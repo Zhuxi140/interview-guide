@@ -14,78 +14,151 @@
     <groupId>interview.guide</groupId>
     <artifactId>interview-guide</artifactId>
     <version>0.0.1-SNAPSHOT</version>
+    <packaging>pom</packaging>
     <name>interview-guide</name>
     <description>AI-powered interview preparation platform</description>
+
+    <modules>
+        <module>api</module>
+        <module>bootstrap</module>
+        <module>common</module>
+        <module>framework</module>
+        <module>modules</module>
+    </modules>
 
     <properties>
         <java.version>21</java.version>
         <mapstruct.version>1.6.3</mapstruct.version>
         <tika.version>2.9.2</tika.version>
         <aws.sdk.version>2.30.39</aws.sdk.version>
+        <jjwt.version>0.12.6</jjwt.version>
+        <hutool.version>5.8.35</hutool.version>
+        <springdoc.version>2.8.5</springdoc.version>
+        <springBoot-data-redis.version>3.1.5</springBoot-data-redis.version>
     </properties>
 
-    <dependencies>
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-starter-test</artifactId>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-starter-tomcat</artifactId>
+                <scope>provided</scope>
+            </dependency>
 
-        <!-- spring boot web-->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
-        </dependency>
+            <!-- MyBatis Plus -->
+            <dependency>
+                <groupId>com.baomidou</groupId>
+                <artifactId>mybatis-plus-spring-boot4-starter</artifactId>
+                <version>3.5.15</version>
+            </dependency>
+            <dependency>
+                <groupId>com.baomidou</groupId>
+                <artifactId>mybatis-plus-annotation</artifactId>
+                <version>3.5.15</version>
+            </dependency>
 
-        <!-- spring boot test -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-        </dependency>
+            <!-- Postgresql -->
+            <dependency>
+                <groupId>org.postgresql</groupId>
+                <artifactId>postgresql</artifactId>
+                <version>42.6.0</version>
+            </dependency>
 
-        <!-- spring boot tomcat -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-tomcat</artifactId>
-            <scope>provided</scope>
-        </dependency>
+            <!-- Redis -->
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-starter-data-redis</artifactId>
+                <version>${springBoot-data-redis.version}</version>
+            </dependency>
 
-        <!-- mybatis plus -->
-        <!-- Source: https://mvnrepository.com/artifact/com.baomidou/mybatis-plus-boot-starter -->
-        <dependency>
-            <groupId>com.baomidou</groupId>
-            <artifactId>mybatis-plus-boot-starter</artifactId>
-            <version>3.5.3.1</version>
-            <scope>compile</scope>
-        </dependency>
+            <!-- MapStruct -->
+            <dependency>
+                <groupId>org.mapstruct</groupId>
+                <artifactId>mapstruct</artifactId>
+                <version>${mapstruct.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.tika</groupId>
+                <artifactId>tika-core</artifactId>
+                <version>${tika.version}</version>
+            </dependency>
 
-        <!-- postgresql -->
-        <!-- Source: https://mvnrepository.com/artifact/org.postgresql/postgresql -->
-        <dependency>
-            <groupId>org.postgresql</groupId>
-            <artifactId>postgresql</artifactId>
-            <version>42.6.0</version>
-            <scope>compile</scope>
-        </dependency>
+            <!-- Springdoc -->
+            <dependency>
+                <groupId>org.springdoc</groupId>
+                <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+                <version>${springdoc.version}</version>
+            </dependency>
 
-        <!-- spring data redis -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-data-redis</artifactId>
-        </dependency>
+            <!-- JJWT -->
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-api</artifactId>
+                <version>${jjwt.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-impl</artifactId>
+                <version>${jjwt.version}</version>
+                <scope>runtime</scope>
+            </dependency>
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-jackson</artifactId>
+                <version>${jjwt.version}</version>
+                <scope>runtime</scope>
+            </dependency>
 
-        <!-- mapstruct -->
-        <dependency>
-            <groupId>org.mapstruct</groupId>
-            <artifactId>mapstruct</artifactId>
-            <version>${mapstruct.version}</version>
-        </dependency>
+            <!-- Hutool -->
+            <dependency>
+                <groupId>cn.hutool</groupId>
+                <artifactId>hutool-all</artifactId>
+                <version>${hutool.version}</version>
+            </dependency>
 
-        <!-- tika -->
-        <dependency>
-            <groupId>org.apache.tika</groupId>
-            <artifactId>tika-core</artifactId>
-            <version>${tika.version}</version>
-        </dependency>
+            <!-- Spring Retry -->
+            <dependency>
+                <groupId>org.springframework.retry</groupId>
+                <artifactId>spring-retry</artifactId>
+                <version>2.0.1</version>
+            </dependency>
 
+            <!-- spring ai bom -->
+            <dependency>
+                <groupId>org.springframework.ai</groupId>
+                <artifactId>spring-ai-bom</artifactId>
+                <version>2.0.0-M4</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
-    </dependencies>
-
+    <repositories>
+        <repository>
+            <id>spring-snapshots</id>
+            <name>Spring Snapshots</name>
+            <url>https://repo.spring.io/snapshot</url>
+            <releases>
+                <enabled>false</enabled>
+            </releases>
+        </repository>
+        <repository>
+            <name>Central Portal Snapshots</name>
+            <id>central-portal-snapshots</id>
+            <url>https://central.sonatype.com/repository/maven-snapshots/</url>
+            <releases>
+                <enabled>false</enabled>
+            </releases>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
 
 </project>
