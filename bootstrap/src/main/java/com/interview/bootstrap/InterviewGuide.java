@@ -9,7 +9,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * @since 2026-05-26
  * @apiNote 项目启动入口
  */
-@SpringBootApplication
+@SpringBootApplication(scanBasePackages = "interview")
 @MapperScan("interview.**.*.mapper")
 public class InterviewGuide {
     public static void main(String[] args) {

@@ -1,8 +1,7 @@
-package interview.common.until;
+package interview.common.util;
 
 import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
-import interview.common.until.IdGeneratorUntil;
 import org.slf4j.MDC;
 
 /**
@@ -13,7 +12,7 @@ import org.slf4j.MDC;
  *     提供操作traceId的方法对接第三方、以及为定时任务生成独立追踪traceId
  * </P>
  */
-public class TraceUntil {
+public class TraceUtil {
 
     private static final String TRACE_ID = "X-Trace-Id";
 
@@ -41,7 +40,7 @@ public class TraceUntil {
      * 初始化定时任务线程的traceId
      */
     public static void initScheduledTrace(){
-        MDC.put(TRACE_ID, IdGeneratorUntil.generateTraceId());
+        MDC.put(TRACE_ID, IdGeneratorUtil.generateTraceId());
     }
 
 

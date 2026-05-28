@@ -1,7 +1,7 @@
 package interview.framework.config;
 
 import com.baomidou.mybatisplus.core.incrementer.IdentifierGenerator;
-import interview.common.until.IdGeneratorUntil;
+import interview.common.util.IdGeneratorUtil;
 import org.springframework.stereotype.Component;
 
 /**
@@ -18,6 +18,6 @@ public class CustomIdGenerator implements IdentifierGenerator {
 
     @Override
     public Number nextId(Object entity) {
-        return IdGeneratorUntil.generateId(workerId,datacenterId);
+        return IdGeneratorUtil.generateId(workerId,datacenterId);
     }
 }

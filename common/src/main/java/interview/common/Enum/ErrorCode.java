@@ -28,7 +28,7 @@ public enum ErrorCode {
     FILE_DOWNLOAD_FAILED(10009, "文件下载失败"),
 
     // ------------ 20xxx 用户认证与授权错误码 ------------
-    USER_NOT_LOGIN(401, "用户未登录"),
+    USER_NOT_LOGIN(401, "未登录"),
     TOKEN_EXPIRED(401, "Token 已过期"),
     TOKEN_INVALID(401, "Token 无效"),
     PERMISSION_DENIED(403, "权限不足"),

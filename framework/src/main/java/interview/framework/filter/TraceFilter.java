@@ -1,7 +1,7 @@
 package interview.framework.filter;
 
 import cn.hutool.core.util.StrUtil;
-import interview.common.until.IdGeneratorUntil;
+import interview.common.util.IdGeneratorUtil;
 import jakarta.servlet.*;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -31,7 +31,7 @@ public class TraceFilter implements Filter {
 
         // 兜底生成TraceId，避免消息头中缺少TraceId而导致无法追踪
         if (!StrUtil.isNotBlank(traceId)){
-            traceId = IdGeneratorUntil.generateTraceId();
+            traceId = IdGeneratorUtil.generateTraceId();
         }
 
 

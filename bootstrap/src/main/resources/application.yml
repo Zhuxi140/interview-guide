@@ -26,8 +26,22 @@ server:
 # mybatis-plus配置
 mybatis-plus:
   mapper-locations: classpath*:mapper/*.xml
-  type-aliases-package: com.interview.modules.**.model.entity
+  type-aliases-package: interview.**.model.entity
   configuration:
     map-underscore-to-camel-case: true
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
 
+
+springdoc:
+  api-docs:
+    path: /api-docs
+    enabled: true
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+
+jwt:
+  # TODO: 上线后需更换为极其复杂的随机字符串
+  secret: interview-guide-auth-secret-key-must-be-long-enough-32-chars-for-security
+  # 单位: 分
+  expiration: 30

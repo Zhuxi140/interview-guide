@@ -1,4 +1,4 @@
-package interview.common.until;
+package interview.common.util;
 
 import cn.hutool.core.util.IdUtil;
 
@@ -8,7 +8,7 @@ import cn.hutool.core.util.IdUtil;
  * @apiNote Id生成工具类
  */
 
-public class IdGeneratorUntil {
+public class IdGeneratorUtil {
 
     /**
      * 生成id

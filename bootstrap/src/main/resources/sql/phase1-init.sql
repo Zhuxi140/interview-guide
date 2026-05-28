@@ -47,8 +47,8 @@ COMMENT ON COLUMN sys_users.is_deleted IS '逻辑删除标识';
 COMMENT ON COLUMN sys_users.created_at IS '创建时间';
 COMMENT ON COLUMN sys_users.updated_at IS '更新时间';
 
-CREATE UNIQUE INDEX idx_user_username ON sys_users (username);
-CREATE INDEX idx_user_risk_status ON sys_users (risk_level, status);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_user_username ON sys_users (username);
+CREATE INDEX IF NOT EXISTS idx_user_risk_status ON sys_users (risk_level, status);
 
 
 -- ==================== 2. user_tokens ====================
@@ -78,8 +78,8 @@ COMMENT ON COLUMN user_tokens.is_deleted IS '逻辑删除标识';
 COMMENT ON COLUMN user_tokens.trace_id IS '调用链 ID';
 COMMENT ON COLUMN user_tokens.created_at IS '创建时间';
 
-CREATE INDEX idx_token_user_id ON user_tokens (user_id);
-CREATE INDEX idx_token_hash ON user_tokens (refresh_token_hash);
+CREATE INDEX IF NOT EXISTS idx_token_user_id ON user_tokens (user_id);
+CREATE INDEX IF NOT EXISTS idx_token_hash ON user_tokens (refresh_token_hash);
 
 
 -- ==================== 4. sys_roles ====================
@@ -105,7 +105,7 @@ COMMENT ON COLUMN sys_roles.trace_id IS '调用链 ID';
 COMMENT ON COLUMN sys_roles.updated_at IS '更新时间';
 COMMENT ON COLUMN sys_roles.created_at IS '创建时间';
 
-CREATE UNIQUE INDEX idx_role_code ON sys_roles (role_code);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_role_code ON sys_roles (role_code);
 
 
 -- ==================== 3. sys_permissions ====================
@@ -131,7 +131,7 @@ COMMENT ON COLUMN sys_permissions.updated_by IS '操作人 ID';
 COMMENT ON COLUMN sys_permissions.trace_id IS '调用链 ID';
 COMMENT ON COLUMN sys_permissions.updated_at IS '更新时间';
 
-CREATE UNIQUE INDEX idx_perm_code ON sys_permissions (perm_code);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_perm_code ON sys_permissions (perm_code);
 
 
 -- ==================== 5. sys_user_roles ====================
@@ -231,7 +231,7 @@ COMMENT ON COLUMN enterprise_team_members.updated_by IS '[逻辑外键]→sys_us
 COMMENT ON COLUMN enterprise_team_members.trace_id IS '调用链 ID';
 COMMENT ON COLUMN enterprise_team_members.updated_at IS '更新时间';
 
-CREATE UNIQUE INDEX idx_team_member ON enterprise_team_members (enterprise_id, user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_team_member ON enterprise_team_members (enterprise_id, user_id);
 
 
 -- ==================== 9. jobs ====================

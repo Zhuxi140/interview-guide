@@ -1,7 +1,7 @@
 package interview.common.constant;
 
 import interview.common.Enum.ErrorCode;
-import interview.common.until.TraceUntil;
+import interview.common.util.TraceUtil;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -24,7 +24,7 @@ public class Result<T> {
 
     public static <T> Result<T> success(T data) {
         long now = System.currentTimeMillis();
-        return new Result<>(ErrorCode.SUCCESS.getCode(), "成功", data, now, TraceUntil.getTraceId());
+        return new Result<>(ErrorCode.SUCCESS.getCode(), "成功", data, now, TraceUtil.getTraceId());
     }
 
     public static <T> Result<T> success() {
@@ -33,6 +33,6 @@ public class Result<T> {
 
     public static <T> Result<T> error(Integer code, String message) {
         long now = System.currentTimeMillis();
-        return new Result<>(code, message, null, now, TraceUntil.getTraceId());
+        return new Result<>(code, message, null, now, TraceUtil.getTraceId());
     }
 }

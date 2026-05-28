@@ -1,5 +1,11 @@
 package interview.framework.context;
 
+import interview.common.Enum.RoleScope;
+import interview.common.Enum.UserType;
+import lombok.Builder;
+
+import java.util.List;
+
 /**
  * @author zhuxi
  * @since 2026-05-26
@@ -20,16 +26,6 @@ public class AuthContext {
      */
     public static void setAuthContext(AuthUser authUser){
         AUTH_CONTEXT.set(authUser);
-    }
-
-    /**
-     * 设置认证上下文
-     * @param userId 用户ID
-     * @param username 用户名
-     * @param nickname 昵称
-     */
-    public static void setAuthContext(Long userId, String username, String nickname){
-        AUTH_CONTEXT.set(new AuthUser(userId, username));
     }
 
     /**
@@ -62,6 +58,22 @@ public class AuthContext {
     }
 
     /**
+     * 获取用户类型
+     * @return 用户类型
+     */
+    public static UserType getUserType(){
+        return getRequiredAuthContext().userType;
+    }
+
+    /**
+     * 获取企业租户 ID
+     * @return 企业租户 ID
+     */
+    public static Long getEnterpriseId(){
+        return getRequiredAuthContext().enterpriseId;
+    }
+
+    /**
      * 移除认证上下文
      */
     public static void remove(){
@@ -71,8 +83,13 @@ public class AuthContext {
     /**
      * 内部类存储用户认证信息
      */
+    @Builder
     public record AuthUser(
             Long userId,
-            String username
+            UserType userType,
+            RoleScope roleScope,
+            Long enterpriseId,
+            String username,
+            List<String> roleCodes
     ){}
 }
