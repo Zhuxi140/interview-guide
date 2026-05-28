@@ -1,6 +1,6 @@
 package interview.system.rbac.service.impl;
 
-import interview.system.rbac.entity.SysRolePermission;
+import interview.system.rbac.model.entity.SysRolePermission;
 import interview.system.rbac.service.RolePermissionsService;
 import interview.system.rbac.mapper.RolePermissionsMapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;

@@ -1,7 +1,8 @@
 package interview.system.auth;
 
 import com.baomidou.mybatisplus.extension.service.IService;
-import interview.system.auth.req.RegisterReq;
+import interview.system.auth.model.entity.UserToken;
+import interview.system.auth.model.req.RegisterReq;
 
 /**
  * @author zhuxi

@@ -1,6 +1,7 @@
 package interview.system.auth;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import interview.system.auth.model.entity.UserToken;
 
 /**
  * @author zhuxi

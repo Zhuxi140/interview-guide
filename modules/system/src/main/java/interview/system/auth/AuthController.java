@@ -1,6 +1,7 @@
 package interview.system.auth;
 
 import interview.common.constant.ApiVersion;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -12,5 +13,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping(ApiVersion.V1 + "/auth")
+@Tag(name = "认证")
 public class AuthController {
 }

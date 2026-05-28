@@ -1,6 +1,7 @@
 package interview.system.tenant;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import interview.system.tenant.model.entity.Enterprise;
 import org.springframework.stereotype.Service;
 
 /**

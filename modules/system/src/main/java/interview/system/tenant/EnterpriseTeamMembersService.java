@@ -1,6 +1,7 @@
 package interview.system.tenant;
 
 import com.baomidou.mybatisplus.extension.service.IService;
+import interview.system.tenant.model.entity.EnterpriseTeamMember;
 
 /**
  * <p>

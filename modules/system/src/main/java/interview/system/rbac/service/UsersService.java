@@ -1,7 +1,7 @@
 package interview.system.rbac.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
-import interview.system.rbac.entity.SysUser;
+import interview.system.rbac.model.entity.SysUser;
 
 /**
  * <p>

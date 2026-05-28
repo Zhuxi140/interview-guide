@@ -1,6 +1,7 @@
 package interview.system.tenant;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import interview.system.tenant.model.entity.Enterprise;
 
 /**
  * <p>
