@@ -1,10 +1,11 @@
 package interview.system.auth;
 
 import cn.hutool.core.util.StrUtil;
-import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import interview.common.Enum.ErrorCode;
+import interview.common.enums.ErrorCode;
+import interview.common.enums.UserType;
 import interview.common.exception.BusinessException;
+import interview.system.auth.mapper.AuthMapper;
 import interview.system.auth.model.entity.UserToken;
 import interview.system.auth.model.req.RegisterReq;
 import interview.system.rbac.model.entity.SysUser;
@@ -39,6 +40,14 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
             throw new BusinessException(ErrorCode.USERNAME_ALREADY_EXISTS);
         }
 
+        // TODO: 效验手机号是否已存在
+        isExists = usersService.lambdaQuery()
+                .eq(SysUser::getPhone, register.getPhone())
+                .exists();
+        if (isExists) {
+            throw new BusinessException(ErrorCode.PHONE_ALREADY_EXISTS);
+        }
+
         //TODO: 效验邮箱是否存在
         if (StrUtil.isNotBlank(register.getEmail())) {
             isExists = usersService.lambdaQuery()
@@ -49,23 +58,21 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
             }
         }
 
-        // TODO: 效验手机号是否已存在
-        if (StrUtil.isNotBlank(register.getPhone())) {
-            isExists = usersService.lambdaQuery()
-                    .eq(SysUser::getPhone, register.getPhone())
-                    .exists();
-            if (isExists) {
-                throw new BusinessException(ErrorCode.PHONE_ALREADY_EXISTS);
-            }
-        }
-        SysUser sysUser = new SysUser();
+
+        SysUser user = SysUser.builder()
+                .username(register.getUsername())
+                .email(register.getEmail())
+                .phone(register.getPhone())
+                .userType(UserType.fromString(register.getUserType()))
+                .build();
         // TODO: 设置用户信息
         // TODO: 密码加密
-        usersService.save(sysUser);
 
-        // TODO: 生成用户Token
+        usersService.save( user);
+
         UserToken userToken = new UserToken();
         save(userToken);
+
         return userToken;
     }
 

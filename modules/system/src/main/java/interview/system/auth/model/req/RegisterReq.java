@@ -1,5 +1,6 @@
 package interview.system.auth.model.req;
 
+import interview.system.auth.enums.SmsType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -32,8 +33,13 @@ public class RegisterReq {
     private String email;
 
     @Pattern(regexp = "^\\d{11}$", message = "手机号格式不正确")
+    @NotBlank(message = "手机号不能为空")
     @Schema(description = "手机号")
     private String phone;
+
+    @NotBlank(message = "验证码不能为空")
+    @Schema(description = "验证码")
+    private String code;
 
     @NotBlank(message = "用户类型不能为空")
     @Pattern(regexp = "^(HR|CANDIDATE)$", message = "用户类型仅支持 HR / CANDIDATE")

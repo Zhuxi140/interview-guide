@@ -1,4 +1,4 @@
-package interview.system.auth;
+package interview.system.auth.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import interview.system.auth.model.entity.UserToken;

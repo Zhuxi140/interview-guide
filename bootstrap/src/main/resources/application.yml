@@ -9,6 +9,18 @@ spring:
     password: 123456
     driver-class-name: org.postgresql.Driver
 
+  data:
+    redis:
+      url: redis://localhost:6379
+      password: 123456
+      database: 0
+      timeout: 10 # 连接超时时间
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 0
+          max-wait: 2000ms
   sql:
     init:
       mode: always
