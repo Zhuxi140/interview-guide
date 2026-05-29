@@ -1,4 +1,4 @@
-package interview.common.Enum;
+package interview.common.enums;
 
 /**
  * @author zhuxi

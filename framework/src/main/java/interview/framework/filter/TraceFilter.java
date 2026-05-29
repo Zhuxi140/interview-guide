@@ -13,9 +13,11 @@ import java.io.IOException;
 
 /**
  * @author zhuxi
- * @since 2026-05-26
- * @apiNote 调用链追踪过滤器
+ * @apiNote 链路追踪过滤器
+ * @since 2026/5/27 14:05
  */
+
+
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class TraceFilter implements Filter {

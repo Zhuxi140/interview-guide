@@ -1,19 +1,19 @@
 package interview.framework.handler;
 
-import interview.common.Enum.ErrorCode;
+import interview.common.enums.ErrorCode;
 import interview.common.constant.Result;
 import interview.common.exception.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /**
  * @author zhuxi
  * @since 2026-05-26
  * @apiNote  全局异常处理器
  */
-@ControllerAdvice
+@RestControllerAdvice
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);

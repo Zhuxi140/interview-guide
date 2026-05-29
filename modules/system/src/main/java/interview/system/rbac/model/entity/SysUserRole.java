@@ -16,6 +16,9 @@ import java.time.LocalDateTime;
 @Data
 public class SysUserRole implements Serializable {
 
+    @TableId(type = IdType.ASSIGN_ID)
+    private Long id;
+
     private Long userId;
 
     private Long roleId;

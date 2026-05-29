@@ -10,7 +10,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * @apiNote 项目启动入口
  */
 @SpringBootApplication(scanBasePackages = "interview")
-@MapperScan("interview.**.*.mapper")
+@MapperScan("interview.**.mapper")
 public class InterviewGuide {
     public static void main(String[] args) {
         SpringApplication.run(InterviewGuide.class, args);

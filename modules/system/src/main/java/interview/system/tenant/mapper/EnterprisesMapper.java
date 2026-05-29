@@ -1,4 +1,4 @@
-package interview.system.tenant;
+package interview.system.tenant.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import interview.system.tenant.model.entity.Enterprise;

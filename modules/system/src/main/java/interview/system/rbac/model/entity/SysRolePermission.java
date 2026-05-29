@@ -16,6 +16,9 @@ import java.time.LocalDateTime;
 @Data
 public class SysRolePermission implements Serializable {
 
+    @TableId(type = IdType.ASSIGN_ID)
+    private Long id;
+
     private Long roleId;
 
     private Long permissionId;

@@ -1,7 +1,7 @@
 package interview.framework.context;
 
-import interview.common.Enum.RoleScope;
-import interview.common.Enum.UserType;
+import interview.common.enums.RoleScope;
+import interview.common.enums.UserType;
 import lombok.Builder;
 
 import java.util.List;

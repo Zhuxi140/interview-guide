@@ -1,7 +1,7 @@
 package interview.system.rbac.model.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
-import interview.common.Enum.UserType;
+import interview.common.enums.UserType;
 import lombok.Builder;
 import lombok.Data;
 

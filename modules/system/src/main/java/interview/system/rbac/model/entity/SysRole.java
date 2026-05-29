@@ -1,7 +1,7 @@
 package interview.system.rbac.model.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
-import interview.common.Enum.RoleScope;
+import interview.common.enums.RoleScope;
 import lombok.Data;
 
 import java.io.Serializable;

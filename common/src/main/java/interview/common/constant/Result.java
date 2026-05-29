@@ -1,6 +1,6 @@
 package interview.common.constant;
 
-import interview.common.Enum.ErrorCode;
+import interview.common.enums.ErrorCode;
 import interview.common.util.TraceUtil;
 import lombok.AllArgsConstructor;
 import lombok.Getter;

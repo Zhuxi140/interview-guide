@@ -1,4 +1,4 @@
-package interview.common.Enum;
+package interview.common.enums;
 
 /**
  * @author zhuxi
@@ -47,6 +47,7 @@ public enum ErrorCode {
     USER_NOT_FOUND(20011, "用户不存在"),
     PASSWORD_ERROR(20012, "密码错误"),
     ACCOUNT_DISABLED(20013, "账号已被禁用"),
+    CODE_ONE_MINUTE(20014, "验证码已经发送，请 1 分钟后再试"),
 
     // ------------ 30xxx 企业/多租户错误码 ------------
     ENTERPRISE_NOT_FOUND(30001, "企业不存在"),

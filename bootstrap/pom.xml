@@ -51,5 +51,11 @@
             <artifactId>engine</artifactId>
             <version>${project.version}</version>
         </dependency>
+
+        <dependency>
+            <groupId>interview.guide</groupId>
+            <artifactId>system</artifactId>
+            <version>${project.version}</version>
+        </dependency>
     </dependencies>
 </project>

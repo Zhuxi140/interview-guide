@@ -1,6 +1,6 @@
 package interview.common.exception;
 
-import interview.common.Enum.ErrorCode;
+import interview.common.enums.ErrorCode;
 import lombok.Getter;
 
 /**

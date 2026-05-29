@@ -1,12 +1,15 @@
 package interview.common.exception;
 
-import interview.common.Enum.ErrorCode;
+import interview.common.enums.ErrorCode;
+import lombok.Getter;
 
 /**
  * @author zhuxi
  * @since 2026-05-26
  * @apiNote 业务异常
  */
+
+@Getter
 public class BusinessException extends RuntimeException {
 
     private final Integer code;
@@ -20,14 +23,5 @@ public class BusinessException extends RuntimeException {
     public BusinessException(ErrorCode code, String message) {
         this.code = code.getCode();
         this.message = message;
-    }
-
-    public Integer getCode() {
-        return code;
-    }
-
-    @Override
-    public String getMessage() {
-        return message;
     }
 }

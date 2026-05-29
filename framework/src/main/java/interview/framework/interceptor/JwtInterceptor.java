@@ -1,8 +1,8 @@
 package interview.framework.interceptor;
 
 import cn.hutool.core.util.StrUtil;
-import interview.common.Enum.RoleScope;
-import interview.common.Enum.UserType;
+import interview.common.enums.RoleScope;
+import interview.common.enums.UserType;
 import interview.common.exception.UnauthorizedException;
 import interview.common.util.JwttUtil;
 import interview.framework.context.AuthContext;
