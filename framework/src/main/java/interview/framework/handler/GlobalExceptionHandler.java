@@ -61,7 +61,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public Result<String> handleException(Exception e){
         log.error("系统发生未知异常:",e);
-        return Result.error(ErrorCode.SYSTEM_ERROR.getCode(),"系统异常");
+        return Result.error(ErrorCode.SYSTEM_ERROR.getCode(),ErrorCode.SYSTEM_ERROR.getMessage());
     }
 
 }

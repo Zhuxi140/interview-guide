@@ -9,7 +9,7 @@ public enum ErrorCode {
 
     // ------------ 10xxx 系统/全局级错误码 ------------
     SUCCESS(10000, "成功"),
-    SYSTEM_ERROR(500, "系统错误,请稍后重试或联系客服"),
+    SYSTEM_ERROR(500, "系统错误或繁忙,请稍后重试或联系客服"),
     SERVICE_UNAVAILABLE(503, "服务不可用"),
     TOO_MANY_REQUESTS(429, "请求过于频繁"),
     PARAM_VALID_ERROR(10001, "参数校验失败"),

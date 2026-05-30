@@ -1,5 +1,7 @@
 package interview.system.auth.model.vo;
 
+import interview.common.Desensitize.Desensitize;
+import interview.common.Desensitize.DesensitizeType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 
@@ -28,6 +30,7 @@ public record UserInfoVO (
     String avatarUrl,
 
     @Schema(description = "手机号")
+    @Desensitize(type = DesensitizeType.PHONE)
     String phone,
 
     @Schema(description = "用户类型：HR / CANDIDATE / PLATFORM_ADMIN")

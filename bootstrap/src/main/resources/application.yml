@@ -53,7 +53,11 @@ springdoc:
     enabled: true
 
 jwt:
-  # TODO: 上线后需更换为极其复杂的随机字符串
+  # TODO: 上线后需更换为极其复杂的随机字符串 且需存储到环境变量或密钥管理服务中
   secret: interview-guide-auth-secret-key-must-be-long-enough-32-chars-for-security
   # 单位: 分
   expiration: 30
+
+DataSecurity:
+  # AES / SM4密钥
+  key:

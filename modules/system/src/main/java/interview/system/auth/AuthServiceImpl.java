@@ -31,7 +31,7 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
     @Override
     @Transactional(rollbackFor = BusinessException.class)
     public UserToken register(RegisterReq register) {
-        // TODO:查库确认用户是否存在
+        //查库确认用户名是否存在
         boolean isExists = usersService.lambdaQuery()
                 .eq(SysUser::getUsername, register.getUsername())
                 .exists();
@@ -40,7 +40,7 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
             throw new BusinessException(ErrorCode.USERNAME_ALREADY_EXISTS);
         }
 
-        // TODO: 效验手机号是否已存在
+        //效验手机号是否已存在
         isExists = usersService.lambdaQuery()
                 .eq(SysUser::getPhone, register.getPhone())
                 .exists();
@@ -48,7 +48,7 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
             throw new BusinessException(ErrorCode.PHONE_ALREADY_EXISTS);
         }
 
-        //TODO: 效验邮箱是否存在
+        //验邮箱是否存在
         if (StrUtil.isNotBlank(register.getEmail())) {
             isExists = usersService.lambdaQuery()
                     .eq(SysUser::getEmail, register.getEmail())
@@ -65,6 +65,8 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
                 .phone(register.getPhone())
                 .userType(UserType.fromString(register.getUserType()))
                 .build();
+
+
         // TODO: 设置用户信息
         // TODO: 密码加密
 
