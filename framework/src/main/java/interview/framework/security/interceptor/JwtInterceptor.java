@@ -1,4 +1,4 @@
-package interview.framework.interceptor;
+package interview.framework.security.interceptor;
 
 import cn.hutool.core.util.StrUtil;
 import interview.common.enums.RoleScope;

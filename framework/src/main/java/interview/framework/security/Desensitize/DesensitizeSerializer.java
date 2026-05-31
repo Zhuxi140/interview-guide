@@ -1,4 +1,4 @@
-package interview.common.Desensitize;
+package interview.framework.security.Desensitize;
 
 import cn.hutool.core.util.StrUtil;
 import com.fasterxml.jackson.core.JsonGenerator;
@@ -10,7 +10,6 @@ import com.fasterxml.jackson.databind.ser.ContextualSerializer;
 import lombok.AllArgsConstructor;
 import lombok.NoArgsConstructor;
 import java.io.IOException;
-import java.util.Optional;
 
 /**
  * @author zhuxi
@@ -23,7 +22,6 @@ import java.util.Optional;
 public class DesensitizeSerializer extends JsonSerializer<String> implements ContextualSerializer {
 
     private DesensitizeType type;
-
 
     /**
      *

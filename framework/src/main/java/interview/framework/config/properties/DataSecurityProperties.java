@@ -11,11 +11,13 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @since 2026/5/27 14:05
  */
 
-@ConfigurationProperties(prefix = "DataSecurity")
+@ConfigurationProperties(prefix = "security")
 @Data
 public class DataSecurityProperties {
 
     // TODO:
-    @Value("${DataSecurity.key}")
-    private final String key;
+    @Value("${DataSecurity.sm4Key}")
+    private final String sm4Key;
+    @Value("${DataSecurity.aesKey}")
+    private final String aesKey;
 }

@@ -1,6 +1,7 @@
 package interview.system.tenant.model.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import interview.framework.security.mybatis.AesTypeHandler;
 import lombok.Data;
 
 import java.io.Serializable;
@@ -29,6 +30,7 @@ public class Enterprise implements Serializable {
 
     private String contactEmail;
 
+    @TableField(typeHandler = AesTypeHandler.class)
     private String contactPhone;
 
     private Integer status;

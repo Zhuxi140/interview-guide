@@ -1,13 +1,9 @@
-package interview.common.Desensitize;
+package interview.framework.security.Desensitize;
 
-import cn.hutool.core.util.DesensitizedUtil;
 import com.fasterxml.jackson.annotation.JacksonAnnotationsInside;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
 
 import java.lang.annotation.*;
-import java.util.function.Function;
 
 /**
  * @author zhuxi

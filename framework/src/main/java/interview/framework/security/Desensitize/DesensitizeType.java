@@ -1,4 +1,4 @@
-package interview.common.Desensitize;
+package interview.framework.security.Desensitize;
 
 import cn.hutool.core.util.DesensitizedUtil;
 import lombok.AllArgsConstructor;

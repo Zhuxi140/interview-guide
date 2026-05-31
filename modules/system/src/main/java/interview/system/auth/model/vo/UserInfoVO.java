@@ -1,7 +1,7 @@
 package interview.system.auth.model.vo;
 
-import interview.common.Desensitize.Desensitize;
-import interview.common.Desensitize.DesensitizeType;
+import interview.framework.security.Desensitize.Desensitize;
+import interview.framework.security.Desensitize.DesensitizeType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 

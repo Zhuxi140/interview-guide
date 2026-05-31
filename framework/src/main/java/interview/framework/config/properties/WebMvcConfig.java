@@ -1,7 +1,7 @@
 package interview.framework.config.properties;
 
 import interview.common.util.JwttUtil;
-import interview.framework.interceptor.JwtInterceptor;
+import interview.framework.security.interceptor.JwtInterceptor;
 import lombok.AllArgsConstructor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;

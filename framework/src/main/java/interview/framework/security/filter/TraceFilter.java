@@ -1,4 +1,4 @@
-package interview.framework.filter;
+package interview.framework.security.filter;
 
 import cn.hutool.core.util.StrUtil;
 import interview.common.util.IdGeneratorUtil;

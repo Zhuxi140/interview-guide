@@ -2,6 +2,7 @@ package interview.system.rbac.model.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
 import interview.common.enums.UserType;
+import interview.framework.security.mybatis.AesTypeHandler;
 import lombok.Builder;
 import lombok.Data;
 
@@ -32,6 +33,7 @@ public class SysUser implements Serializable {
 
     private String avatarUrl;
 
+    @TableField(typeHandler = AesTypeHandler.class)
     private String phone;
 
     private UserType userType;

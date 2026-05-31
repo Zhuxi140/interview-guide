@@ -28,6 +28,6 @@ public class SecurityConfig {
 
     @Bean
     public DataSecurityUtil dataSecurityUtil(DataSecurityProperties properties){
-        return new DataSecurityUtil(properties.getKey());
+        return new DataSecurityUtil(properties.getSm4Key(), properties.getAesKey());
     }
 }
