@@ -4,7 +4,7 @@ import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
 
 import java.io.Serializable;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 /**
  * @author zhuxi
@@ -19,8 +19,10 @@ public class SysRolePermission implements Serializable {
     @TableId(type = IdType.ASSIGN_ID)
     private Long id;
 
+    // 必填
     private Long roleId;
 
+    // 必填
     private Long permissionId;
 
     @TableField(fill = FieldFill.INSERT_UPDATE)
@@ -30,8 +32,8 @@ public class SysRolePermission implements Serializable {
     private String traceId;
 
     @TableField(fill = FieldFill.INSERT_UPDATE)
-    private LocalDateTime updatedAt;
+    private OffsetDateTime updatedAt;
 
     @TableField(fill = FieldFill.INSERT)
-    private LocalDateTime createdAt;
+    private OffsetDateTime createdAt;
 }

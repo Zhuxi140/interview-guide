@@ -5,7 +5,7 @@ import interview.framework.security.mybatis.AesTypeHandler;
 import lombok.Data;
 
 import java.io.Serializable;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 /**
  * @author zhuxi
@@ -38,7 +38,7 @@ public class Enterprise implements Serializable {
     private String logoUrl;
 
     @TableField(fill = FieldFill.INSERT)
-    private LocalDateTime createdAt;
+    private OffsetDateTime createdAt;
 
     @TableLogic
     private Boolean isDeleted;
@@ -47,5 +47,5 @@ public class Enterprise implements Serializable {
     private String traceId;
 
     @TableField(fill = FieldFill.INSERT_UPDATE)
-    private LocalDateTime updatedAt;
+    private OffsetDateTime updatedAt;
 }

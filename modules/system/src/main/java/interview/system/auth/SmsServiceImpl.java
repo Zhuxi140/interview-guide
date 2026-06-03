@@ -44,7 +44,7 @@ public class SmsServiceImpl implements SmsService{
                 .eq(SysUser::getPhone, phone)
                 .exists();
 
-        if (!exists) {
+        if (exists) {
             throw new BusinessException(ErrorCode.PHONE_ALREADY_EXISTS);
         }
 

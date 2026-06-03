@@ -7,7 +7,7 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.io.Serializable;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 /**
  * @author zhuxi
@@ -23,10 +23,12 @@ public class SysUser implements Serializable {
     @TableId(type = IdType.ASSIGN_ID)
     private Long id;
 
+    // 必填
     private String username;
 
     private String email;
 
+    // 必填
     private String passwordHash;
 
     private String nickname;
@@ -36,18 +38,23 @@ public class SysUser implements Serializable {
     @TableField(typeHandler = AesTypeHandler.class)
     private String phone;
 
+    // 必填
     private UserType userType;
 
+    // 默认值 0
     private Integer riskLevel;
 
+    // 默认值 1
     private Integer status;
 
+    // 默认值 false
     @TableLogic
     private Boolean isDeleted;
 
+    // 必填
     @TableField(fill = FieldFill.INSERT)
-    private LocalDateTime createdAt;
+    private OffsetDateTime createdAt;
 
     @TableField(fill = FieldFill.INSERT_UPDATE)
-    private LocalDateTime updatedAt;
+    private OffsetDateTime updatedAt;
 }

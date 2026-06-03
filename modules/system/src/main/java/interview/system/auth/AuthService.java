@@ -2,6 +2,7 @@ package interview.system.auth;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import interview.system.auth.enums.SmsType;
+import interview.system.auth.model.bo.RegisterBo;
 import interview.system.auth.model.entity.UserToken;
 import interview.system.auth.model.req.RegisterReq;
 
@@ -17,7 +18,7 @@ public interface AuthService extends IService<UserToken> {
      * @param register 注册信息
      * @return 注册结果
      */
-    UserToken register(RegisterReq register);
+    RegisterBo register(RegisterReq register);
 
     UserToken login(String username,String password);
 
