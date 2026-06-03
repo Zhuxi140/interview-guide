@@ -17,29 +17,24 @@ import java.sql.SQLException;
  * @since 2026/5/27 14:05
  */
 
-@Component
-@AllArgsConstructor
 public class AesTypeHandler extends BaseTypeHandler<String> {
-
-    private final DataSecurityUtil dataSecurityUtil;
-
     @Override
     public void setNonNullParameter(PreparedStatement ps, int i, String parameter, JdbcType jdbcType) throws SQLException {
-        ps.setString(i, dataSecurityUtil.aesEncrypt(parameter));
+        ps.setString(i, DataSecurityUtil.INSTANCE.aesEncrypt(parameter));
     }
 
     @Override
     public String getNullableResult(ResultSet rs, String columnName) throws SQLException {
-        return dataSecurityUtil.aesDecrypt(rs.getString(columnName));
+        return DataSecurityUtil.INSTANCE.aesDecrypt(rs.getString(columnName));
     }
 
     @Override
     public String getNullableResult(ResultSet rs, int columnIndex) throws SQLException {
-        return dataSecurityUtil.aesDecrypt(rs.getString(columnIndex));
+        return DataSecurityUtil.INSTANCE.aesDecrypt(rs.getString(columnIndex));
     }
 
     @Override
     public String getNullableResult(CallableStatement cs, int columnIndex) throws SQLException {
-        return dataSecurityUtil.aesDecrypt(cs.getString(columnIndex));
+        return DataSecurityUtil.INSTANCE.aesDecrypt(cs.getString(columnIndex));
     }
 }

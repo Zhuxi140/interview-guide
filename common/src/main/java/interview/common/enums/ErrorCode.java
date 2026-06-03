@@ -36,6 +36,7 @@ public enum ErrorCode {
     RISK_CONTROL(403, "你的账户当前存在异常，请等待稍后重试或联系客服"),
     CODE_ERROR(20001, "验证码错误"),
     CODE_EXPIRED(20002, "验证码已过期"),
+    CODE_ERROR_OR_EXPIRED(20010, "验证码错误或已过期"),
     PHONE_ALREADY_EXISTS(20003, "手机号已注册"),
     THIRD_PARTY_AUTH_ERROR(20004, "第三方授权失败"),
     PASSWORD_STRENGTH_ERROR(20005, "密码强度不够"),

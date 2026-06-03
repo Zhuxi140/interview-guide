@@ -5,8 +5,7 @@ import cn.hutool.crypto.SecureUtil;
 import cn.hutool.crypto.SmUtil;
 import cn.hutool.crypto.symmetric.AES;
 import cn.hutool.crypto.symmetric.SM4;
-import cn.hutool.crypto.symmetric.SymmetricCrypto;
-import lombok.extern.slf4j.Slf4j;
+
 
 /**
  * @author zhuxi
@@ -14,8 +13,9 @@ import lombok.extern.slf4j.Slf4j;
  * @since 2026/5/27 14:05
  */
 
-public class DataSecurityUtil {
+public class DataSecurityUtil{
 
+    public static DataSecurityUtil INSTANCE;
     private final SM4 sm4;
     private final AES aes;
 
@@ -25,6 +25,7 @@ public class DataSecurityUtil {
         byte[] sm4Bytes = HexUtil.decodeHex(sm4Key);
         this.sm4 = SmUtil.sm4(sm4Bytes);
         this.aes = SecureUtil.aes(aesBytes);
+        INSTANCE = this;
     }
 
     /**

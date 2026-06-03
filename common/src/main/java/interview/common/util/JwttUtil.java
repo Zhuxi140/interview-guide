@@ -20,11 +20,11 @@ import java.util.Optional;
 @Slf4j
 public class JwttUtil {
 
-    private final Integer expiration;
+    private final Long expiration;
     private final SecretKey key;
     private final JwtParser parser;
 
-    public JwttUtil(Integer expiration, String secretString) {
+    public JwttUtil(Long expiration, String secretString) {
         this.expiration = expiration;
         byte[] bytes = secretString.getBytes(StandardCharsets.UTF_8);
         this.key = Keys.hmacShaKeyFor(bytes);
@@ -45,7 +45,7 @@ public class JwttUtil {
 
         long nowMillis = System.currentTimeMillis();
         Date now = new Date(nowMillis);
-        Date expireDate = new Date(nowMillis + (expiration.longValue() * 60 * 1000));
+        Date expireDate = new Date(nowMillis + (expiration * 60 * 1000));
         return Jwts.builder()
                 .claims(data != null ? data : Map.of())
                 .subject(userIdString)

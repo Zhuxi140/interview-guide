@@ -64,5 +64,10 @@
             <artifactId>mybatis-plus-annotation</artifactId>
         </dependency>
 
+        <!-- SM4加密 -->
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcprov-jdk18on</artifactId>
+        </dependency>
     </dependencies>
 </project>

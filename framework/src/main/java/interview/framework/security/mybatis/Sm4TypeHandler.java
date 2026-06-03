@@ -17,29 +17,24 @@ import java.sql.SQLException;
  * @since 2026/5/27 14:05
  */
 
-@AllArgsConstructor
-@Component
 public class Sm4TypeHandler extends BaseTypeHandler<String> {
-
-    private final DataSecurityUtil dataSecurityUtil;
-
     @Override
     public void setNonNullParameter(PreparedStatement ps, int i, String parameter, JdbcType jdbcType) throws SQLException {
-        ps.setString(i, dataSecurityUtil.sm4Encrypt(parameter));
+        ps.setString(i, DataSecurityUtil.INSTANCE.sm4Encrypt(parameter));
     }
 
     @Override
     public String getNullableResult(ResultSet rs, String columnName) throws SQLException {
-        return dataSecurityUtil.sm4Decrypt(rs.getString(columnName));
+        return DataSecurityUtil.INSTANCE.sm4Decrypt(rs.getString(columnName));
     }
 
     @Override
     public String getNullableResult(ResultSet rs, int columnIndex) throws SQLException {
-        return dataSecurityUtil.sm4Decrypt(rs.getString(columnIndex));
+        return DataSecurityUtil.INSTANCE.sm4Decrypt(rs.getString(columnIndex));
     }
 
     @Override
     public String getNullableResult(CallableStatement cs, int columnIndex) throws SQLException {
-        return dataSecurityUtil.sm4Decrypt(cs.getString(columnIndex));
+        return DataSecurityUtil.INSTANCE.sm4Decrypt(cs.getString(columnIndex));
     }
 }

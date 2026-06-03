@@ -16,8 +16,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class DataSecurityProperties {
 
     // TODO:
-    @Value("${DataSecurity.sm4Key}")
+    @Value("${security.sm4Key}")
     private final String sm4Key;
-    @Value("${DataSecurity.aesKey}")
+    @Value("${security.aesKey}")
     private final String aesKey;
 }

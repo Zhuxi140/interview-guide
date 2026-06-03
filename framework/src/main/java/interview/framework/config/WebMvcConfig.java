@@ -1,4 +1,4 @@
-package interview.framework.config.properties;
+package interview.framework.config;
 
 import interview.common.util.JwttUtil;
 import interview.framework.security.interceptor.JwtInterceptor;
@@ -25,6 +25,11 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
         registry.addInterceptor(new JwtInterceptor(jwttUtil))
                 .addPathPatterns("/**")
-                .excludePathPatterns("/api/v1/auth/**");
+                .excludePathPatterns(
+                        "/api/v1/auth/**",
+                        "/swagger-ui/**",
+                        "/swagger-ui.html",
+                        "/api-docs/**"
+                        );
     }
 }

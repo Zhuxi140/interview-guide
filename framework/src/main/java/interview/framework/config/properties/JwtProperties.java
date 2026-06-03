@@ -14,7 +14,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "jwt")
 public class JwtProperties {
     @Value("${jwt.expiration}")
-    private final Integer expiration;
+    private final Long expiration;
     @Value("${jwt.secret}")
     private final String secret;
 }
