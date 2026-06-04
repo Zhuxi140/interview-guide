@@ -3,6 +3,8 @@ package interview.system.rbac.model.entity;
 import com.baomidou.mybatisplus.annotation.*;
 import interview.common.enums.UserType;
 import interview.framework.security.mybatis.AesTypeHandler;
+import interview.common.enums.RiskLevel;
+import interview.system.rbac.model.enums.UserStatus;
 import lombok.Builder;
 import lombok.Data;
 
@@ -41,11 +43,11 @@ public class SysUser implements Serializable {
     // 必填
     private UserType userType;
 
-    // 默认值 0
-    private Integer riskLevel;
+    // 默认值 0 无风险
+    private RiskLevel riskLevel;
 
     // 默认值 1
-    private Integer status;
+    private UserStatus status;
 
     // 默认值 false
     @TableLogic

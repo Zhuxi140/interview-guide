@@ -49,6 +49,7 @@ public enum ErrorCode {
     PASSWORD_ERROR(20012, "密码错误"),
     ACCOUNT_DISABLED(20013, "账号已被禁用"),
     CODE_ONE_MINUTE(20014, "验证码已经发送，请 1 分钟后再试"),
+    ACCOUNT_DATA_ANOMALY(20015, "账号状态异常，暂无法登录，请联系客服"),
 
     // ------------ 30xxx 企业/多租户错误码 ------------
     ENTERPRISE_NOT_FOUND(30001, "企业不存在"),
@@ -60,6 +61,7 @@ public enum ErrorCode {
     NOT_ENTERPRISE_OWNER(30007, "非企业所有者，无权操作"),
     ENTERPRISE_MEMBER_ALREADY_EXISTS(30008, "该用户已是企业成员"),
     ENTERPRISE_TENANT_MISMATCH(30009, "租户隔离校验不通过"),
+    ENTERPRISE_DATA_ANOMALY(30010, "企业数据异常，请联系客服"),
 
     // ------------ 40xxx 岗位/简历/候选人错误码 ------------
     JOB_NOT_FOUND(40001, "岗位不存在"),

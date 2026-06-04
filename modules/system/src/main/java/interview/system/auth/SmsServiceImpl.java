@@ -2,14 +2,13 @@ package interview.system.auth;
 
 import interview.common.enums.ErrorCode;
 import interview.common.exception.BusinessException;
-import interview.system.auth.enums.SmsType;
+import interview.system.auth.model.enums.SmsType;
 import interview.system.auth.model.req.SmsSendReq;
 import interview.system.rbac.model.entity.SysUser;
 import interview.system.rbac.service.UsersService;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.stereotype.Service;
 
 import java.util.Random;

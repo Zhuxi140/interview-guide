@@ -1,5 +1,6 @@
 package interview.framework.context;
 
+import interview.common.enums.RiskLevel;
 import interview.common.enums.RoleScope;
 import interview.common.enums.UserType;
 import lombok.Builder;
@@ -97,6 +98,7 @@ public class AuthContext {
     public record AuthUser(
             Long userId,
             UserType userType,
+            RiskLevel riskLevel,
             RoleScope roleScope,
             Long enterpriseId,
             String username,

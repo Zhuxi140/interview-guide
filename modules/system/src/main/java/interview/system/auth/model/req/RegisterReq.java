@@ -1,6 +1,5 @@
 package interview.system.auth.model.req;
 
-import interview.system.auth.enums.SmsType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;

@@ -2,4 +2,13 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="interview.system.rbac.mapper.PermissionsMapper">
 
+    <select id="getPermCodeByRoleId" resultType="java.lang.String">
+    SELECT sp.perm_code
+    FROM sys_permissions sp JOIN sys_role_permissions srp
+        ON srp.permission_id = sp.id
+    WHERE srp.role_id IN
+        <foreach collection="roleIds" item="roleId" open="(" separator="," close=")">
+            #{roleId}
+        </foreach>
+    </select>
 </mapper>

@@ -1,7 +1,9 @@
 package interview.system.auth;
 
 
+import interview.system.auth.model.bo.LoginBO;
 import interview.system.auth.model.bo.RegisterBo;
+import interview.system.auth.model.vo.LoginVO;
 import interview.system.auth.model.vo.RegisterVO;
 import org.mapstruct.Mapper;
 
@@ -15,4 +17,6 @@ import org.mapstruct.Mapper;
 @Mapper(componentModel = "spring")
 public interface AuthConvertor {
     RegisterVO toRegisterVO(RegisterBo registerBo);
+
+    LoginVO toLoginVO(LoginBO loginBO);
 }

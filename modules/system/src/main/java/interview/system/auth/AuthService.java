@@ -1,9 +1,11 @@
 package interview.system.auth;
 
 import com.baomidou.mybatisplus.extension.service.IService;
-import interview.system.auth.enums.SmsType;
+import interview.system.auth.model.bo.LoginBO;
 import interview.system.auth.model.bo.RegisterBo;
 import interview.system.auth.model.entity.UserToken;
+import interview.system.auth.model.req.LoginReq;
+import interview.system.auth.model.req.LogoutReq;
 import interview.system.auth.model.req.RegisterReq;
 
 /**
@@ -20,11 +22,11 @@ public interface AuthService extends IService<UserToken> {
      */
     RegisterBo register(RegisterReq register);
 
-    UserToken login(String username,String password);
+    LoginBO login(LoginReq loginReq);
 
     UserToken refreshToken(String refreshToken);
 
-    void logout(String refreshToken);
+    void logout(LogoutReq logout);
 
     UserToken getUserToken();
 

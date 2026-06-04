@@ -3,6 +3,8 @@ package interview.system.auth.model.vo;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 
+import java.util.List;
+
 /**
  * @author zhuxi
  * @apiNote 登录响应
@@ -14,6 +16,15 @@ public record LoginVO (
 
     @Schema(description = "用户ID")
     Long userId,
+
+    @Schema(description = "企业ID")
+    Long enterpriseId,
+
+    @Schema(description = "企业名称")
+    String enterpriseName,
+
+    @Schema(description = "企业logo URL")
+    String logoUrl,
 
     @Schema(description = "用户名")
     String username,
@@ -27,12 +38,18 @@ public record LoginVO (
     @Schema(description = "用户类型：HR / CANDIDATE")
     String userType,
 
+    @Schema(description = "角色编码集合")
+    List<String> roles,
+
+    @Schema(description = "权限标识符集合")
+    List<String> permissions,
+
     @Schema(description = "短时 JWT")
     String accessToken,
 
     @Schema(description = "长时 Refresh Token")
     String refreshToken,
 
-    @Schema(description = "过期时间（秒）")
+    @Schema(description = "短时token过期时间（秒）")
     Long expiresIn
 ) {}

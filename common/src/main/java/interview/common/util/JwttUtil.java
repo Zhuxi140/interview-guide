@@ -68,7 +68,7 @@ public class JwttUtil {
             } catch (JwtException | IllegalArgumentException e){
             log.error("JWT 解析失败: {}",e.getMessage());
             throw new UnauthorizedException();
-        }
+            }
     }
 
 }

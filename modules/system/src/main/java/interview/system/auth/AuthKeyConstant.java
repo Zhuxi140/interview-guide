@@ -1,6 +1,6 @@
 package interview.system.auth;
 
-import interview.system.auth.enums.SmsType;
+import interview.system.auth.model.enums.SmsType;
 
 /**
  * @author zhuxi
@@ -36,5 +36,14 @@ public interface AuthKeyConstant {
      */
     static String getSmsLockKey(String phone, SmsType type){
         return PREFIX + SMS_LOCK_PREFIX + phone + ":" + type.name();
+    }
+
+    /**
+     * 获取token禁用key
+     * @param token token
+     * @return token禁用key
+     */
+    static String getTokenBanKey(String token){
+        return PREFIX + TOKEN_BAN_PREFIX + token;
     }
 }

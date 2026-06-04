@@ -2,11 +2,13 @@ package interview.system.auth;
 
 import interview.common.constant.ApiVersion;
 import interview.common.constant.Result;
-import interview.system.auth.enums.SmsType;
+import interview.system.auth.model.bo.LoginBO;
 import interview.system.auth.model.bo.RegisterBo;
-import interview.system.auth.model.entity.UserToken;
+import interview.system.auth.model.req.LoginReq;
+import interview.system.auth.model.req.LogoutReq;
 import interview.system.auth.model.req.RegisterReq;
 import interview.system.auth.model.req.SmsSendReq;
+import interview.system.auth.model.vo.LoginVO;
 import interview.system.auth.model.vo.RegisterVO;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -46,5 +48,21 @@ public class AuthController {
         RegisterBo registerBo = authService.register(register);
         RegisterVO registerVO = authConvertor.toRegisterVO(registerBo);
         return Result.success(registerVO);
+    }
+
+
+    @ApiResponse(description = "用户登录")
+    @PostMapping("/login")
+    public Result<LoginVO> login(@RequestBody LoginReq loginReq) {
+        LoginBO login = authService.login(loginReq);
+        LoginVO loginVO = authConvertor.toLoginVO(login);
+        return Result.success(loginVO);
+    }
+
+    @ApiResponse(description = "用户登出")
+    @PostMapping("/logout")
+    public Result<Void> logout(@RequestBody LogoutReq logout) {
+        authService.logout(logout);
+        return Result.success();
     }
 }

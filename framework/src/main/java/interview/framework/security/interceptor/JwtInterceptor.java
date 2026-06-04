@@ -1,6 +1,7 @@
 package interview.framework.security.interceptor;
 
 import cn.hutool.core.util.StrUtil;
+import interview.common.enums.RiskLevel;
 import interview.common.enums.RoleScope;
 import interview.common.enums.UserType;
 import interview.common.exception.UnauthorizedException;
@@ -56,6 +57,13 @@ public class JwtInterceptor implements HandlerInterceptor {
                     return new UnauthorizedException();
                 });
 
+        Integer riskLevel = Optional.ofNullable(claims.get("riskLevel", Integer.class))
+                .filter(level -> level >= RiskLevel.NO_RISK.getCode())
+                .orElseThrow(() -> {
+                    log.error("从token中未获取到riskLevel");
+                    return new UnauthorizedException();
+                });
+
         Number number = claims.get("enterpriseId", Number.class);
         Long enterpriseId = number != null ? number.longValue() : null;
         String username = claims.get("username", String.class);
@@ -66,6 +74,7 @@ public class JwtInterceptor implements HandlerInterceptor {
         AuthContext.setAuthContext(new AuthContext.AuthUser(
                 userId,
                 UserType.valueOf(userTypeString),
+                RiskLevel.codeToRiskLevel(riskLevel),
                 RoleScope.valueOf(roleScopeString),
                 enterpriseId,
                 username,

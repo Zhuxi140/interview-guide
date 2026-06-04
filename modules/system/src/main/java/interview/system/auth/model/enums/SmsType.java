@@ -1,4 +1,4 @@
-package interview.system.auth.enums;
+package interview.system.auth.model.enums;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -17,6 +17,7 @@ public enum SmsType {
     LOGIN("LOGIN", "登录"),
     RESET_PWD("RESET_PWD", "忘记密码"),
     BIND_PHONE("BIND_PHONE", "绑定手机");
+
 
     private final String code;
     private final String msg;
