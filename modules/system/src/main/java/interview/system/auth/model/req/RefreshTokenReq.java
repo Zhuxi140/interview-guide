@@ -16,4 +16,8 @@ public class RefreshTokenReq {
     @NotBlank(message = "Refresh Token 不能为空")
     @Schema(description = "长时 Refresh Token")
     private String refreshToken;
+
+    @NotBlank(message = "Access Token 不能为空")
+    @Schema(description = "短时 Access Token")
+    private String accessToken;
 }

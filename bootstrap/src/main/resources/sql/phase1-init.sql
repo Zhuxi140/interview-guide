@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS user_tokens (
     expires_at          TIMESTAMPTZ     NOT NULL,
     is_revoked          BOOLEAN         DEFAULT FALSE,
     is_deleted          BOOLEAN         DEFAULT FALSE,
-    trace_id            VARCHAR(64),
+    trace_id            VARCHAR(128),
     created_at          TIMESTAMPTZ     NOT NULL,
     PRIMARY KEY (id)
 );
@@ -89,7 +89,7 @@ CREATE TABLE IF NOT EXISTS sys_roles (
     role_name   VARCHAR(64)     NOT NULL,
     role_scope  VARCHAR(16)     NOT NULL,
     updated_by  BIGINT,
-    trace_id    VARCHAR(64),
+    trace_id    VARCHAR(128),
     updated_at  TIMESTAMPTZ,
     created_at  TIMESTAMPTZ     NOT NULL,
     PRIMARY KEY (id)
@@ -116,7 +116,7 @@ CREATE TABLE IF NOT EXISTS sys_permissions (
     api_path    VARCHAR(256),
     status      SMALLINT        DEFAULT 1,
     updated_by  BIGINT,
-    trace_id    VARCHAR(64),
+    trace_id    VARCHAR(128),
     updated_at  TIMESTAMPTZ,
     PRIMARY KEY (id)
 );
@@ -136,31 +136,39 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_perm_code ON sys_permissions (perm_code);
 
 -- ==================== 5. sys_user_roles ====================
 CREATE TABLE IF NOT EXISTS sys_user_roles (
+    id          BIGINT          NOT NULL,
     user_id     BIGINT          NOT NULL,
     role_id     BIGINT          NOT NULL,
     updated_by  BIGINT,
-    trace_id    VARCHAR(64),
+    trace_id    VARCHAR(128),
     updated_at  TIMESTAMPTZ,
-    PRIMARY KEY (user_id, role_id)
+    created_at  TIMESTAMPTZ     NOT NULL,
+    PRIMARY KEY (id)
 );
 
 COMMENT ON TABLE sys_user_roles IS '用户角色关联表';
+COMMENT ON COLUMN sys_user_roles.id IS '主键，雪花算法生成';
 COMMENT ON COLUMN sys_user_roles.user_id IS '关联用户 ID';
 COMMENT ON COLUMN sys_user_roles.role_id IS '关联角色 ID';
 COMMENT ON COLUMN sys_user_roles.updated_by IS '操作人 ID';
 COMMENT ON COLUMN sys_user_roles.trace_id IS '调用链 ID';
 COMMENT ON COLUMN sys_user_roles.updated_at IS '更新时间';
+COMMENT ON COLUMN sys_user_roles.created_at IS '创建时间';
+
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_user_role ON sys_user_roles (user_id, role_id);
 
 
 -- ==================== 6. sys_role_permissions ====================
 CREATE TABLE IF NOT EXISTS sys_role_permissions (
-    role_id         BIGINT      NOT NULL,
-    permission_id   BIGINT      NOT NULL,
+    id              BIGINT          NOT NULL,
+    role_id         BIGINT          NOT NULL,
+    permission_id   BIGINT          NOT NULL,
     updated_by      BIGINT,
-    trace_id        VARCHAR(64),
+    trace_id        VARCHAR(128),
     updated_at      TIMESTAMPTZ,
-    created_at      TIMESTAMPTZ NOT NULL,
-    PRIMARY KEY (role_id, permission_id)
+    created_at      TIMESTAMPTZ     NOT NULL,
+    PRIMARY KEY (id)
 );
 
 COMMENT ON TABLE sys_role_permissions IS '角色权限关联表';
@@ -170,6 +178,8 @@ COMMENT ON COLUMN sys_role_permissions.updated_by IS '操作人 ID';
 COMMENT ON COLUMN sys_role_permissions.trace_id IS '调用链 ID';
 COMMENT ON COLUMN sys_role_permissions.updated_at IS '更新时间';
 COMMENT ON COLUMN sys_role_permissions.created_at IS '创建时间';
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_role_permission ON sys_role_permissions (role_id, permission_id);
 
 
 -- ==================== 7. enterprises ====================
@@ -185,7 +195,7 @@ CREATE TABLE IF NOT EXISTS enterprises (
     logo_url        VARCHAR(512),
     created_at      TIMESTAMPTZ     NOT NULL,
     is_deleted      BOOLEAN         DEFAULT FALSE,
-    trace_id        VARCHAR(64),
+    trace_id        VARCHAR(128),
     updated_at      TIMESTAMPTZ,
     PRIMARY KEY (id)
 );
@@ -215,7 +225,7 @@ CREATE TABLE IF NOT EXISTS enterprise_team_members (
     created_at      TIMESTAMPTZ     NOT NULL,
     is_deleted      BOOLEAN         DEFAULT FALSE,
     updated_by      BIGINT,
-    trace_id        VARCHAR(64),
+    trace_id        VARCHAR(128),
     updated_at      TIMESTAMPTZ,
     PRIMARY KEY (id)
 );
@@ -252,7 +262,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     created_at      TIMESTAMPTZ     NOT NULL,
     is_deleted      BOOLEAN         DEFAULT FALSE,
     updated_by      BIGINT,
-    trace_id        VARCHAR(64),
+    trace_id        VARCHAR(128),
     updated_at      TIMESTAMPTZ,
     PRIMARY KEY (id)
 );
@@ -276,3 +286,27 @@ COMMENT ON COLUMN jobs.is_deleted IS '逻辑删除标识';
 COMMENT ON COLUMN jobs.updated_by IS '轻量审计：操作人';
 COMMENT ON COLUMN jobs.trace_id IS '调用链 ID';
 COMMENT ON COLUMN jobs.updated_at IS '更新时间';
+
+
+-- ============================================================
+-- Phase 1 角色种子数据（idempotent：先删后插，避免重复执行报错）
+-- role_scope: PLATFORM / ENTERPRISE / USER
+-- ============================================================
+DELETE FROM sys_roles WHERE id BETWEEN 1001 AND 3001;
+
+-- PLATFORM 域（平台运营端 Admin）
+INSERT INTO sys_roles (id, role_code, role_name, role_scope, created_at) VALUES
+(1001, 'SUPER_ADMIN',       '超级管理员',   'PLATFORM',   NOW()),
+(1002, 'FINANCE_ADMIN',     '财务管理员',   'PLATFORM',   NOW());
+
+-- ENTERPRISE 域（B 端企业，通过 enterprise_team_members.role_id 分配）
+INSERT INTO sys_roles (id, role_code, role_name, role_scope, created_at) VALUES
+(2001, 'ENTERPRISE_OWNER',  '企业所有者',   'ENTERPRISE', NOW()),
+(2002, 'ENTERPRISE_ADMIN',  '企业管理员',   'ENTERPRISE', NOW()),
+(2003, 'HR_MANAGER',        'HR 经理',      'ENTERPRISE', NOW()),
+(2004, 'HR_RECRUITER',      '招聘专员',     'ENTERPRISE', NOW()),
+(2005, 'INTERVIEWER',       '面试官',       'ENTERPRISE', NOW());
+
+-- USER 域（C 端求职者，注册时 sys_user_roles 自动分配）
+INSERT INTO sys_roles (id, role_code, role_name, role_scope, created_at) VALUES
+(3001, 'CANDIDATE',         '求职者',       'USER',       NOW());

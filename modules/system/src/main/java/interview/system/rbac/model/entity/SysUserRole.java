@@ -33,4 +33,7 @@ public class SysUserRole implements Serializable {
 
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private OffsetDateTime updatedAt;
+
+    @TableField(fill = FieldFill.INSERT)
+    private OffsetDateTime createdAt;
 }

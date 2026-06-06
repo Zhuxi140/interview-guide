@@ -1,6 +1,7 @@
 package interview.system.auth;
 
 
+import interview.system.auth.model.enums.SmsType;
 import interview.system.auth.model.req.SmsSendReq;
 
 /**
@@ -16,4 +17,12 @@ public interface SmsService {
      * @param smsReq 短信请求
      */
     void sendSms(SmsSendReq smsReq);
+
+    /**
+     * 验证码
+     * @param phone 手机号
+     * @param code 验证码
+     * @param type 验证码类型
+     */
+    void verifyCode(String phone, String code, SmsType type);
 }

@@ -18,6 +18,6 @@ public record RefreshTokenVO (
     @Schema(description = "新长时 Refresh Token")
     String refreshToken,
 
-    @Schema(description = "过期时间（秒）")
+    @Schema(description = "短期时间（秒）")
     Long expiresIn
 ) {}

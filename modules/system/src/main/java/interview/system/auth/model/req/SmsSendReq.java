@@ -3,6 +3,7 @@ package interview.system.auth.model.req;
 import interview.system.auth.model.enums.SmsType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import lombok.Data;
 
@@ -20,7 +21,7 @@ public class SmsSendReq {
     @Schema(description = "手机号")
     private String phone;
 
-    @NotBlank(message = "短信类型不能为空")
+    @NotNull(message = "短信类型不能为空")
     @Schema(description = "短信类型")
     private SmsType smsType;
 }

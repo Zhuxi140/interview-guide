@@ -2,9 +2,9 @@ package interview.system.rbac.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import interview.system.rbac.model.entity.SysRole;
+import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
-import org.mapstruct.Mapper;
 
 import java.util.List;
 

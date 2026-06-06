@@ -16,7 +16,9 @@ public enum SmsType {
     REGISTER("REGISTER", "注册"),
     LOGIN("LOGIN", "登录"),
     RESET_PWD("RESET_PWD", "忘记密码"),
-    BIND_PHONE("BIND_PHONE", "绑定手机");
+    BIND_PHONE("BIND_PHONE", "绑定手机"),
+    RISK_VERIFY("RISK_VERIFY", "风控验证"),
+    SENSITIVE_OPERATION("SENSITIVE_OPERATION", "敏感操作");
 
 
     private final String code;

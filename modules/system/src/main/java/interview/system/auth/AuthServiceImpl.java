@@ -1,29 +1,27 @@
 package interview.system.auth;
 
 import cn.hutool.core.collection.CollUtil;
-import cn.hutool.core.io.resource.ResourceUtil;
 import cn.hutool.core.lang.id.NanoId;
 import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.crypto.digest.DigestUtil;
 import com.baomidou.mybatisplus.core.incrementer.IdentifierGenerator;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import interview.common.enums.ErrorCode;
-import interview.common.enums.RiskLevel;
-import interview.common.enums.RoleScope;
-import interview.common.enums.UserType;
+import interview.common.enums.*;
 import interview.common.exception.BusinessException;
 import interview.common.util.CryptoUtil;
 import interview.common.util.JwttUtil;
 import interview.framework.config.properties.JwtProperties;
+import interview.framework.context.AuthContext;
 import interview.system.auth.model.bo.LoginBO;
+import interview.system.auth.model.bo.UserInfoBO;
 import interview.system.auth.model.enums.SmsType;
 import interview.system.auth.mapper.AuthMapper;
 import interview.system.auth.model.bo.RegisterBo;
 import interview.system.auth.model.entity.UserToken;
-import interview.system.auth.model.req.LoginReq;
-import interview.system.auth.model.req.LogoutReq;
-import interview.system.auth.model.req.RegisterReq;
+import interview.system.auth.model.req.*;
+import interview.system.auth.model.vo.RefreshTokenVO;
+import interview.system.auth.model.vo.TokenInfoVO;
 import interview.system.rbac.mapper.PermissionsMapper;
 import interview.system.rbac.model.entity.SysRole;
 import interview.system.rbac.model.entity.SysUser;
@@ -35,18 +33,16 @@ import interview.system.tenant.EnterprisesService;
 import interview.system.tenant.model.entity.Enterprise;
 import interview.system.tenant.model.entity.EnterpriseTeamMember;
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.OffsetDateTime;
-import java.util.Collections;
-import java.util.Date;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 
 /**
@@ -60,6 +56,7 @@ import java.util.concurrent.TimeUnit;
 @AllArgsConstructor
 public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implements AuthService{
 
+    private final SmsService smsService;
     private final UsersService usersService;
     private final EnterprisesService enterprisesService;
     private final UserRolesService userRolesService;
@@ -70,20 +67,13 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
     private final JwttUtil jwttUtil;
     private final IdentifierGenerator customIdGenerator;
     private final JwtProperties jwtProperties;
-    private static final DefaultRedisScript<Long> CHECK_DELETE_CODE_SCRIPT;
-
-    static{
-        CHECK_DELETE_CODE_SCRIPT = new DefaultRedisScript<>();
-        CHECK_DELETE_CODE_SCRIPT.setScriptText(ResourceUtil.readUtf8Str("GetDeleteCode.lua"));
-        CHECK_DELETE_CODE_SCRIPT.setResultType(Long.class);
-    }
 
     @Override
     @Transactional(rollbackFor = BusinessException.class)
     public RegisterBo register(RegisterReq register) {
 
         // 验证code 并 删除code
-        checkCode( register);
+        smsService.verifyCode(register.getPhone(), register.getCode(), SmsType.REGISTER);
 
         // 验证用户名、手机号、邮箱是否已存在
         checkUnique( register);
@@ -93,7 +83,12 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
         SysUser user = buildUser(register, number);
         usersService.save(user);
 
-        // TODO: 构建角色及权限
+        // 构建角色(默认求职者)
+        SysUserRole sysUserRole = new SysUserRole();
+        sysUserRole.setUserId(user.getId());
+        sysUserRole.setRoleId(Role.CANDIDATE.getCode().longValue());
+        userRolesService.save(sysUserRole);
+
 
         // 构建Token
         String raw = IdUtil.fastSimpleUUID();
@@ -110,17 +105,18 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
         // 验证用户名、状态、密码
         SysUser user = checkAndGetUser(login);
 
+        Long userId = user.getId();
         // 构建Token 并 去除本设备的旧Token
-        String raw = checkAndGetUserToken(login, user);
+        String raw = checkAndGetUserToken(userId, login.getDeviceInfo(), login.getIpAddress());
 
         // 加载企业信息 和 角色权限信息
-        EnterpriseContext enterpriseContext = loadEnterpriseContext(user.getId());
-        RbacContext rbacContext = loadRbacContext(user.getId());
+        EnterpriseContext enterpriseContext = loadEnterpriseContext(userId);
+        RbacContext rbacContext = loadRbacContext(userId, enterpriseContext.enterpriseId);
 
         List<String> roleCodes = rbacContext.roleCodes;
 
-        Map<String, Object> claims = new java.util.HashMap<>();
-        claims.put("userId", user.getId());
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("userId", userId);
         claims.put("username", user.getUsername());
         claims.put("userType", user.getUserType().name());
         claims.put("riskLevel", user.getRiskLevel().getCode());
@@ -129,10 +125,10 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
         if (enterpriseId != null) {
             claims.put("enterpriseId", enterpriseId);
         }
-        String token = jwttUtil.generatorToken(claims, user.getId());
+        String token = jwttUtil.generatorToken(claims, userId);
 
         return LoginBO.builder()
-                    .userId(user.getId())
+                    .userId(userId)
                     .enterpriseId(enterpriseId)
                     .enterpriseName(enterpriseContext.name)
                     .logoUrl(enterpriseContext.logoUrl)
@@ -150,33 +146,195 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
 
     @Override
     @Transactional(rollbackFor = BusinessException.class)
-    public UserToken refreshToken(String refreshToken) {
-        return null;
+    public RefreshTokenVO refreshToken(RefreshTokenReq refresh) {
+        String refreshToken   = refresh.getRefreshToken();
+
+        // 验证refreshToken是否存在
+        UserToken token = lambdaQuery()
+                .select(
+                        UserToken::getUserId,
+                        UserToken::getDeviceInfo,
+                        UserToken::getIpAddress,
+                        UserToken::getIsRevoked
+                        )
+                .eq(UserToken::getRefreshTokenHash, DigestUtil.sha256Hex(refreshToken))
+                .gt(UserToken::getExpiresAt, OffsetDateTime.now())
+                .one();
+
+        if (token == null) {
+            log.error("异常的登录状态,refreshToken：[{}]不存在或过期", refreshToken);
+            throw new BusinessException(ErrorCode.ACCOUNT_DATA_ANOMALY);
+        }
+
+        Long userId = token.getUserId();
+        String ipAddress = token.getIpAddress();
+
+        // 触发重放检测
+        if (token.getIsRevoked()){
+            log.error("检测到过期Refresh Token 再次被使用! userId:[{}], IP:[{}]", userId, ipAddress);
+
+            lambdaUpdate()
+                    .eq(UserToken::getUserId, userId)
+                    .set(UserToken::getIsRevoked, true)
+                    .update();
+
+            throw new BusinessException(ErrorCode.RISK_CONTROL);
+        }
+
+        // 生成refreshToken
+        String raw = checkAndGetUserToken(userId, token.getDeviceInfo(), ipAddress);
+
+        // 验证accessToken
+        String access = refresh.getAccessToken();
+        Claims claims;
+        try{
+            claims = jwttUtil.parseToken(access);
+        }catch (ExpiredJwtException e){
+            claims = e.getClaims();
+        }catch (Exception e){
+            throw new BusinessException(ErrorCode.TOKEN_INVALID);
+        }
+
+        long expire = claims.getExpiration().getTime() - System.currentTimeMillis();
+        if (expire > 0) {
+            // 如果accessToken未过期，则加入黑名单
+            stringRedisTemplate.opsForValue().set(
+                    AuthKeyConstant.getTokenBanKey(access),
+                    "1",
+                    expire,
+                    TimeUnit.MILLISECONDS
+            );
+        }
+
+        // 生成新的accessToken
+        String accessToken = jwttUtil.generatorToken(claims,token.getUserId());
+
+        return RefreshTokenVO.builder()
+                    .accessToken(accessToken)
+                    .refreshToken(raw)
+                    .expiresIn(jwtProperties.getExpiration() * 60)
+                    .build();
     }
 
     @Override
     @Transactional(rollbackFor = BusinessException.class)
     public void logout(LogoutReq logout) {
 
-        Claims claims = jwttUtil.parseToken(logout.getAccessToken());
-        Date expiration = claims.getExpiration();
+        String accessToken = logout.getAccessToken();
+        try{
+            Claims claims = jwttUtil.parseToken(accessToken);
+            Date expiration = claims.getExpiration();
+            long expire = expiration.getTime() - System.currentTimeMillis();
 
-        long expire = expiration.getTime() - System.currentTimeMillis();
-
-        if (expire > 0){
-            stringRedisTemplate.opsForValue()
-                    .set(AuthKeyConstant.getTokenBanKey(logout.getAccessToken()), "1", expire, TimeUnit.MILLISECONDS);
+            if (expire > 0){
+                stringRedisTemplate.opsForValue()
+                        .set(AuthKeyConstant.getTokenBanKey(accessToken), "1", expire, TimeUnit.MILLISECONDS);
+            }
+        }catch (ExpiredJwtException e){
+            log.info("Logout: AccessToken 已过期，无需加入黑名单");
         }
 
         String hashToken = DigestUtil.sha256Hex(logout.getRefreshToken());
         lambdaUpdate()
                     .eq(UserToken::getRefreshTokenHash, hashToken)
-                    .remove();
+                    .set(UserToken::getIsRevoked, true)
+                    .update();
     }
 
     @Override
-    public UserToken getUserToken() {
-        return null;
+    public List<TokenInfoVO> getUserToken() {
+
+        List<UserToken> list = lambdaQuery()
+                .select(
+                        UserToken::getId,
+                        UserToken::getDeviceInfo,
+                        UserToken::getIpAddress,
+                        UserToken::getExpiresAt,
+                        UserToken::getCreatedAt
+                )
+                .eq(UserToken::getUserId, AuthContext.getUserId())
+                .eq(UserToken::getIsRevoked, false)
+                .gt(UserToken::getExpiresAt, OffsetDateTime.now())
+                .list();
+
+        return list.stream()
+                .map(item -> TokenInfoVO.builder()
+                        .tokenId(item.getId())
+                        .deviceInfo(item.getDeviceInfo())
+                        .ipAddress(item.getIpAddress())
+                        .createdAt(item.getCreatedAt())
+                        .expiresAt(item.getExpiresAt())
+                        .build())
+                .toList();
+    }
+
+    @Override
+    @Transactional(rollbackFor = BusinessException.class)
+    public void revoke(Long tokenId, RevokeDeviceReq code) {
+
+        Long userId = AuthContext.getUserId();
+
+        SysUser user = usersService.lambdaQuery()
+                .select(SysUser::getPhone)
+                .eq(SysUser::getId, userId)
+                .one();
+        if (user == null){
+            log.error("token有效，但数据库无此实体，userId：[{}]", userId);
+            throw new BusinessException(ErrorCode.ACCOUNT_DATA_ANOMALY);
+        }
+
+        smsService.verifyCode(user.getPhone(), code.getCode(), SmsType.SENSITIVE_OPERATION);
+
+        boolean update = lambdaUpdate()
+                .eq(UserToken::getId, tokenId)
+                .eq(UserToken::getUserId, userId)
+                .set(UserToken::getIsRevoked, true)
+                .update();
+
+        if (!update){
+            log.warn("越权拦截或数据不存在: 用户 [{}] 试图作废 Token [{}]", userId, tokenId);
+            throw new BusinessException(ErrorCode.ACCOUNT_DATA_ANOMALY);
+        }
+
+        log.info("设备下线成功: 用户 [{}] 成功移除了设备 Token [{}]", userId, tokenId);
+    }
+
+    @Override
+    public UserInfoBO getUserInfo() {
+
+        Long userId = AuthContext.getUserId();
+        SysUser user = usersService.lambdaQuery()
+                .select(
+                    SysUser::getUsername,
+                    SysUser::getNickname,
+                    SysUser::getPhone,
+                    SysUser::getEmail,
+                    SysUser::getAvatarUrl,
+                    SysUser::getStatus
+                )
+                .eq(SysUser::getId, AuthContext.getUserId())
+                .one();
+
+        if (user == null){
+            log.error("token有效，但数据库无此实体，userId：[{}]", userId);
+            throw new BusinessException(ErrorCode.ACCOUNT_DATA_ANOMALY);
+        }
+
+        if (user.getStatus() != UserStatus.NORMAL){
+            log.error("用户已冻结，userId:[{}], userStatus:[{}]", userId, user.getStatus().name());
+            throw new BusinessException(ErrorCode.USER_ALREADY_FREEZE);
+        }
+
+        return UserInfoBO.builder()
+                .id(userId)
+                .username(user.getUsername())
+                .nickname(user.getNickname())
+                .phone(user.getPhone())
+                .email(user.getEmail())
+                .avatarUrl(user.getAvatarUrl())
+                .userType(AuthContext.getUserType().name())
+                .status(user.getStatus())
+                .build();
     }
 
 
@@ -233,20 +391,6 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
                 .build();
     }
 
-    private void checkCode(RegisterReq register){
-        // 验证验证码 并删除验证码
-        Long result = stringRedisTemplate.execute(
-                CHECK_DELETE_CODE_SCRIPT,
-                Collections.singletonList(AuthKeyConstant.getSmsCodeKey(register.getPhone(), SmsType.REGISTER)),
-                register.getCode());
-
-        if(result == null || result == 0L){
-            throw new BusinessException(ErrorCode.CODE_ERROR_OR_EXPIRED);
-        }else if(result == 1L){
-            throw new BusinessException(ErrorCode.CODE_ERROR);
-        }
-    }
-
     private RegisterBo buildRegisterBo(String raw,SysUser user,Long number){
         // 生成JWT令牌
         String jwtToken = jwttUtil.generatorToken(Map.of(
@@ -294,20 +438,23 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
         return user;
     }
 
-    private String checkAndGetUserToken(LoginReq login,SysUser user){
+    private String checkAndGetUserToken(Long userId,String deviceInfo,String ipAddress){
             String raw = IdUtil.fastSimpleUUID();
             UserToken userToken = UserToken.builder()
-                        .userId(user.getId())
+                        .userId(userId)
                         .refreshTokenHash(DigestUtil.sha256Hex(raw))
-                        .deviceInfo(login.getDeviceInfo())
-                        .ipAddress(login.getIpAddress())
+                        .deviceInfo(deviceInfo)
+                        .ipAddress(ipAddress)
                         .expiresAt(OffsetDateTime.now().plusDays(7))
                         .build();
 
-            lambdaUpdate()
-                .eq(UserToken::getUserId, user.getId())
-                .eq(UserToken::getDeviceInfo, login.getDeviceInfo())
-                .remove();
+                lambdaUpdate()
+                    .eq(UserToken::getUserId, userId)
+                    .eq(UserToken::getDeviceInfo, deviceInfo)
+                    .eq(UserToken::getIsRevoked,false)
+                    .set(UserToken::getIsRevoked, true)
+                    .update();
+
             save(userToken);
         return raw;
     }
@@ -336,17 +483,30 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
         return new EnterpriseContext(enterpriseId, enterprise.getName(), enterprise.getLogoUrl());
     }
 
-    private RbacContext loadRbacContext(Long userId) {
-        List<Long> roleIds = userRolesService.lambdaQuery()
+    private RbacContext loadRbacContext(Long userId,Long enterpriseId) {
+        ArrayList<Long> roleIds = userRolesService.lambdaQuery()
                 .select(SysUserRole::getRoleId)
                 .eq(SysUserRole::getUserId, userId)
                 .list()
                 .stream()
                 .map(SysUserRole::getRoleId)
-                .toList();
+                .collect(Collectors.toCollection(ArrayList::new));
+        if (enterpriseId != null){
+            List<Long> enterpriseRoleIds = enterpriseTeamMembersService.lambdaQuery()
+                    .select(EnterpriseTeamMember::getRoleId)
+                    .eq(EnterpriseTeamMember::getUserId, userId)
+                    .eq(EnterpriseTeamMember::getEnterpriseId, enterpriseId)
+                    .list()
+                    .stream()
+                    .map(EnterpriseTeamMember::getRoleId)
+                    .toList();
+
+            roleIds.addAll(enterpriseRoleIds);
+        }
+
 
         if (CollUtil.isEmpty(roleIds)) {
-            log.error("脏数据拦截: 用户ID [{}], 其关联的角色ID 在 user_roles 表中查不到实体记录！", userId);
+            log.error("脏数据拦截: 用户ID [{}], 企业Id [{}], 其关联的角色ID 在 user_roles 和 enterpiseTeamMeber 表中查不到实体记录！", userId, enterpriseId);
             throw new BusinessException(ErrorCode.ACCOUNT_DATA_ANOMALY);
         }
 
