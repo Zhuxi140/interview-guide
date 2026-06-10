@@ -402,6 +402,7 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
 
         return RegisterBo.builder()
                 .userId(number)
+                .username(user.getUsername())
                 .accessToken(jwtToken)
                 .refreshToken(raw)
                 .expiresIn(jwtProperties.getExpiration() * 60L)
