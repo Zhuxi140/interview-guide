@@ -1,10 +1,10 @@
-package interview.system.rbac.model.entity;
+package interview.system.auth.model.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
 import interview.common.enums.UserType;
 import interview.framework.security.mybatis.AesTypeHandler;
 import interview.common.enums.RiskLevel;
-import interview.system.rbac.model.enums.UserStatus;
+import interview.system.auth.model.enums.UserStatus;
 import lombok.Builder;
 import lombok.Data;
 

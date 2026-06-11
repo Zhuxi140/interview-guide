@@ -2,4 +2,28 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="interview.system.rbac.mapper.RolesMapper">
 
+    <resultMap id="RoleDetail" type="interview.system.rbac.model.vo.RoleDetailVO">
+        <id property="id" column="id"/>
+        <result property="roleCode" column="role_code"/>
+        <result property="roleName" column="role_name"/>
+        <result property="roleScope" column="role_scope"/>
+        <result property="createdAt" column="created_at"/>
+        <collection property="permissions" ofType="String">
+            <result column="permission"/>
+        </collection>
+     </resultMap>
+
+    <select id="selectAllPerByRoleId" resultMap="RoleDetail">
+        SELECT
+            sr.id,
+            sr.role_code,
+            sr.role_name,
+            sr.role_scope,
+            sp.perm_code AS permission,
+            sr.created_at
+        FROM sys_roles sr
+        LEFT JOIN sys_role_permissions srp ON sr.id = srp.role_id
+        LEFT JOIN sys_permissions sp ON srp.permission_id = sp.id
+        WHERE sr.id = #{roleId}
+    </select>
 </mapper>

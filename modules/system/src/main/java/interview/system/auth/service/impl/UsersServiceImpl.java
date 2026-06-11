@@ -1,7 +1,7 @@
-package interview.system.rbac.service.impl;
+package interview.system.auth.service.impl;
 
-import interview.system.rbac.model.entity.SysUser;
-import interview.system.rbac.service.UsersService;
+import interview.system.auth.model.entity.SysUser;
+import interview.system.auth.service.UsersService;
 import interview.system.rbac.mapper.UsersMapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import org.springframework.stereotype.Service;

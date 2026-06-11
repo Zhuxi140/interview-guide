@@ -17,7 +17,7 @@ import java.time.OffsetDateTime;
 @Data
 public class SysRole implements Serializable {
 
-    @TableId(type = IdType.ASSIGN_ID)
+    @TableId(type = IdType.INPUT)
     private Long id;
 
     // 必填

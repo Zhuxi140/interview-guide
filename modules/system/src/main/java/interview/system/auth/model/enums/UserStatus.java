@@ -1,4 +1,4 @@
-package interview.system.rbac.model.enums;
+package interview.system.auth.model.enums;
 
 import com.baomidou.mybatisplus.annotation.EnumValue;
 import lombok.AllArgsConstructor;

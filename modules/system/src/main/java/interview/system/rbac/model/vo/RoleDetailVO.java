@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Builder;
 
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 
 /**
@@ -19,5 +20,5 @@ public record RoleDetailVO(
     String roleScope,
     List<String> permissions,
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-    LocalDateTime createdAt
+    OffsetDateTime createdAt
 ) {}

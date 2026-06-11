@@ -1,6 +1,6 @@
 package interview.system.auth.model.bo;
 
-import interview.system.rbac.model.enums.UserStatus;
+import interview.system.auth.model.enums.UserStatus;
 import lombok.Builder;
 
 @Builder

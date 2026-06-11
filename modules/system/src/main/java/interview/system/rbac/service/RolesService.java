@@ -2,15 +2,28 @@ package interview.system.rbac.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import interview.system.rbac.model.entity.SysRole;
+import interview.system.rbac.model.vo.RoleDetailVO;
+import interview.system.rbac.model.vo.RoleListItemVO;
+
+import java.util.List;
 
 /**
- * <p>
- * 系统角色表 服务类
- * </p>
- *
  * @author zhuxi
- * @since 2026-05-27
+ * @apiNote 角色服务
+ * @since 2026/5/27 14:09
  */
 public interface RolesService extends IService<SysRole> {
 
+    /**
+     * 获取角色列表
+     * @return 角色列表
+     */
+    List<RoleListItemVO> listRoles();
+
+    /**
+     * 获取角色详情
+     * @param roleId 角色ID
+     * @return 角色详情
+     */
+    RoleDetailVO getRoleDetail(Long roleId);
 }

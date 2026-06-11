@@ -1,4 +1,4 @@
-package interview.system.auth;
+package interview.system.auth.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import interview.system.auth.model.bo.LoginBO;

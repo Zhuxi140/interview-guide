@@ -49,7 +49,7 @@ public enum ErrorCode {
     PASSWORD_ERROR(20012, "密码错误"),
     ACCOUNT_DISABLED(20013, "账号已被禁用"),
     CODE_ONE_MINUTE(20014, "验证码已经发送，请 1 分钟后再试"),
-    ACCOUNT_DATA_ANOMALY(20015, "账号状态异常，暂无法登录，请联系客服"),
+    ACCOUNT_DATA_ANOMALY(20015, "账号数据状态异常，请稍后重试或联系客服"),
 
     // ------------ 30xxx 企业/多租户错误码 ------------
     ENTERPRISE_NOT_FOUND(30001, "企业不存在"),

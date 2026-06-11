@@ -1,12 +1,14 @@
-package interview.system.auth;
+package interview.system.auth.service.impl;
 
 import cn.hutool.core.io.resource.ResourceUtil;
 import interview.common.enums.ErrorCode;
 import interview.common.exception.BusinessException;
+import interview.system.auth.AuthKeyConstant;
 import interview.system.auth.model.enums.SmsType;
 import interview.system.auth.model.req.SmsSendReq;
-import interview.system.rbac.model.entity.SysUser;
-import interview.system.rbac.service.UsersService;
+import interview.system.auth.model.entity.SysUser;
+import interview.system.auth.service.SmsService;
+import interview.system.auth.service.UsersService;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -14,7 +16,6 @@ import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 
 import java.util.Collections;
-import java.util.Objects;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
@@ -27,7 +28,7 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 @Service
 @AllArgsConstructor
-public class SmsServiceImpl implements SmsService{
+public class SmsServiceImpl implements SmsService {
 
     private final StringRedisTemplate stringRedisTemplate;
     private final UsersService usersService;

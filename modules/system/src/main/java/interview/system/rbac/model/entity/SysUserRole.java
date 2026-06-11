@@ -1,7 +1,10 @@
 package interview.system.rbac.model.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.io.Serializable;
 import java.time.OffsetDateTime;
@@ -14,14 +17,12 @@ import java.time.OffsetDateTime;
 
 @TableName("sys_user_roles")
 @Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class SysUserRole implements Serializable {
-
-    @TableId(type = IdType.ASSIGN_ID)
-    private Long id;
-
     // 必填
     private Long userId;
-
     // 必填
     private Long roleId;
 

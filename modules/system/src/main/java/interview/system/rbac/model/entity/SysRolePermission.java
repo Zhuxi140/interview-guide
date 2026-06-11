@@ -15,10 +15,6 @@ import java.time.OffsetDateTime;
 @TableName("sys_role_permissions")
 @Data
 public class SysRolePermission implements Serializable {
-
-    @TableId(type = IdType.ASSIGN_ID)
-    private Long id;
-
     // 必填
     private Long roleId;
 

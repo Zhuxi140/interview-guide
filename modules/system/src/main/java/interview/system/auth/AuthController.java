@@ -7,6 +7,8 @@ import interview.system.auth.model.bo.RegisterBo;
 import interview.system.auth.model.bo.UserInfoBO;
 import interview.system.auth.model.req.*;
 import interview.system.auth.model.vo.*;
+import interview.system.auth.service.AuthService;
+import interview.system.auth.service.SmsService;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;

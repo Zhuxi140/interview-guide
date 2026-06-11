@@ -1,4 +1,4 @@
-package interview.system.auth;
+package interview.system.auth.service.impl;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.lang.id.NanoId;
@@ -13,6 +13,7 @@ import interview.common.util.CryptoUtil;
 import interview.common.util.JwttUtil;
 import interview.framework.config.properties.JwtProperties;
 import interview.framework.context.AuthContext;
+import interview.system.auth.AuthKeyConstant;
 import interview.system.auth.model.bo.LoginBO;
 import interview.system.auth.model.bo.UserInfoBO;
 import interview.system.auth.model.enums.SmsType;
@@ -22,11 +23,14 @@ import interview.system.auth.model.entity.UserToken;
 import interview.system.auth.model.req.*;
 import interview.system.auth.model.vo.RefreshTokenVO;
 import interview.system.auth.model.vo.TokenInfoVO;
+import interview.system.auth.service.AuthService;
+import interview.system.auth.service.SmsService;
+import interview.system.auth.service.UsersService;
 import interview.system.rbac.mapper.PermissionsMapper;
 import interview.system.rbac.model.entity.SysRole;
-import interview.system.rbac.model.entity.SysUser;
+import interview.system.auth.model.entity.SysUser;
 import interview.system.rbac.model.entity.SysUserRole;
-import interview.system.rbac.model.enums.UserStatus;
+import interview.system.auth.model.enums.UserStatus;
 import interview.system.rbac.service.*;
 import interview.system.tenant.EnterpriseTeamMembersService;
 import interview.system.tenant.EnterprisesService;
@@ -54,7 +58,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 @AllArgsConstructor
-public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implements AuthService{
+public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implements AuthService {
 
     private final SmsService smsService;
     private final UsersService usersService;
@@ -83,10 +87,19 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
         SysUser user = buildUser(register, number);
         usersService.save(user);
 
+        // FK检查
+        Integer code = Role.CANDIDATE.getCode();
+        if (!rolesService.lambdaQuery()
+                .eq(SysRole::getRoleCode, code)
+                .exists()) {
+            log.error("外键拦截: 角色:[{}]在Role表内已不存在",Role.CANDIDATE.getCode());
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR);
+        }
+
         // 构建角色(默认求职者)
         SysUserRole sysUserRole = new SysUserRole();
         sysUserRole.setUserId(user.getId());
-        sysUserRole.setRoleId(Role.CANDIDATE.getCode().longValue());
+        sysUserRole.setRoleId(code.longValue());
         userRolesService.save(sysUserRole);
 
 
@@ -148,7 +161,6 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
     @Transactional(rollbackFor = BusinessException.class)
     public RefreshTokenVO refreshToken(RefreshTokenReq refresh) {
         String refreshToken   = refresh.getRefreshToken();
-
         // 验证refreshToken是否存在
         UserToken token = lambdaQuery()
                 .select(
@@ -169,9 +181,18 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
         Long userId = token.getUserId();
         String ipAddress = token.getIpAddress();
 
+        //FK检查
+        if (!usersService.lambdaQuery()
+                .eq(SysUser::getId,userId)
+                .exists()) {
+            log.error("外键拦截: 外键UserId：[{}]在User表已不存在",userId);
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR);
+        }
+
         // 触发重放检测
         if (token.getIsRevoked()){
             log.error("检测到过期Refresh Token 再次被使用! userId:[{}], IP:[{}]", userId, ipAddress);
+
 
             lambdaUpdate()
                     .eq(UserToken::getUserId, userId)

@@ -1,7 +1,7 @@
 package interview.system.rbac.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import interview.system.rbac.model.entity.SysUser;
+import interview.system.auth.model.entity.SysUser;
 
 /**
  * <p>
