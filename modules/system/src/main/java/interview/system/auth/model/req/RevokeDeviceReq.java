@@ -7,7 +7,6 @@ import lombok.Data;
 /**
  * @author zhuxi
  * @apiNote 下线请求
- * @since 2026/5/27 14:05
  */
 
 @Schema(description = "下线请求")

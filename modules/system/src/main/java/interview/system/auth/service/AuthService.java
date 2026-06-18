@@ -14,7 +14,6 @@ import java.util.List;
 /**
  * @author zhuxi
  * @apiNote 认证服务
- * @since 2026/5/27 14:05
  */
 public interface AuthService extends IService<UserToken> {
 

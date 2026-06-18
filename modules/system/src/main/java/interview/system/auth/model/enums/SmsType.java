@@ -6,7 +6,6 @@ import lombok.Getter;
 /**
  * @author zhuxi
  * @apiNote 短信类型枚举
- * @since 2026/5/27 14:05
  */
 
 

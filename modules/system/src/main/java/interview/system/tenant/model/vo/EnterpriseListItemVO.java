@@ -5,7 +5,6 @@ import lombok.Builder;
 /**
  * @author zhuxi
  * @apiNote 企业列表项响应
- * @since 2026/5/27 14:05
  */
 @Builder
 public record EnterpriseListItemVO(

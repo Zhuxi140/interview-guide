@@ -9,7 +9,6 @@ import java.time.LocalDateTime;
 
 /**
  * @author zhuxi
- * @since 2026-05-26
  * @apiNote 企业招聘岗位实体
  */
 @TableName("jobs")

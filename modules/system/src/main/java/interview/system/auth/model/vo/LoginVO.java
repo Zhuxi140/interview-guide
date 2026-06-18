@@ -8,7 +8,6 @@ import java.util.List;
 /**
  * @author zhuxi
  * @apiNote 登录响应
- * @since 2026/5/27 14:05
  */
 @Builder
 @Schema(description = "登录响应")

@@ -6,7 +6,6 @@ import lombok.Builder;
 /**
  * @author zhuxi
  * @apiNote 注册响应
- * @since 2026/5/27 14:05
  */
 @Builder
 @Schema(description = "注册响应")

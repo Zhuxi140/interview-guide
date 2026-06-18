@@ -8,7 +8,6 @@ import lombok.Builder;
 /**
  * @author zhuxi
  * @apiNote 当前用户信息响应
- * @since 2026/5/27 14:05
  */
 @Builder
 @Schema(description = "当前用户信息响应")

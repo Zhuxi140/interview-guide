@@ -10,7 +10,6 @@ import lombok.Data;
 /**
  * @author zhuxi
  * @apiNote 注册请求
- * @since 2026/5/27 14:05
  */
 
 @Data

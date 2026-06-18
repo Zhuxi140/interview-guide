@@ -12,7 +12,6 @@ import org.mapstruct.Mapper;
 /**
  * @author zhuxi
  * @apiNote 认证转换器
- * @since 2026/5/27 14:05
  */
 
 

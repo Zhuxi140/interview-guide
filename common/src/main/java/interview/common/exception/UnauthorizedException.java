@@ -5,7 +5,6 @@ import lombok.Getter;
 
 /**
  * @author zhuxi
- * @since 2026-05-26
  * @apiNote 401 用户未登录/Token 无效异常
  */
 @Getter

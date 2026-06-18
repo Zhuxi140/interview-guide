@@ -3,7 +3,6 @@ package interview.common.enums;
 /**
  * @author zhuxi
  * @apiNote 用户类型枚举类
- * @since 2026-05-26
  */
 
 public enum UserType {

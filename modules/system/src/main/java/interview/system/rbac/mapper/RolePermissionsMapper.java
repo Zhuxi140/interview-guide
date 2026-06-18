@@ -9,7 +9,6 @@ import interview.system.rbac.model.entity.SysRolePermission;
  * </p>
  *
  * @author zhuxi
- * @since 2026-05-27
  */
 public interface RolePermissionsMapper extends BaseMapper<SysRolePermission> {
 

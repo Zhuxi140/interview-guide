@@ -11,7 +11,6 @@ import java.time.OffsetDateTime;
 
 /**
  * @author zhuxi
- * @since 2026-05-26
  * @apiNote 角色和用户关系表
  */
 

@@ -10,7 +10,6 @@ import lombok.Data;
 /**
  * @author zhuxi
  * @apiNote 短信发送请求
- * @since 2026/5/27 14:05
  */
 
 @Schema(description = "短信发送请求")

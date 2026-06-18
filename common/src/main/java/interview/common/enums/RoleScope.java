@@ -5,7 +5,6 @@ package interview.common.enums;
 /**
  * @author zhuxi
  * @apiNote 角色作用域枚举
- * @since 2026/5/26 14:09
  */
 
 public enum RoleScope {

@@ -5,7 +5,6 @@ import lombok.Getter;
 
 /**
  * @author zhuxi
- * @since 2026-05-26
  * @apiNote 500 系统内部异常
  */
 @Getter

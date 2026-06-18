@@ -8,7 +8,6 @@ import java.time.OffsetDateTime;
 /**
  * @author zhuxi
  * @apiNote 活跃设备列表项响应
- * @since 2026/5/27 14:05
  */
 @Builder
 @Schema(description = "活跃设备列表项响应")

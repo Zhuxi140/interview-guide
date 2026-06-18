@@ -136,18 +136,16 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_perm_code ON sys_permissions (perm_code);
 
 -- ==================== 5. sys_user_roles ====================
 CREATE TABLE IF NOT EXISTS sys_user_roles (
-    id          BIGINT          NOT NULL,
     user_id     BIGINT          NOT NULL,
     role_id     BIGINT          NOT NULL,
     updated_by  BIGINT,
     trace_id    VARCHAR(128),
     updated_at  TIMESTAMPTZ,
     created_at  TIMESTAMPTZ     NOT NULL,
-    PRIMARY KEY (id)
+    PRIMARY KEY (user_id,role_id)
 );
 
 COMMENT ON TABLE sys_user_roles IS '用户角色关联表';
-COMMENT ON COLUMN sys_user_roles.id IS '主键，雪花算法生成';
 COMMENT ON COLUMN sys_user_roles.user_id IS '关联用户 ID';
 COMMENT ON COLUMN sys_user_roles.role_id IS '关联角色 ID';
 COMMENT ON COLUMN sys_user_roles.updated_by IS '操作人 ID';
@@ -161,14 +159,13 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_user_role ON sys_user_roles (user_id, role
 
 -- ==================== 6. sys_role_permissions ====================
 CREATE TABLE IF NOT EXISTS sys_role_permissions (
-    id              BIGINT          NOT NULL,
     role_id         BIGINT          NOT NULL,
     permission_id   BIGINT          NOT NULL,
     updated_by      BIGINT,
     trace_id        VARCHAR(128),
     updated_at      TIMESTAMPTZ,
     created_at      TIMESTAMPTZ     NOT NULL,
-    PRIMARY KEY (id)
+    PRIMARY KEY (role_id,permission_id)
 );
 
 COMMENT ON TABLE sys_role_permissions IS '角色权限关联表';

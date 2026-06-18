@@ -8,7 +8,6 @@ import lombok.Data;
 /**
  * @author zhuxi
  * @apiNote 更新企业信息请求
- * @since 2026/5/27 14:05
  */
 
 @Data

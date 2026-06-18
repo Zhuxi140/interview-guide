@@ -11,7 +11,6 @@ import java.sql.SQLException;
 /**
  * @author zhuxi
  * @apiNote mybatis 加密（SM4）处理器
- * @since 2026/5/27 14:05
  */
 
 public class Sm4TypeHandler extends BaseTypeHandler<String> {

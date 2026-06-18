@@ -2,7 +2,6 @@ package interview.common.enums;
 
 /**
  * @author zhuxi
- * @since 2026-05-26
  * @apiNote 错误码枚举类
  */
 public enum ErrorCode {

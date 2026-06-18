@@ -7,7 +7,6 @@ import lombok.Getter;
 
 /**
  * @author zhuxi
- * @since 2026-05-26
  * @apiNote 封装结果类
  */
 

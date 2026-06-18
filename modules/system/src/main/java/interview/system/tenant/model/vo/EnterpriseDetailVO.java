@@ -8,7 +8,6 @@ import java.time.LocalDateTime;
 /**
  * @author zhuxi
  * @apiNote 企业详情响应
- * @since 2026/5/27 14:05
  */
 @Builder
 public record EnterpriseDetailVO(

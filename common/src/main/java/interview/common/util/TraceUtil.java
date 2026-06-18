@@ -6,7 +6,6 @@ import org.slf4j.MDC;
 
 /**
  * @author zhuxi
- * @since 2026-05-26
  * @apiNote 链路追踪工具类
  * <P>
  *     提供操作traceId的方法对接第三方、以及为定时任务生成独立追踪traceId

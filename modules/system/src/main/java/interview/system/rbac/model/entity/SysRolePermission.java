@@ -8,7 +8,6 @@ import java.time.OffsetDateTime;
 
 /**
  * @author zhuxi
- * @since 2026-05-26
  * @apiNote 角色权限关联表
  */
 

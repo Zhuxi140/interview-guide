@@ -9,7 +9,6 @@ import java.time.OffsetDateTime;
 
 /**
  * @author zhuxi
- * @since 2026-05-26
  * @apiNote 系统 API 资源
  */
 

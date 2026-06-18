@@ -14,7 +14,6 @@ import tools.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 /**
  * @author zhuxi
  * @apiNote Redis配置
- * @since 2026/5/27 14:05
  */
 @Configuration
 public class RedisConfig {

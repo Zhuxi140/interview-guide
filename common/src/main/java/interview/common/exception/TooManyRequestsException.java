@@ -5,7 +5,6 @@ import lombok.Getter;
 
 /**
  * @author zhuxi
- * @since 2026-05-26
  * @apiNote 429 请求过于频繁异常
  */
 @Getter

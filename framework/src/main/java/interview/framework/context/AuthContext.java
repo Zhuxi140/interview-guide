@@ -9,7 +9,6 @@ import java.util.List;
 
 /**
  * @author zhuxi
- * @since 2026-05-26
  * @apiNote 认证上下文
  * <p>
  *     存入用户认证信息，用于全局调用

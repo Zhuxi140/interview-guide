@@ -6,7 +6,6 @@ import org.springframework.stereotype.Component;
 
 /**
  * @author zhuxi
- * @since 2026-05-26
  * @apiNote 自定义ID生成器
  */
 @Component

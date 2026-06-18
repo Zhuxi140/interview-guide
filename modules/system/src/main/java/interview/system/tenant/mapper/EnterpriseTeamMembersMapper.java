@@ -9,7 +9,6 @@ import interview.system.tenant.model.entity.EnterpriseTeamMember;
  * </p>
  *
  * @author zhuxi
- * @since 2026-05-27
  */
 public interface EnterpriseTeamMembersMapper extends BaseMapper<EnterpriseTeamMember> {
 

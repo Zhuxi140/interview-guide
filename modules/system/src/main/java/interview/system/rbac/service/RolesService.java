@@ -10,7 +10,6 @@ import java.util.List;
 /**
  * @author zhuxi
  * @apiNote 角色服务
- * @since 2026/5/27 14:09
  */
 public interface RolesService extends IService<SysRole> {
 

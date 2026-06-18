@@ -9,7 +9,6 @@ import interview.system.auth.model.entity.SysUser;
  * </p>
  *
  * @author zhuxi
- * @since 2026-05-27
  */
 public interface UsersService extends IService<SysUser> {
 

@@ -11,7 +11,6 @@ import org.springframework.context.annotation.Configuration;
 /**
  * @author zhuxi
  * @apiNote 认证配置
- * @since 2026/5/27 14:05
  */
 
 @Configuration

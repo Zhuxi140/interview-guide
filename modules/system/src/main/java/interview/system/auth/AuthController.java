@@ -20,7 +20,6 @@ import java.util.List;
 /**
  * @author zhuxi
  * @apiNote 认证控制器
- * @since 2026/5/27 14:05
  */
 
 @RestController

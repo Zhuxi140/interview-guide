@@ -10,7 +10,6 @@ import org.springframework.web.bind.annotation.RestController;
  * </p>
  *
  * @author zhuxi
- * @since 2026-05-27
  */
 @RestController
 @RequestMapping(ApiVersion.V1 + "/admin/users")

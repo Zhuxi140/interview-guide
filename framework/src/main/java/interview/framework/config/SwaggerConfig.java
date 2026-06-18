@@ -10,7 +10,6 @@ import org.springframework.context.annotation.Configuration;
 /**
  * @author zhuxi
  * @apiNote Swagger 配置
- * @since 2026-05-26
  */
 
 @Configuration

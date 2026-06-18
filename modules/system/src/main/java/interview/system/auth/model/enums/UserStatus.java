@@ -7,7 +7,6 @@ import lombok.Getter;
 /**
  * @author zhuxi
  * @apiNote 用户状态枚举
- * @since 2026/5/27 14:05
  */
 
 @AllArgsConstructor

@@ -10,7 +10,6 @@ import java.util.List;
 /**
  * @author zhuxi
  * @apiNote 角色详情响应
- * @since 2026/5/27 14:05
  */
 @Builder
 public record RoleDetailVO(

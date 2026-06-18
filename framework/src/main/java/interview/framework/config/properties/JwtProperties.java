@@ -7,7 +7,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 /**
  * @author zhuxi
  * @apiNote JWT 配置属性
- * @since 2026/5/27 14:05
  */
 
 @Data

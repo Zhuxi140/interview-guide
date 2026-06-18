@@ -6,7 +6,6 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 /**
  * @author zhuxi
- * @since 2026-05-26
  * @apiNote 项目启动入口
  */
 @SpringBootApplication(scanBasePackages = "interview")
