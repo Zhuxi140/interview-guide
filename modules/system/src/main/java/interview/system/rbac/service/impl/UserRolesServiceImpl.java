@@ -3,6 +3,7 @@ package interview.system.rbac.service.impl;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import interview.common.enums.ErrorCode;
 import interview.common.exception.BusinessException;
+import org.springframework.dao.DataIntegrityViolationException;
 import interview.system.auth.model.entity.SysUser;
 import interview.system.auth.service.impl.UsersServiceImpl;
 import interview.system.rbac.mapper.UserRolesMapper;
@@ -33,12 +34,12 @@ public class UserRolesServiceImpl extends ServiceImpl<UserRolesMapper, SysUserRo
     @Transactional(rollbackFor = BusinessException.class)
     public void assignUserRoles(Long userId, AssignUserRolesReq req) {
 
-        List<Long> roleIds = req.getRoleIds().stream().distinct().toList();
+        List<Integer> roleIds = req.getRoleIds().stream().distinct().toList();
 
         //FK 检查
         FKCheck(userId, roleIds);
 
-        List<Long> existing = lambdaQuery()
+        List<Integer> existing = lambdaQuery()
                 .eq(SysUserRole::getUserId, userId)
                 .select(SysUserRole::getRoleId)
                 .list()
@@ -54,8 +55,14 @@ public class UserRolesServiceImpl extends ServiceImpl<UserRolesMapper, SysUserRo
                         .build())
                 .toList();
 
-        if (!toInsert.isEmpty()) {
+        if (toInsert.isEmpty()) {
+            throw new BusinessException(ErrorCode.ROLE_ALREADY_ASSIGNED);
+        }
+
+        try {
             saveBatch(toInsert);
+        } catch (DataIntegrityViolationException e) {
+            throw new BusinessException(ErrorCode.ROLE_ALREADY_ASSIGNED);
         }
     }
 
@@ -67,9 +74,9 @@ public class UserRolesServiceImpl extends ServiceImpl<UserRolesMapper, SysUserRo
     @Override
     @Transactional(rollbackFor = BusinessException.class)
     public void removeUserRoles(Long userId, RemoveUserRolesReq req) {
-        List<Long> roleIds = req.getRoleIds().stream().distinct().toList();
+        List<Integer> roleIds = req.getRoleIds().stream().distinct().toList();
 
-        List<Long> existing = lambdaQuery()
+        List<Integer> existing = lambdaQuery()
                 .eq(SysUserRole::getUserId, userId)
                 .select(SysUserRole::getRoleId)
                 .list()
@@ -87,7 +94,7 @@ public class UserRolesServiceImpl extends ServiceImpl<UserRolesMapper, SysUserRo
     }
 
 
-    public void FKCheck(Long userId, List<Long> roleId) {
+    public void FKCheck(Long userId, List<Integer> roleId) {
         if (!usersService.lambdaQuery()
                         .eq(SysUser::getId, userId)
                         .exists()) {

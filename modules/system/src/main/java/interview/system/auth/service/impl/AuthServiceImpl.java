@@ -98,7 +98,7 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
         // 构建角色(默认求职者)
         SysUserRole sysUserRole = new SysUserRole();
         sysUserRole.setUserId(user.getId());
-        sysUserRole.setRoleId(code.longValue());
+        sysUserRole.setRoleId(code);
         userRolesService.save(sysUserRole);
 
 
@@ -299,7 +299,7 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
                 .eq(SysUser::getId, userId)
                 .one();
         if (user == null){
-            log.error("token有效，但数据库无此实体，userId：[{}]", userId);
+            log.error("｛revoke｝——token有效，但数据库无此实体，userId：[{}]", userId);
             throw new BusinessException(ErrorCode.ACCOUNT_DATA_ANOMALY);
         }
 
@@ -336,7 +336,7 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
                 .one();
 
         if (user == null){
-            log.error("token有效，但数据库无此实体，userId：[{}]", userId);
+            log.error("{getUserInfo}——token有效，但数据库无此实体，userId：[{}]", userId);
             throw new BusinessException(ErrorCode.ACCOUNT_DATA_ANOMALY);
         }
 
@@ -505,7 +505,7 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
     }
 
     private RbacContext loadRbacContext(Long userId,Long enterpriseId) {
-        ArrayList<Long> roleIds = userRolesService.lambdaQuery()
+        ArrayList<Integer> roleIds = userRolesService.lambdaQuery()
                 .select(SysUserRole::getRoleId)
                 .eq(SysUserRole::getUserId, userId)
                 .list()
@@ -513,7 +513,7 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
                 .map(SysUserRole::getRoleId)
                 .collect(Collectors.toCollection(ArrayList::new));
         if (enterpriseId != null){
-            List<Long> enterpriseRoleIds = enterpriseTeamMembersService.lambdaQuery()
+            List<Integer> enterpriseRoleIds = enterpriseTeamMembersService.lambdaQuery()
                     .select(EnterpriseTeamMember::getRoleId)
                     .eq(EnterpriseTeamMember::getUserId, userId)
                     .eq(EnterpriseTeamMember::getEnterpriseId, enterpriseId)
@@ -527,7 +527,7 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
 
 
         if (CollUtil.isEmpty(roleIds)) {
-            log.error("脏数据拦截: 用户ID [{}], 企业Id [{}], 其关联的角色ID 在 user_roles 和 enterpiseTeamMeber 表中查不到实体记录！", userId, enterpriseId);
+            log.error("脏数据拦截: 用户ID [{}], 企业Id [{}], 其关联的角色ID 在 user_roles 和 EnterprisesTeamMembers 表中查不到实体记录！", userId, enterpriseId);
             throw new BusinessException(ErrorCode.ACCOUNT_DATA_ANOMALY);
         }
 

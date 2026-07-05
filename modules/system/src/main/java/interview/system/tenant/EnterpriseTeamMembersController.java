@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
  * @author zhuxi
  */
 @RestController
-@RequestMapping(ApiVersion.V1 + "/enterprises/")
+@RequestMapping(ApiVersion.V1 + "/enterprises/{enterpriseId}/members")
 public class EnterpriseTeamMembersController {
 
 }

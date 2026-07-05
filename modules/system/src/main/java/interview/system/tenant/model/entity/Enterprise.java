@@ -2,6 +2,8 @@ package interview.system.tenant.model.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
 import interview.framework.security.mybatis.AesTypeHandler;
+import interview.system.tenant.model.enums.EnterpriseStatus;
+import lombok.Builder;
 import lombok.Data;
 
 import java.io.Serializable;
@@ -14,9 +16,10 @@ import java.time.OffsetDateTime;
 
 @Data
 @TableName(value = "enterprises",autoResultMap = true)
+@Builder
 public class Enterprise implements Serializable {
 
-    @TableId(type = IdType.ASSIGN_ID, value = "id")
+    @TableId(type = IdType.INPUT, value = "id")
     private Long id;
 
     private String name;
@@ -32,7 +35,7 @@ public class Enterprise implements Serializable {
     @TableField(typeHandler = AesTypeHandler.class)
     private String contactPhone;
 
-    private Integer status;
+    private EnterpriseStatus status;
 
     private String logoUrl;
 

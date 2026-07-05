@@ -20,9 +20,9 @@ CREATE TABLE IF NOT EXISTS sys_users (
     username        VARCHAR(64)     NOT NULL,
     email           VARCHAR(128)    UNIQUE,
     password_hash   VARCHAR(128)    NOT NULL,
-    nickname        VARCHAR(64),
+    nickname        VARCHAR(128),
     avatar_url      VARCHAR(512),
-    phone           VARCHAR(20),
+    phone           VARCHAR(64),
     user_type       VARCHAR(16)     NOT NULL,
     risk_level      SMALLINT        DEFAULT 0,
     status          SMALLINT        DEFAULT 1,
@@ -55,7 +55,7 @@ CREATE INDEX IF NOT EXISTS idx_user_risk_status ON sys_users (risk_level, status
 CREATE TABLE IF NOT EXISTS user_tokens (
     id                  BIGINT          NOT NULL,
     user_id             BIGINT          NOT NULL,
-    refresh_token_hash  VARCHAR(128)    NOT NULL,
+    refresh_token_hash  VARCHAR(256)    NOT NULL,
     device_info         VARCHAR(256),
     ip_address          VARCHAR(45),
     expires_at          TIMESTAMPTZ     NOT NULL,
@@ -84,7 +84,7 @@ CREATE INDEX IF NOT EXISTS idx_token_hash ON user_tokens (refresh_token_hash);
 
 -- ==================== 4. sys_roles ====================
 CREATE TABLE IF NOT EXISTS sys_roles (
-    id          BIGINT          NOT NULL,
+    id          INTEGER         NOT NULL,
     role_code   VARCHAR(32)     NOT NULL,
     role_name   VARCHAR(64)     NOT NULL,
     role_scope  VARCHAR(16)     NOT NULL,
@@ -137,7 +137,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_perm_code ON sys_permissions (perm_code);
 -- ==================== 5. sys_user_roles ====================
 CREATE TABLE IF NOT EXISTS sys_user_roles (
     user_id     BIGINT          NOT NULL,
-    role_id     BIGINT          NOT NULL,
+    role_id     INTEGER         NOT NULL,
     updated_by  BIGINT,
     trace_id    VARCHAR(128),
     updated_at  TIMESTAMPTZ,
@@ -159,7 +159,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_user_role ON sys_user_roles (user_id, role
 
 -- ==================== 6. sys_role_permissions ====================
 CREATE TABLE IF NOT EXISTS sys_role_permissions (
-    role_id         BIGINT          NOT NULL,
+    role_id         INTEGER         NOT NULL,
     permission_id   BIGINT          NOT NULL,
     updated_by      BIGINT,
     trace_id        VARCHAR(128),
@@ -183,12 +183,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_role_permission ON sys_role_permissions (r
 CREATE TABLE IF NOT EXISTS enterprises (
     id              BIGINT          NOT NULL,
     name            VARCHAR(128)    NOT NULL,
-    short_name      VARCHAR(64),
-    industry        VARCHAR(64),
+    short_name      VARCHAR(64)     NOT NULL,
+    industry        VARCHAR(64)     NOT NULL,
     scale           VARCHAR(32),
-    contact_email   VARCHAR(128),
-    contact_phone   VARCHAR(20),
-    status          SMALLINT        DEFAULT 1,
+    contact_email   VARCHAR(128)    NOT NULL,
+    contact_phone   VARCHAR(20)     NOT NULL,
+    status          SMALLINT        NOT NULL    DEFAULT 1,
     logo_url        VARCHAR(512),
     created_at      TIMESTAMPTZ     NOT NULL,
     is_deleted      BOOLEAN         DEFAULT FALSE,
@@ -196,6 +196,8 @@ CREATE TABLE IF NOT EXISTS enterprises (
     updated_at      TIMESTAMPTZ,
     PRIMARY KEY (id)
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_enterprises_name_active ON enterprises (name) WHERE is_deleted = false;
 
 COMMENT ON TABLE enterprises IS '企业租户主表 (SaaS 隔离核心，被约 20 张表依赖)';
 COMMENT ON COLUMN enterprises.id IS '企业租户唯一 ID（全局 enterprise_id 隔离键）';
@@ -218,7 +220,7 @@ CREATE TABLE IF NOT EXISTS enterprise_team_members (
     id              BIGINT          NOT NULL,
     enterprise_id   BIGINT          NOT NULL,
     user_id         BIGINT          NOT NULL,
-    role_id         BIGINT          NOT NULL,
+    role_id         INTEGER         NOT NULL,
     created_at      TIMESTAMPTZ     NOT NULL,
     is_deleted      BOOLEAN         DEFAULT FALSE,
     updated_by      BIGINT,

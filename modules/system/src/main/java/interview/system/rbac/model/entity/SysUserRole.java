@@ -23,7 +23,7 @@ public class SysUserRole implements Serializable {
     // 必填
     private Long userId;
     // 必填
-    private Long roleId;
+    private Integer roleId;
 
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private Long updatedBy;

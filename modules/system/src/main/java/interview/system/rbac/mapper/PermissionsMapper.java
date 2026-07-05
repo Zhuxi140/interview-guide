@@ -19,6 +19,6 @@ import java.util.List;
 @Mapper
 public interface PermissionsMapper extends BaseMapper<SysPermission> {
 
-    List<String> getPermCodeByRoleId(@Param("roleIds") List<Long> roleIds);
+    List<String> getPermCodeByRoleId(@Param("roleIds") List<Integer> roleIds);
 
 }
