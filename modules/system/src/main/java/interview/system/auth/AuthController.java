@@ -39,6 +39,13 @@ public class AuthController {
         return Result.success();
     }
 
+    @ApiResponse(description = "敏感操作授权令牌")
+    @PostMapping("/verify-sms")
+    public Result<String> verifyCode(@RequestBody @Valid VerifyReq verifyReq) {
+        String token = smsService.verifyForSensitiveAction(verifyReq);
+        return Result.success(token);
+    }
+
 
     @ApiResponse(description = "用户注册")
     @PostMapping("/register")

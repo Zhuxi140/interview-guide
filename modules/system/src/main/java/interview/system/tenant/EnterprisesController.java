@@ -1,27 +1,28 @@
 package interview.system.tenant;
 
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.tags.Tag;
 import interview.common.constant.ApiVersion;
 import interview.common.constant.Result;
+import interview.common.enums.SmsType;
+import interview.framework.annonate.RequireSecure;
 import interview.system.tenant.model.bo.EnterpriseCreateBO;
 import interview.system.tenant.model.bo.ListUserEnterprisesBO;
+import interview.system.tenant.model.req.EnterpriseBasicUpdateReq;
+import interview.system.tenant.model.req.EnterpriseContactUpdateReq;
 import interview.system.tenant.model.req.EnterpriseCreateReq;
 import interview.system.tenant.model.vo.EnterpriseCreateVO;
+import interview.system.tenant.model.vo.EnterpriseDetailVO;
 import interview.system.tenant.model.vo.EnterpriseListItemVO;
+import interview.system.tenant.model.vo.EnterpriseContactUpdateVO;
+import interview.system.tenant.model.vo.EnterpriseUpdateVO;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 /**
- * <p>
- * 企业租户主表 (SaaS 隔离核心，被约 20 张表依赖) 前端控制器
- * </p>
- *
  * @author zhuxi
  */
 @RestController
@@ -34,7 +35,7 @@ public class EnterprisesController {
 
     @ApiResponse(description = "创建企业（创建者自动成为 OWNER）")
     @PostMapping
-    public Result<EnterpriseCreateVO> createEnterprise(EnterpriseCreateReq req) {
+    public Result<EnterpriseCreateVO> createEnterprise(@RequestBody @Valid EnterpriseCreateReq req) {
         EnterpriseCreateBO enterprise = enterprisesService.createEnterprise(req);
         EnterpriseCreateVO vo = covert.convertToEnterpriseCreateVO(enterprise);
         return Result.success(vo);
@@ -42,10 +43,34 @@ public class EnterprisesController {
 
     @ApiResponse(description = "查询当前用户所属企业列表")
     @GetMapping
-    public Result<List<EnterpriseListItemVO>> getEnterprises() {
+    public Result<List<EnterpriseListItemVO>> getUserListEnterprises() {
         List<ListUserEnterprisesBO> listUserEnterprisesBOS = enterprisesService.listUserEnterprises();
         List<EnterpriseListItemVO> vos = covert.BOCovertToEnterpriseListItemVO(listUserEnterprisesBOS);
         return Result.success(vos);
+    }
+
+    @ApiResponse(description = "查询企业详情")
+    @GetMapping("/{enterpriseId}")
+    public Result<EnterpriseDetailVO> getEnterprisesDetail(@PathVariable("enterpriseId") Long enterpriseId) {
+        EnterpriseDetailVO vo = enterprisesService.getEnterpriseDetail(enterpriseId);
+        return Result.success(vo);
+    }
+
+    @ApiResponse(description = "更新企业基本信息（名称、简称、行业、规模、Logo）")
+    @PatchMapping("/{enterpriseId}")
+    public Result<EnterpriseUpdateVO> updateEnterpriseBasic(@PathVariable("enterpriseId") Long enterpriseId,
+                                                            @RequestBody @Valid EnterpriseBasicUpdateReq req) {
+        EnterpriseUpdateVO vo = enterprisesService.updateEnterpriseBasic(enterpriseId, req);
+        return Result.success(vo);
+    }
+
+    @RequireSecure(allowList = {SmsType.SENSITIVE_OPERATION,SmsType.DOUBLE_VERIFY_NEW})
+    @ApiResponse(description = "更新企业联系方式（邮箱、手机），需携带 X-Secure-Action-Token")
+    @PutMapping("/{enterpriseId}/contact")
+    public Result<EnterpriseContactUpdateVO> updateEnterpriseContact(@PathVariable("enterpriseId") Long enterpriseId,
+                                                                     @RequestBody @Valid EnterpriseContactUpdateReq req) {
+        EnterpriseContactUpdateVO vo = enterprisesService.updateEnterpriseContact(enterpriseId, req);
+        return Result.success(vo);
     }
 
 }

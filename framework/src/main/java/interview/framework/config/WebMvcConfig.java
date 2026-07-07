@@ -2,8 +2,11 @@ package interview.framework.config;
 
 import interview.common.util.JwttUtil;
 import interview.framework.security.interceptor.JwtInterceptor;
+import interview.framework.security.interceptor.SecureActionInterceptor;
 import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
@@ -14,10 +17,11 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 
 @Configuration
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class WebMvcConfig implements WebMvcConfigurer {
 
     private final JwttUtil jwttUtil;
+    private final StringRedisTemplate stringRedisTemplate;
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
@@ -32,5 +36,8 @@ public class WebMvcConfig implements WebMvcConfigurer {
                         "/swagger-ui.html",
                         "/api-docs/**"
                         );
+        registry.addInterceptor(new SecureActionInterceptor(stringRedisTemplate));
     }
+
+
 }

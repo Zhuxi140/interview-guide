@@ -1,12 +1,18 @@
 package interview.system.auth.service.impl;
 
 import cn.hutool.core.io.resource.ResourceUtil;
+import cn.hutool.core.util.IdUtil;
+import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONUtil;
 import interview.common.enums.ErrorCode;
 import interview.common.exception.BusinessException;
-import interview.system.auth.AuthKeyConstant;
-import interview.system.auth.model.enums.SmsType;
+import interview.framework.context.AuthContext;
+import interview.common.constant.AuthKeyConstant;
+import interview.common.constant.SecureActionContext;
+import interview.common.enums.SmsType;
 import interview.system.auth.model.req.SmsSendReq;
 import interview.system.auth.model.entity.SysUser;
+import interview.system.auth.model.req.VerifyReq;
 import interview.system.auth.service.SmsService;
 import interview.system.auth.service.UsersService;
 import lombok.AllArgsConstructor;
@@ -39,6 +45,7 @@ public class SmsServiceImpl implements SmsService {
         CHECK_DELETE_CODE_SCRIPT.setResultType(Long.class);
     }
 
+    // 发送短信验证码，按 smsType 分流校验
     @Override
     public void sendSms(SmsSendReq smsReq) {
 
@@ -50,12 +57,29 @@ public class SmsServiceImpl implements SmsService {
             throw new BusinessException(ErrorCode.CODE_ONE_MINUTE);
         }
 
-        boolean exists = usersService.lambdaQuery()
+        SysUser user = usersService.lambdaQuery()
+                .select(SysUser::getId,SysUser::getPhone)
                 .eq(SysUser::getPhone, phone)
-                .exists();
+                .one();
 
-        if (exists) {
-            throw new BusinessException(ErrorCode.PHONE_ALREADY_EXISTS);
+        // 注册流程：校验手机号是否已被注册
+        if (SmsType.REGISTER == smsType) {
+            if (user != null){
+                throw new BusinessException(ErrorCode.PHONE_ALREADY_EXISTS);
+            }
+        // 非注册流程：校验手机号归属
+        }else{
+            if (user != null) {
+                Long userId = AuthContext.getRequiredUserId();
+                if (SmsType.DOUBLE_VERIFY_OLD != smsType) {
+                    if (!user.getId().equals(userId)) {
+                        throw new BusinessException(ErrorCode.NOT_YOUR_PHONE);
+                    }
+                }
+                // 如果是双重手机验证，则允许当前登录用户手机号和要发送验证码的手机号可以不一致
+            }else{
+                throw new BusinessException(ErrorCode.USER_NOT_FOUND);
+            }
         }
 
         Random random = new Random();
@@ -67,6 +91,7 @@ public class SmsServiceImpl implements SmsService {
         stringRedisTemplate.opsForValue().set(AuthKeyConstant.getSmsLockKey(phone, smsType), "1", 60, TimeUnit.SECONDS);
     }
 
+    // Lua 原子校验 + 删除验证码
     @Override
     public void verifyCode(String phone, String code, SmsType type) {
         Long result = stringRedisTemplate.execute(
@@ -79,5 +104,45 @@ public class SmsServiceImpl implements SmsService {
         }else if(result == 1L){
             throw new BusinessException(ErrorCode.CODE_ERROR);
         }
+    }
+
+    // 核销验证码并颁发安全操作票据
+    @Override
+    public String verifyForSensitiveAction(VerifyReq verifyReq) {
+        String phone = verifyReq.getPhone();
+        SmsType smsType = verifyReq.getSmsType();
+
+        // 双重验证：校验前序票据是否有效
+        if (SmsType.DOUBLE_VERIFY_NEW == smsType){
+            String previousToken = verifyReq.getPreviousToken();
+            if (StrUtil.isBlank(previousToken)){
+                throw new BusinessException(ErrorCode.VERIFY_NO_PRE_TOKEN);
+            }
+
+            String preKey = AuthKeyConstant.getSmsSensitiveActionTokenKey(previousToken);
+            String preJson = stringRedisTemplate.opsForValue().get(preKey);
+            if (StrUtil.isBlank(preJson)){
+                throw new BusinessException(ErrorCode.VERIFY_PRE_TOKEN_VALID_OR_EXPIRED);
+            }
+            SecureActionContext bean = JSONUtil.toBean(preJson, SecureActionContext.class);
+
+            if (!bean.getUserId().equals(AuthContext.getRequiredUserId())){
+                throw new BusinessException(ErrorCode.PERMISSION_DENIED);
+            }
+
+            stringRedisTemplate.delete(preKey);
+        }
+        verifyCode(phone,verifyReq.getCode(),smsType);
+        // 生成安全操作票据，写入 Redis（5 分钟有效）
+        String token = IdUtil.fastSimpleUUID();
+        String tokenKey = AuthKeyConstant.getSmsSensitiveActionTokenKey(token);
+        SecureActionContext build = SecureActionContext.builder()
+                .userId(AuthContext.getRequiredUserId())
+                .actionType(smsType)
+                .targetPhone(phone)
+                .build();
+        String json = JSONUtil.toJsonStr(build);
+        stringRedisTemplate.opsForValue().set(tokenKey, json, 5, TimeUnit.MINUTES);
+        return token;
     }
 }

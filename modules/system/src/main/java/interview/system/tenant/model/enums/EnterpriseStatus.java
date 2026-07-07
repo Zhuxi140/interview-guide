@@ -14,10 +14,10 @@ import lombok.Getter;
 @AllArgsConstructor
 public enum EnterpriseStatus {
 
-    PENDING(2, "待认证"),
-    NORMAL(1, "正常"),
-    PAUSED(0, "暂停"),
-    CANCELLED(-1, "注销");
+    PENDING(2, "PENDING"),
+    NORMAL(1, "NORMAL"),
+    PAUSED(0, "PAUSED"),
+    CANCELLED(-1, "CANCELLED");
     @EnumValue
     private final int code;
     private final String message;

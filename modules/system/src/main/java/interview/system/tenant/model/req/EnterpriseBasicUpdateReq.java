@@ -1,18 +1,12 @@
 package interview.system.tenant.model.req;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
-/**
- * @author zhuxi
- * @apiNote 更新企业信息请求
- */
-
 @Data
-@Schema(description = "更新企业信息请求")
-public class EnterpriseUpdateReq {
+@Schema(description = "更新企业基本信息请求")
+public class EnterpriseBasicUpdateReq {
 
     @Size(min = 2, max = 128, message = "企业名称长度 2~128 个字符")
     @Schema(description = "企业名称")
@@ -27,14 +21,6 @@ public class EnterpriseUpdateReq {
 
     @Schema(description = "企业规模")
     private String scale;
-
-    @Pattern(regexp = "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$", message = "邮箱格式不正确")
-    @Schema(description = "联系邮箱")
-    private String contactEmail;
-
-    @Pattern(regexp = "^\\d{11}$", message = "手机号格式不正确")
-    @Schema(description = "联系电话")
-    private String contactPhone;
 
     @Schema(description = "企业 Logo URL")
     private String logoUrl;

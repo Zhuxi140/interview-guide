@@ -50,6 +50,14 @@ public enum ErrorCode {
     CODE_ONE_MINUTE(20014, "验证码已经发送，请 1 分钟后再试"),
     ACCOUNT_DATA_ANOMALY(20015, "账号数据状态异常，请稍后重试或联系客服"),
     ROLE_ALREADY_ASSIGNED(20016, "角色已分配给该用户"),
+    NOT_YOUR_PHONE(20017, "请使用绑定的手机号！"),
+    VERIFY_NO_PRE_TOKEN(20018,"缺失前置身份凭证，请先完成第一次手机验证"),
+    VERIFY_PRE_TOKEN_VALID_OR_EXPIRED(20019,"前置身份凭证无效或已过期，请重新完成第一次手机验证"),
+    NO_VERIFY_TOKEN(20020,"缺少安全操作授权,请完成手机号验证获取授权"),
+    VERIFY_TOKEN_EXPIRE(20021,"安全身份凭证已过期，请重新进行手机验证"),
+    LACK_PHONE_OR_EMAIL(20022,"请填写需要修改的手机号或者邮箱"),
+    SMS_TYPE_NOT_MATCH(20023,"该操作需进行二重手机验证，请先进行验证"),
+    PHONE_MISMATCH(20024,"手机号匹配错误，请填写刚才进行验证的手机号"),
 
     // ------------ 30xxx 企业/多租户错误码 ------------
     ENTERPRISE_NOT_FOUND(30001, "企业不存在"),
@@ -63,6 +71,9 @@ public enum ErrorCode {
     ENTERPRISE_TENANT_MISMATCH(30009, "租户隔离校验不通过"),
     ENTERPRISE_DATA_ANOMALY(30010, "企业数据异常，请联系客服"),
     ENTERPRISE_NAME_ALREADY_EXISTS(30011, "企业名称已存在"),
+    ENTERPRISE_NOT_BELONG(30012,"当前用户不属于该企业"),
+    SECURE_TOKEN_INVALID(30013, "安全操作令牌无效或已过期"),
+    SECURE_TOKEN_USER_MISMATCH(30014, "安全操作令牌与当前用户不匹配"),
 
     // ------------ 40xxx 岗位/简历/候选人错误码 ------------
     JOB_NOT_FOUND(40001, "岗位不存在"),

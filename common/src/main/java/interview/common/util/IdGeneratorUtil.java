@@ -10,7 +10,7 @@ import cn.hutool.core.util.IdUtil;
 public class IdGeneratorUtil {
 
     /**
-     * 生成id
+     * 生成雪花id
      * @param workerId 工作机器ID
      * @param datacenterId 数据中心ID
      * @return id(Long)

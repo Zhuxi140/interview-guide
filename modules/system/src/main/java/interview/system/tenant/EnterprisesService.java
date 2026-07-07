@@ -4,10 +4,12 @@ import com.baomidou.mybatisplus.extension.service.IService;
 import interview.system.tenant.model.bo.EnterpriseCreateBO;
 import interview.system.tenant.model.bo.ListUserEnterprisesBO;
 import interview.system.tenant.model.entity.Enterprise;
+import interview.system.tenant.model.req.EnterpriseBasicUpdateReq;
+import interview.system.tenant.model.req.EnterpriseContactUpdateReq;
 import interview.system.tenant.model.req.EnterpriseCreateReq;
-import interview.system.tenant.model.req.EnterpriseUpdateReq;
 import interview.system.tenant.model.vo.EnterpriseDetailVO;
 import interview.system.tenant.model.vo.EnterpriseListItemVO;
+import interview.system.tenant.model.vo.EnterpriseContactUpdateVO;
 import interview.system.tenant.model.vo.EnterpriseUpdateVO;
 
 import java.util.List;
@@ -46,13 +48,22 @@ public interface EnterprisesService extends IService<Enterprise> {
     EnterpriseDetailVO getEnterpriseDetail(Long enterpriseId);
 
     /**
-     * 更新企业信息
+     * 更新企业基本信息（名称、简称、行业、规模、Logo）
      *
      * @param enterpriseId 企业 ID
      * @param req          更新请求
      * @return 更新结果
      */
-    EnterpriseUpdateVO updateEnterprise(Long enterpriseId, EnterpriseUpdateReq req);
+    EnterpriseUpdateVO updateEnterpriseBasic(Long enterpriseId, EnterpriseBasicUpdateReq req);
+
+    /**
+     * 更新企业联系方式（邮箱、手机）
+     *
+     * @param enterpriseId 企业 ID
+     * @param req          更新请求
+     * @return 更新结果
+     */
+    EnterpriseContactUpdateVO updateEnterpriseContact(Long enterpriseId, EnterpriseContactUpdateReq req);
 
     /**
      * 注销企业（仅 OWNER）

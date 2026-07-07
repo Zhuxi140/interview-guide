@@ -4,7 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
 import interview.common.enums.ErrorCode;
 import interview.common.exception.BusinessException;
-import interview.system.auth.model.enums.SmsType;
+import interview.common.enums.SmsType;
 import interview.system.auth.model.req.SmsSendReq;
 import interview.system.auth.model.entity.SysUser;
 import interview.system.auth.service.impl.SmsServiceImpl;

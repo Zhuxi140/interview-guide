@@ -1,8 +1,10 @@
 package interview.framework.context;
 
+import interview.common.enums.ErrorCode;
 import interview.common.enums.RiskLevel;
 import interview.common.enums.RoleScope;
 import interview.common.enums.UserType;
+import interview.common.exception.UnauthorizedException;
 import lombok.Builder;
 
 import java.util.List;
@@ -43,8 +45,7 @@ public class AuthContext {
     public static AuthUser getRequiredAuthContext(){
         AuthUser authUser = AUTH_CONTEXT.get();
         if (authUser == null){
-            // TODO: 抛出异常，因异常模块 没有完全构建完成 简单抛出
-            throw new RuntimeException("未登录或ThreadLocal数据不完整");
+            throw new UnauthorizedException();
         }
         return authUser;
     }
@@ -54,7 +55,7 @@ public class AuthContext {
      * 专供基础拦截器（如 MyBatis-Plus 字段填充、日志拦截器）使用
      * @return 用户ID
      */
-    public static Long getUserIdSafe() {
+    public static Long getUserIdOrNull() {
         AuthUser authUser = AUTH_CONTEXT.get();
         return authUser != null ? authUser.userId() : null;
     }
@@ -62,8 +63,11 @@ public class AuthContext {
     /**
      * 获取用户ID
      * @return 用户ID
+     * <P>
+     *     如果当前未登录，则会抛出UnauthorizedException异常
+     * </P>
      */
-    public static Long getUserId(){
+    public static Long getRequiredUserId(){
         return getRequiredAuthContext().userId;
     }
 

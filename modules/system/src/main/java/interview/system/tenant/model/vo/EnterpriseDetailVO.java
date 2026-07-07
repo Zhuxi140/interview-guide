@@ -1,9 +1,11 @@
 package interview.system.tenant.model.vo;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import interview.system.tenant.model.enums.EnterpriseStatus;
 import lombok.Builder;
 
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 /**
  * @author zhuxi
@@ -18,8 +20,8 @@ public record EnterpriseDetailVO(
     String scale,
     String contactEmail,
     String contactPhone,
-    Integer status,
+    EnterpriseStatus status,
     String logoUrl,
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-    LocalDateTime createdAt
+    OffsetDateTime createdAt
 ) {}

@@ -21,14 +21,14 @@ public class MyMetaObjectHandler implements MetaObjectHandler {
     @Override
     public void insertFill(MetaObject metaObject) {
 
-        this.strictInsertFill(metaObject,"updatedBy", Long.class, AuthContext.getUserIdSafe());
+        this.strictInsertFill(metaObject,"updatedBy", Long.class, AuthContext.getUserIdOrNull());
         this.strictInsertFill(metaObject,"createdAt", OffsetDateTime.class, OffsetDateTime.now());
         this.strictInsertFill(metaObject,"traceId", String.class, TraceUtil.getTraceId());
     }
 
     @Override
     public void updateFill(MetaObject metaObject) {
-        this.strictUpdateFill(metaObject, "updatedBy", Long.class, AuthContext.getUserIdSafe());
+        this.strictUpdateFill(metaObject, "updatedBy", Long.class, AuthContext.getUserIdOrNull());
         this.strictUpdateFill(metaObject, "updatedAt", OffsetDateTime.class, OffsetDateTime.now());
         this.strictUpdateFill(metaObject, "traceId", String.class, TraceUtil.getTraceId());
     }

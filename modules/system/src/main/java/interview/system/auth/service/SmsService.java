@@ -1,8 +1,9 @@
 package interview.system.auth.service;
 
 
-import interview.system.auth.model.enums.SmsType;
+import interview.common.enums.SmsType;
 import interview.system.auth.model.req.SmsSendReq;
+import interview.system.auth.model.req.VerifyReq;
 
 /**
  * @author zhuxi
@@ -24,4 +25,12 @@ public interface SmsService {
      * @param type 验证码类型
      */
     void verifyCode(String phone, String code, SmsType type);
+
+
+    /**
+     * 效验敏感操作
+     * @param verifyReq 验证请求
+     * @return 敏感操作令牌token
+     */
+    String verifyForSensitiveAction(VerifyReq verifyReq);
 }

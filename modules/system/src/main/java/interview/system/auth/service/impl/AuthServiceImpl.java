@@ -13,10 +13,10 @@ import interview.common.util.CryptoUtil;
 import interview.common.util.JwttUtil;
 import interview.framework.config.properties.JwtProperties;
 import interview.framework.context.AuthContext;
-import interview.system.auth.AuthKeyConstant;
+import interview.common.constant.AuthKeyConstant;
 import interview.system.auth.model.bo.LoginBO;
 import interview.system.auth.model.bo.UserInfoBO;
-import interview.system.auth.model.enums.SmsType;
+import interview.common.enums.SmsType;
 import interview.system.auth.mapper.AuthMapper;
 import interview.system.auth.model.bo.RegisterBo;
 import interview.system.auth.model.entity.UserToken;
@@ -272,7 +272,7 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
                         UserToken::getExpiresAt,
                         UserToken::getCreatedAt
                 )
-                .eq(UserToken::getUserId, AuthContext.getUserId())
+                .eq(UserToken::getUserId, AuthContext.getRequiredUserId())
                 .eq(UserToken::getIsRevoked, false)
                 .gt(UserToken::getExpiresAt, OffsetDateTime.now())
                 .list();
@@ -292,7 +292,7 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
     @Transactional(rollbackFor = BusinessException.class)
     public void revoke(Long tokenId, RevokeDeviceReq code) {
 
-        Long userId = AuthContext.getUserId();
+        Long userId = AuthContext.getRequiredUserId();
 
         SysUser user = usersService.lambdaQuery()
                 .select(SysUser::getPhone)
@@ -322,7 +322,7 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
     @Override
     public UserInfoBO getUserInfo() {
 
-        Long userId = AuthContext.getUserId();
+        Long userId = AuthContext.getRequiredUserId();
         SysUser user = usersService.lambdaQuery()
                 .select(
                     SysUser::getUsername,
@@ -332,7 +332,7 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
                     SysUser::getAvatarUrl,
                     SysUser::getStatus
                 )
-                .eq(SysUser::getId, AuthContext.getUserId())
+                .eq(SysUser::getId, AuthContext.getRequiredUserId())
                 .one();
 
         if (user == null){

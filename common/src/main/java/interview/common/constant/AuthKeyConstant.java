@@ -1,6 +1,6 @@
-package interview.system.auth;
+package interview.common.constant;
 
-import interview.system.auth.model.enums.SmsType;
+import interview.common.enums.SmsType;
 
 /**
  * @author zhuxi
@@ -13,8 +13,19 @@ public interface AuthKeyConstant {
     String PREFIX = "sys:auth";
     String SMS_CODE_PREFIX =":sms:code:";
     String SMS_LOCK_PREFIX = ":sms:lock:";
+    String SMS_SENSITIVE_ACTION_TOKEN_PREFIX = ":sms:secure:token:";
 
     String TOKEN_BAN_PREFIX = "token:ban:";
+
+
+    /**
+     * 获取敏感操作令牌key（仅以 token 为维度，不包含 phone/smsType，方便 SecureAspect 查找）
+     * @param token 令牌
+     * @return 敏感操作令牌key
+     */
+    static String getSmsSensitiveActionTokenKey(String token) {
+        return PREFIX + SMS_SENSITIVE_ACTION_TOKEN_PREFIX + token;
+    }
 
 
     /**

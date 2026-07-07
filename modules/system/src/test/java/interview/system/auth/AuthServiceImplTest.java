@@ -14,7 +14,7 @@ import interview.system.auth.model.bo.LoginBO;
 import interview.system.auth.model.bo.RegisterBo;
 import interview.system.auth.model.bo.UserInfoBO;
 import interview.system.auth.model.entity.UserToken;
-import interview.system.auth.model.enums.SmsType;
+import interview.common.enums.SmsType;
 import interview.system.auth.model.req.*;
 import interview.system.auth.model.vo.RefreshTokenVO;
 import interview.system.auth.model.vo.TokenInfoVO;

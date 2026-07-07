@@ -11,6 +11,7 @@ import io.jsonwebtoken.Claims;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
@@ -24,8 +25,7 @@ import java.util.Optional;
  * @apiNote JWT 拦截器
  */
 @Slf4j
-@Component
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class JwtInterceptor implements HandlerInterceptor {
 
     private final JwttUtil jwttUtil;

@@ -1,9 +1,12 @@
 package interview.system.tenant;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import interview.common.constant.SecureActionContext;
 import interview.common.enums.ErrorCode;
 import interview.common.enums.Role;
+import interview.common.enums.SmsType;
 import interview.common.exception.BusinessException;
+import interview.framework.annonate.RequireSecure;
 import interview.framework.config.CustomIdGenerator;
 import interview.framework.context.AuthContext;
 import interview.system.rbac.model.entity.SysRole;
@@ -17,15 +20,19 @@ import interview.system.tenant.model.bo.UserEnterprisesBO;
 import interview.system.tenant.model.entity.Enterprise;
 import interview.system.tenant.model.entity.EnterpriseTeamMember;
 import interview.system.tenant.model.enums.EnterpriseStatus;
+import interview.system.tenant.model.req.EnterpriseBasicUpdateReq;
+import interview.system.tenant.model.req.EnterpriseContactUpdateReq;
 import interview.system.tenant.model.req.EnterpriseCreateReq;
-import interview.system.tenant.model.req.EnterpriseUpdateReq;
+import interview.system.tenant.model.vo.EnterpriseContactUpdateVO;
 import interview.system.tenant.model.vo.EnterpriseDetailVO;
 import interview.system.tenant.model.vo.EnterpriseUpdateVO;
+import jakarta.servlet.ServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.context.request.RequestContextHolder;
 
 import java.util.List;
 import java.util.Map;
@@ -51,6 +58,7 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
     private final EnterpriseTeamMembersService enterpriseTeamMembersService;
     private final EnterprisesMapper enterprisesMapper;
     private final RolesService rolesService;
+    private final ServletRequest request;
 
     @Override
     @Transactional(rollbackFor = BusinessException.class)
@@ -87,13 +95,13 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
         }
         //在 enterprise_team_members 中创建一条 OWNER 记录（当前用户 + role_id=ENTERPRISE_OWNER）
         SysUserRole role = SysUserRole.builder()
-                .userId(AuthContext.getUserId())
+                .userId(AuthContext.getRequiredUserId())
                 .roleId(Role.ENTERPRISE_OWNER.getCode())
                 .build();
 
         userRolesService.save(role);
         EnterpriseTeamMember enterpriseTeamMember = EnterpriseTeamMember.builder()
-                .userId(AuthContext.getUserId())
+                .userId(AuthContext.getRequiredUserId())
                 .roleId(Role.ENTERPRISE_OWNER.getCode())
                 .enterpriseId(number)
                 .build();
@@ -117,9 +125,9 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
     @Override
     public List<ListUserEnterprisesBO> listUserEnterprises() {
         //从 AuthContext 获取当前 user_id
-        Long userId = AuthContext.getUserId();
+        Long userId = AuthContext.getRequiredUserId();
         //联表查询 enterprise_team_members 获取用户所属企业列表
-        List<UserEnterprisesBO> bos = enterprisesMapper.getlistUserEnterprises(userId);
+        List<UserEnterprisesBO> bos = enterprisesMapper.getListUserEnterprises(userId);
         if (bos.isEmpty()){
             return List.of();
         }
@@ -177,20 +185,111 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
     @Override
     public EnterpriseDetailVO getEnterpriseDetail(Long enterpriseId) {
         // TODO: 校验 enterpriseId 合法性（是否存在、is_deleted = false）
-        //       租户隔离校验：当前用户必须属于该企业
+        boolean exists = lambdaQuery()
+                .eq(Enterprise::getId, enterpriseId)
+                .eq(Enterprise::getIsDeleted,false)
+                .exists();
+        if (!exists) {
+            throw new BusinessException(ErrorCode.ENTERPRISE_NOT_FOUND);
+        }
+        //租户隔离校验：当前用户必须属于该企业
+        Long userId = AuthContext.getRequiredUserId();
+        boolean exists1 = enterpriseTeamMembersService.lambdaQuery()
+                .eq(EnterpriseTeamMember::getEnterpriseId, enterpriseId)
+                .eq(EnterpriseTeamMember::getIsDeleted, false)
+                .eq(EnterpriseTeamMember::getUserId, userId)
+                .exists();
+        if (!exists1) {
+            throw new BusinessException(ErrorCode.ENTERPRISE_NOT_BELONG);
+        }
         //       查询 Enterprise 实体
-        //       转换为 EnterpriseDetailVO
-        return null;
+        Enterprise enterprise = enterprisesMapper.getEnterpriseDetail(enterpriseId);
+
+        return EnterpriseDetailVO.builder()
+                .id(enterpriseId)
+                .name(enterprise.getName())
+                .shortName(enterprise.getShortName())
+                .industry(enterprise.getIndustry())
+                .scale(enterprise.getScale())
+                .contactEmail(enterprise.getContactEmail())
+                .contactPhone(enterprise.getContactPhone())
+                .status(enterprise.getStatus())
+                .logoUrl(enterprise.getLogoUrl())
+                .createdAt(enterprise.getCreatedAt())
+                .build();
     }
 
     @Override
-    public EnterpriseUpdateVO updateEnterprise(Long enterpriseId, EnterpriseUpdateReq req) {
-        // TODO: 校验 enterpriseId 合法性
-        //       校验操作人权限（仅 ADMIN 及以上可修改企业信息）
-        //       仅更新非 null 字段（部分更新，不覆盖未传字段）
-        //       UPDATE enterprises
-        //       返回 EnterpriseUpdateVO
-        return null;
+    @Transactional(rollbackFor = BusinessException.class)
+    public EnterpriseUpdateVO updateEnterpriseBasic(Long enterpriseId, EnterpriseBasicUpdateReq req) {
+        validateEnterpriseBelong(enterpriseId);
+
+        Enterprise update = Enterprise.builder().id(enterpriseId).build();
+        if (req.getName() != null){
+            update.setName(req.getName());
+        }
+        if (req.getShortName() != null){
+            update.setShortName(req.getShortName());
+        }
+        if (req.getIndustry() != null){
+            update.setIndustry(req.getIndustry());
+        }
+        if (req.getScale() != null){
+            update.setScale(req.getScale());
+        }
+        if (req.getLogoUrl() != null){
+            update.setLogoUrl(req.getLogoUrl());
+        }
+
+        baseMapper.updateById(update);
+        Enterprise updated = baseMapper.selectById(enterpriseId);
+        return new EnterpriseUpdateVO(updated.getId(), updated.getName(), updated.getShortName(), updated.getIndustry());
+    }
+
+    @Override
+    @Transactional(rollbackFor = BusinessException.class)
+    public EnterpriseContactUpdateVO updateEnterpriseContact(Long enterpriseId, EnterpriseContactUpdateReq req) {
+        validateEnterpriseBelong(enterpriseId);
+
+        SecureActionContext secureActionContext = (SecureActionContext)request.getAttribute("SECURE_ACTION_CONTEXT");
+
+        String contactEmail = req.getContactEmail();
+        String contactPhone = req.getContactPhone();
+        if (contactEmail == null && contactPhone == null) {
+            throw new BusinessException(ErrorCode.LACK_PHONE_OR_EMAIL);
+        }
+
+        String targetPhone = secureActionContext.getTargetPhone();
+        if (contactPhone != null && !contactPhone.equals(targetPhone)){
+            throw new BusinessException(ErrorCode.PHONE_MISMATCH);
+        }
+
+        lambdaUpdate()
+                .eq(Enterprise::getId,enterpriseId)
+                .set(contactPhone != null,Enterprise::getContactPhone,contactPhone)
+                .set(contactEmail != null,Enterprise::getContactEmail, req.getContactEmail())
+                .update();
+
+        return new EnterpriseContactUpdateVO(enterpriseId, contactEmail, contactPhone);
+    }
+
+    private void validateEnterpriseBelong(Long enterpriseId) {
+        boolean exists = lambdaQuery()
+                .eq(Enterprise::getId, enterpriseId)
+                .eq(Enterprise::getIsDeleted, false)
+                .exists();
+        if (!exists) {
+            throw new BusinessException(ErrorCode.ENTERPRISE_NOT_FOUND);
+        }
+        Long userId = AuthContext.getRequiredUserId();
+        boolean member = enterpriseTeamMembersService.lambdaQuery()
+                .eq(EnterpriseTeamMember::getEnterpriseId, enterpriseId)
+                .eq(EnterpriseTeamMember::getUserId, userId)
+                .eq(EnterpriseTeamMember::getIsDeleted, false)
+                .exists();
+        if (!member) {
+            throw new BusinessException(ErrorCode.ENTERPRISE_NOT_BELONG);
+        }
     }
 
     @Override

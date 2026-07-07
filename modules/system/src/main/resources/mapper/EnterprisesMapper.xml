@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="interview.system.tenant.mapper.EnterprisesMapper">
 
-    <select id="getlistUserEnterprises" resultType="interview.system.tenant.model.bo.UserEnterprisesBO">
+    <select id="getListUserEnterprises" resultType="interview.system.tenant.model.bo.UserEnterprisesBO">
         SELECT
             e.id AS enterprise_id,
             e.name,
@@ -13,5 +13,20 @@
         FROM enterprises e
         JOIN enterprise_team_members etm ON e.id = etm.enterprise_id
         WHERE etm.user_id = #{userId} AND etm.is_deleted = false AND e.is_deleted = false
+    </select>
+    <select id="getEnterpriseDetail" resultType="interview.system.tenant.model.entity.Enterprise">
+        SELECT
+            id,
+            name,
+            short_name,
+            industry,
+            scale,
+            contact_email,
+            contact_phone,
+            status,
+            logo_url,
+            created_at
+        FROM Enterprises e
+        WHERE e.id = #{enterpriseId} AND e.is_deleted = false
     </select>
 </mapper>
