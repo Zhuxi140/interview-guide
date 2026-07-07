@@ -2,6 +2,7 @@ package interview.system.auth.model.vo;
 
 import interview.framework.security.Desensitize.Desensitize;
 import interview.framework.security.Desensitize.DesensitizeType;
+import interview.system.auth.model.enums.UserStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 
@@ -36,5 +37,5 @@ public record UserInfoVO (
     String userType,
 
     @Schema(description = "状态：1-正常 0-禁用")
-    Integer status
+    UserStatus status
 ) {}

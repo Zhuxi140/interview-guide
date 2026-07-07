@@ -13,8 +13,8 @@ import lombok.Getter;
 @Getter
 public enum UserStatus {
 
-    NORMAL(1, "正常"),
-    DISABLED(0, "禁用");
+    NORMAL(1, "NORMAL"),
+    DISABLED(0, "BAN");
 
     @EnumValue
     private final Integer code;

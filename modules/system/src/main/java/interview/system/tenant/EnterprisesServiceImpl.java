@@ -13,15 +13,16 @@ import interview.system.rbac.service.UserRolesService;
 import interview.system.tenant.mapper.EnterprisesMapper;
 import interview.system.tenant.model.bo.EnterpriseCreateBO;
 import interview.system.tenant.model.bo.ListUserEnterprisesBO;
+import interview.system.tenant.model.bo.UserEnterprisesBO;
 import interview.system.tenant.model.entity.Enterprise;
 import interview.system.tenant.model.entity.EnterpriseTeamMember;
 import interview.system.tenant.model.enums.EnterpriseStatus;
 import interview.system.tenant.model.req.EnterpriseCreateReq;
 import interview.system.tenant.model.req.EnterpriseUpdateReq;
 import interview.system.tenant.model.vo.EnterpriseDetailVO;
-import interview.system.tenant.model.vo.EnterpriseListItemVO;
 import interview.system.tenant.model.vo.EnterpriseUpdateVO;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +31,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import static java.util.stream.Collectors.toList;
 
 /**
  * <p>
@@ -40,6 +43,7 @@ import java.util.stream.Collectors;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enterprise> implements EnterprisesService {
 
     private final CustomIdGenerator customIdGenerator;
@@ -115,17 +119,17 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
         //从 AuthContext 获取当前 user_id
         Long userId = AuthContext.getUserId();
         //联表查询 enterprise_team_members 获取用户所属企业列表
-        List<ListUserEnterprisesBO> bos = enterprisesMapper.getlistUserEnterprises(userId);
+        List<UserEnterprisesBO> bos = enterprisesMapper.getlistUserEnterprises(userId);
         if (bos.isEmpty()){
             return List.of();
         }
         //关联 sys_roles 获取 roleCode
         Set<Integer> roleIds = bos.stream()
-                .map(ListUserEnterprisesBO::roleId)
+                .map(UserEnterprisesBO::roleId)
                 .collect(Collectors.toSet());
 
         Map<Integer, String> roleCodeMap = rolesService.lambdaQuery()
-                .select(SysRole::getRoleCode)
+                .select(SysRole::getId,SysRole::getRoleCode)
                 .in(SysRole::getId, roleIds)
                 .list()
                 .stream()
@@ -133,7 +137,7 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
 
         //统计每个企业的 memberCount
         Set<Long> enterpriseIds = bos.stream()
-                .map(ListUserEnterprisesBO::enterpriseId)
+                .map(UserEnterprisesBO::enterpriseId)
                 .collect(Collectors.toSet());
 
         Map<Long, Long> memberCountMap = enterpriseTeamMembersService.lambdaQuery()
@@ -150,15 +154,23 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
 
         //返回 List<ListUserEnterprisesBO>
         return bos.stream()
-                .map(bo ->
-                ListUserEnterprisesBO.builder()
-                        .enterpriseId(bo.enterpriseId())
-                        .name(bo.name())
-                        .shortName(bo.shortName())
-                        .status(bo.status())
-                        .roleCode(roleCodeMap.get(bo.roleId()))
-                        .memberCount(memberCountMap.get(bo.enterpriseId()))
-                        .build()
+                .map(bo ->{
+                    String roleCode = roleCodeMap.get(bo.roleId());
+                    if (roleCode == null){
+                        log.warn("[数据一致性警告] 未找到对应的 RoleCode! 脏数据企业关联 ID: {}, 缺失的 RoleID:{}",
+                                bo.enterpriseId(), bo.roleId());
+                    }
+                    return ListUserEnterprisesBO.builder()
+                            .enterpriseId(bo.enterpriseId())
+                            .name(bo.name())
+                            .shortName(bo.shortName())
+                            .industry(bo.industry())
+                            .status(bo.status())
+                            // FIXME: 若 roleCode 为 null，前端应拦截并提示用户其数据有异常 建议联系客服
+                            .roleCode(roleCode)
+                            .memberCount(memberCountMap.get(bo.enterpriseId()))
+                            .build();
+                    }
                 ).toList();
     }
 

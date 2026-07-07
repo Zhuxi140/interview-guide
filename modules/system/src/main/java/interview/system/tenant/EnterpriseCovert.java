@@ -5,6 +5,7 @@ import interview.system.tenant.model.bo.ListUserEnterprisesBO;
 import interview.system.tenant.model.vo.EnterpriseCreateVO;
 import interview.system.tenant.model.vo.EnterpriseListItemVO;
 import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 
 import java.util.List;
 
@@ -18,5 +19,6 @@ public interface EnterpriseCovert {
 
     EnterpriseCreateVO convertToEnterpriseCreateVO(EnterpriseCreateBO bo);
 
-    List<EnterpriseListItemVO> BOCovertToEnterpriseListItemVO(List<ListUserEnterprisesBO> voList);
+    @Mapping(source = "enterpriseId",target = "id")
+    List<EnterpriseListItemVO> BOCovertToEnterpriseListItemVO(List<ListUserEnterprisesBO> boList);
 }

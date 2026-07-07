@@ -1,7 +1,7 @@
 package interview.system.tenant.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import interview.system.tenant.model.bo.ListUserEnterprisesBO;
+import interview.system.tenant.model.bo.UserEnterprisesBO;
 import interview.system.tenant.model.entity.Enterprise;
 import org.apache.ibatis.annotations.Mapper;
 
@@ -17,5 +17,5 @@ import java.util.List;
 @Mapper
 public interface EnterprisesMapper extends BaseMapper<Enterprise> {
 
-    List<ListUserEnterprisesBO> getlistUserEnterprises(Long userId);
+    List<UserEnterprisesBO> getlistUserEnterprises(Long userId);
 }
