@@ -1,16 +1,19 @@
 package interview.common.enums;
 
 
+import lombok.Getter;
 
 /**
  * @author zhuxi
  * @apiNote 角色作用域枚举
  */
 
+@Getter
 public enum RoleScope {
     PLATFORM,
     ENTERPRISE,
-    USER;
+    USER,
+    UNKNOWN;
 
     public static RoleScope getRoleScope(String roleScope){
         for (RoleScope value : RoleScope.values()) {

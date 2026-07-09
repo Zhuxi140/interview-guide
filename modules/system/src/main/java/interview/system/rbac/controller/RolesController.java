@@ -8,6 +8,7 @@ import interview.system.rbac.service.RolesService;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -22,7 +23,7 @@ import java.util.List;
 @RestController
 @RequestMapping(ApiVersion.V1 + "/admin/roles")
 @Tag(name = "角色查阅")
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class RolesController {
 
     private final RolesService rolesService;

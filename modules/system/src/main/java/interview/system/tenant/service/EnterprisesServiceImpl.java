@@ -1,12 +1,11 @@
-package interview.system.tenant;
+package interview.system.tenant.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import interview.common.constant.SecureActionContext;
 import interview.common.enums.ErrorCode;
 import interview.common.enums.Role;
-import interview.common.enums.SmsType;
 import interview.common.exception.BusinessException;
-import interview.framework.annonate.RequireSecure;
 import interview.framework.config.CustomIdGenerator;
 import interview.framework.context.AuthContext;
 import interview.system.rbac.model.entity.SysRole;
@@ -32,14 +31,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.context.request.RequestContextHolder;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
-
-import static java.util.stream.Collectors.toList;
 
 /**
  * <p>
@@ -58,7 +54,6 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
     private final EnterpriseTeamMembersService enterpriseTeamMembersService;
     private final EnterprisesMapper enterprisesMapper;
     private final RolesService rolesService;
-    private final ServletRequest request;
 
     @Override
     @Transactional(rollbackFor = BusinessException.class)
@@ -67,7 +62,6 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
         boolean exists = lambdaQuery()
                 .select(Enterprise::getName)
                 .eq(Enterprise::getName, req.getName())
-                .eq(Enterprise::getIsDeleted, false)
                 .exists();
 
         if (exists) {
@@ -148,17 +142,20 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
                 .map(UserEnterprisesBO::enterpriseId)
                 .collect(Collectors.toSet());
 
-        Map<Long, Long> memberCountMap = enterpriseTeamMembersService.lambdaQuery()
-                .in(EnterpriseTeamMember::getEnterpriseId, enterpriseIds)
-                .eq(EnterpriseTeamMember::getIsDeleted, false)
-                .list()
-                .stream()
+
+        List<Map<String, Object>> countList = enterpriseTeamMembersService.listMaps(
+                new QueryWrapper<EnterpriseTeamMember>()
+                        .select("enterprise_id AS enterpriseId","COUNT(*) AS count")
+                        .in("enterprise_id", enterpriseIds)
+                        .groupBy("enterprise_id")
+        );
+
+        Map<Long, Long> memberCountMap = countList.stream()
                 .collect(
-                        Collectors.groupingBy(
-                                EnterpriseTeamMember::getEnterpriseId,
-                                Collectors.counting()
-                        )
-                );
+                    Collectors.toMap(
+                            map -> ((Number) map.get("enterprise_id")).longValue(),
+                            map -> ((Number) map.get("count")).longValue()
+                ));
 
         //返回 List<ListUserEnterprisesBO>
         return bos.stream()
@@ -184,19 +181,12 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
 
     @Override
     public EnterpriseDetailVO getEnterpriseDetail(Long enterpriseId) {
-        // TODO: 校验 enterpriseId 合法性（是否存在、is_deleted = false）
-        boolean exists = lambdaQuery()
-                .eq(Enterprise::getId, enterpriseId)
-                .eq(Enterprise::getIsDeleted,false)
-                .exists();
-        if (!exists) {
-            throw new BusinessException(ErrorCode.ENTERPRISE_NOT_FOUND);
-        }
+        //校验 enterpriseId 合法性（是否存在、is_deleted = false）
+        verifyEnterpriseId(enterpriseId);
         //租户隔离校验：当前用户必须属于该企业
         Long userId = AuthContext.getRequiredUserId();
         boolean exists1 = enterpriseTeamMembersService.lambdaQuery()
                 .eq(EnterpriseTeamMember::getEnterpriseId, enterpriseId)
-                .eq(EnterpriseTeamMember::getIsDeleted, false)
                 .eq(EnterpriseTeamMember::getUserId, userId)
                 .exists();
         if (!exists1) {
@@ -224,6 +214,7 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
     public EnterpriseUpdateVO updateEnterpriseBasic(Long enterpriseId, EnterpriseBasicUpdateReq req) {
         validateEnterpriseBelong(enterpriseId);
 
+        // TODO: 权限效验体系补全后，需对其进行权限效验  仅Enterprise_ADMIN以上权限可修改
         Enterprise update = Enterprise.builder().id(enterpriseId).build();
         if (req.getName() != null){
             update.setName(req.getName());
@@ -248,10 +239,9 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
 
     @Override
     @Transactional(rollbackFor = BusinessException.class)
-    public EnterpriseContactUpdateVO updateEnterpriseContact(Long enterpriseId, EnterpriseContactUpdateReq req) {
+    public EnterpriseContactUpdateVO updateEnterpriseContact(Long enterpriseId,SecureActionContext secureActionContext, EnterpriseContactUpdateReq req) {
         validateEnterpriseBelong(enterpriseId);
-
-        SecureActionContext secureActionContext = (SecureActionContext)request.getAttribute("SECURE_ACTION_CONTEXT");
+        // TODO: 权限效验体系补全后，需对其进行权限效验  仅Enterprise_ADMIN以上权限可修改
 
         String contactEmail = req.getContactEmail();
         String contactPhone = req.getContactPhone();
@@ -274,18 +264,13 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
     }
 
     private void validateEnterpriseBelong(Long enterpriseId) {
-        boolean exists = lambdaQuery()
-                .eq(Enterprise::getId, enterpriseId)
-                .eq(Enterprise::getIsDeleted, false)
-                .exists();
-        if (!exists) {
-            throw new BusinessException(ErrorCode.ENTERPRISE_NOT_FOUND);
-        }
+        // 效验EnterpriseId合法性
+        verifyEnterpriseId(enterpriseId);
+
         Long userId = AuthContext.getRequiredUserId();
         boolean member = enterpriseTeamMembersService.lambdaQuery()
                 .eq(EnterpriseTeamMember::getEnterpriseId, enterpriseId)
                 .eq(EnterpriseTeamMember::getUserId, userId)
-                .eq(EnterpriseTeamMember::getIsDeleted, false)
                 .exists();
         if (!member) {
             throw new BusinessException(ErrorCode.ENTERPRISE_NOT_BELONG);
@@ -294,11 +279,34 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
 
     @Override
     public void deleteEnterprise(Long enterpriseId) {
-        // TODO: 校验 enterpriseId 合法性
-        //       校验操作人权限（仅 OWNER 可注销企业）
-        //       校验企业下无活跃岗位（jobs.status = 1）
-        //       逻辑删除 enterprises（is_deleted = true）
-        //       级联逻辑删除 enterprise_team_members 相关记录
-        //       Phase 8 扩展：需校验 sys_enterprise_cert 已通过认证
+        // TODO: 权限体系完善后，需先检查权限（仅 OWNER 可注销企业）
+        //校验 enterpriseId 合法性
+        verifyEnterpriseId(enterpriseId);
+
+        // TODO: 需Job模块 对外开放API后完善
+        //  校验企业下无活跃岗位（jobs.status = 1）
+
+
+        //逻辑删除 enterprises（is_deleted = true）
+        lambdaUpdate()
+                .eq(Enterprise::getId, enterpriseId)
+                .set(Enterprise::getIsDeleted, true)
+                .update();
+        //级联逻辑删除 enterprise_team_members 相关记录
+        enterpriseTeamMembersService.lambdaUpdate()
+                .eq(EnterpriseTeamMember::getEnterpriseId, enterpriseId)
+                .set(EnterpriseTeamMember::getIsDeleted, true)
+                .update();
+
+        // TODO: Phase 8 扩展：需校验 sys_enterprise_cert 已通过认证
+    }
+
+    public void verifyEnterpriseId(Long enterpriseId) {
+        boolean exists = lambdaQuery()
+                .eq(Enterprise::getId, enterpriseId)
+                .exists();
+        if (!exists) {
+            throw new BusinessException(ErrorCode.ENTERPRISE_NOT_FOUND);
+        }
     }
 }

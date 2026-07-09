@@ -5,7 +5,5 @@ package interview.system.tenant.model.vo;
  * @apiNote 邀请成员响应
  */
 public record TeamMemberCreateVO(
-    Long id,
-    Long userId,
-    Long roleId
+    Long id
 ) {}

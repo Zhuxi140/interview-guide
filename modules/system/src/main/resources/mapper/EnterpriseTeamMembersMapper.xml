@@ -2,4 +2,19 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="interview.system.tenant.mapper.EnterpriseTeamMembersMapper">
 
+    <select id="getTeamMembersPage" resultType="interview.system.tenant.model.bo.TeamMemberItemBO">
+        SELECT
+            etm.id,
+            su.id AS user_id,
+            su.username,
+            su.nickname,
+            su.email,
+            etm.role_id,
+            etm.created_at
+        FROM enterprise_team_members etm
+        JOIN sys_users su
+            ON etm.user_id = su.id
+        WHERE
+            etm.enterprise_id = #{enterpriseId} AND etm.is_deleted = false
+    </select>
 </mapper>

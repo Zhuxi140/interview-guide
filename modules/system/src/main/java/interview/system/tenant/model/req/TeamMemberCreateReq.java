@@ -19,5 +19,5 @@ public class TeamMemberCreateReq {
 
     @NotNull(message = "角色ID不能为空")
     @Schema(description = "角色ID")
-    private Long roleId;
+    private Integer roleId;
 }

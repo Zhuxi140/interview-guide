@@ -1,6 +1,7 @@
-package interview.system.tenant;
+package interview.system.tenant.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
+import interview.common.constant.SecureActionContext;
 import interview.system.tenant.model.bo.EnterpriseCreateBO;
 import interview.system.tenant.model.bo.ListUserEnterprisesBO;
 import interview.system.tenant.model.entity.Enterprise;
@@ -8,7 +9,6 @@ import interview.system.tenant.model.req.EnterpriseBasicUpdateReq;
 import interview.system.tenant.model.req.EnterpriseContactUpdateReq;
 import interview.system.tenant.model.req.EnterpriseCreateReq;
 import interview.system.tenant.model.vo.EnterpriseDetailVO;
-import interview.system.tenant.model.vo.EnterpriseListItemVO;
 import interview.system.tenant.model.vo.EnterpriseContactUpdateVO;
 import interview.system.tenant.model.vo.EnterpriseUpdateVO;
 
@@ -63,7 +63,7 @@ public interface EnterprisesService extends IService<Enterprise> {
      * @param req          更新请求
      * @return 更新结果
      */
-    EnterpriseContactUpdateVO updateEnterpriseContact(Long enterpriseId, EnterpriseContactUpdateReq req);
+    EnterpriseContactUpdateVO updateEnterpriseContact(Long enterpriseId, SecureActionContext secureActionContext, EnterpriseContactUpdateReq req);
 
     /**
      * 注销企业（仅 OWNER）

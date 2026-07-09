@@ -1,5 +1,6 @@
 package interview.common.enums;
 
+import com.baomidou.mybatisplus.annotation.EnumValue;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -12,17 +13,20 @@ import lombok.Getter;
 @Getter
 public enum Role {
 
-    SUPER_ADMIN(1001,"超级管理员"),
-    FINANCE_ADMIN(1002,"财务管理员"),
-    ENTERPRISE_OWNER(2001,"企业所有者"),
-    ENTERPRISE_ADMIN(2002,"企业管理员"),
-    HR_MANAGER(2003,"HR经理"),
-    HR_RECRUITER(2004,"招聘专员"),
-    INTERVIEWER(2005,"面试官"),
-    CANDIDATE(3001,"求职者");
+    SUPER_ADMIN(1001,"超级管理员",RoleScope.PLATFORM),
+    FINANCE_ADMIN(1002,"财务管理员",RoleScope.PLATFORM),
+    ENTERPRISE_OWNER(2001,"企业所有者",RoleScope.ENTERPRISE),
+    ENTERPRISE_ADMIN(2002,"企业管理员",RoleScope.ENTERPRISE),
+    HR_MANAGER(2003,"HR经理",RoleScope.ENTERPRISE),
+    HR_RECRUITER(2004,"招聘专员",RoleScope.ENTERPRISE),
+    INTERVIEWER(2005,"面试官",RoleScope.ENTERPRISE),
+    CANDIDATE(3001,"求职者",RoleScope.USER),
+    UNKNOWN(4001,"未知",RoleScope.UNKNOWN);
 
+    @EnumValue
     private final Integer code;
     private final String msg;
+    private final RoleScope roleScope;
 
 
     /**

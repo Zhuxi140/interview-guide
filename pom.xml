@@ -134,6 +134,11 @@
                 <artifactId>mybatis-plus-annotation</artifactId>
                 <version>${mybatis-plus.version}</version>
             </dependency>
+            <dependency>
+                <groupId>com.baomidou</groupId>
+                <artifactId>mybatis-plus-jsqlparser</artifactId>
+                <version>${mybatis-plus.version}</version>
+            </dependency>
 
             <!-- postgresql -->
             <!-- Source: https://mvnrepository.com/artifact/org.postgresql/postgresql -->

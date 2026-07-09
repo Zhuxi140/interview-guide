@@ -1,6 +1,5 @@
 package interview.framework.context;
 
-import interview.common.enums.ErrorCode;
 import interview.common.enums.RiskLevel;
 import interview.common.enums.RoleScope;
 import interview.common.enums.UserType;

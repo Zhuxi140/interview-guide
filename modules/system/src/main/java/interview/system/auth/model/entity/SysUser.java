@@ -17,7 +17,7 @@ import java.time.OffsetDateTime;
  */
 
 @Data
-@TableName("sys_users")
+@TableName(value = "sys_users",autoResultMap = true)
 @Builder
 public class SysUser implements Serializable {
 

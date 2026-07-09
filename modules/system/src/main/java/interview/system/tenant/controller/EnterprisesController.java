@@ -1,9 +1,11 @@
-package interview.system.tenant;
+package interview.system.tenant.controller;
 
 import interview.common.constant.ApiVersion;
 import interview.common.constant.Result;
+import interview.common.constant.SecureActionContext;
 import interview.common.enums.SmsType;
 import interview.framework.annonate.RequireSecure;
+import interview.system.tenant.EnterpriseCovert;
 import interview.system.tenant.model.bo.EnterpriseCreateBO;
 import interview.system.tenant.model.bo.ListUserEnterprisesBO;
 import interview.system.tenant.model.req.EnterpriseBasicUpdateReq;
@@ -14,8 +16,10 @@ import interview.system.tenant.model.vo.EnterpriseDetailVO;
 import interview.system.tenant.model.vo.EnterpriseListItemVO;
 import interview.system.tenant.model.vo.EnterpriseContactUpdateVO;
 import interview.system.tenant.model.vo.EnterpriseUpdateVO;
+import interview.system.tenant.service.EnterprisesService;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.ServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -31,13 +35,14 @@ import java.util.List;
 @RequiredArgsConstructor
 public class EnterprisesController {
     private final EnterprisesService enterprisesService;
-    private final EnterpriseCovert covert;
+    private final EnterpriseCovert convert;
+    private final ServletRequest request;
 
     @ApiResponse(description = "创建企业（创建者自动成为 OWNER）")
     @PostMapping
     public Result<EnterpriseCreateVO> createEnterprise(@RequestBody @Valid EnterpriseCreateReq req) {
         EnterpriseCreateBO enterprise = enterprisesService.createEnterprise(req);
-        EnterpriseCreateVO vo = covert.convertToEnterpriseCreateVO(enterprise);
+        EnterpriseCreateVO vo = convert.convertToEnterpriseCreateVO(enterprise);
         return Result.success(vo);
     }
 
@@ -45,7 +50,7 @@ public class EnterprisesController {
     @GetMapping
     public Result<List<EnterpriseListItemVO>> getUserListEnterprises() {
         List<ListUserEnterprisesBO> listUserEnterprisesBOS = enterprisesService.listUserEnterprises();
-        List<EnterpriseListItemVO> vos = covert.BOCovertToEnterpriseListItemVO(listUserEnterprisesBOS);
+        List<EnterpriseListItemVO> vos = convert.BOCovertToEnterpriseListItemVO(listUserEnterprisesBOS);
         return Result.success(vos);
     }
 
@@ -69,7 +74,8 @@ public class EnterprisesController {
     @PutMapping("/{enterpriseId}/contact")
     public Result<EnterpriseContactUpdateVO> updateEnterpriseContact(@PathVariable("enterpriseId") Long enterpriseId,
                                                                      @RequestBody @Valid EnterpriseContactUpdateReq req) {
-        EnterpriseContactUpdateVO vo = enterprisesService.updateEnterpriseContact(enterpriseId, req);
+        SecureActionContext secureActionContext = (SecureActionContext)request.getAttribute("SECURE_ACTION_CONTEXT");
+        EnterpriseContactUpdateVO vo = enterprisesService.updateEnterpriseContact(enterpriseId,secureActionContext, req);
         return Result.success(vo);
     }
 

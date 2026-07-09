@@ -4,6 +4,9 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
+/**
+ * @author zhuxi
+ */
 @Data
 @Schema(description = "更新企业基本信息请求")
 public class EnterpriseBasicUpdateReq {

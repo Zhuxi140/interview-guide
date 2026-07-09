@@ -32,8 +32,8 @@ import interview.system.auth.model.entity.SysUser;
 import interview.system.rbac.model.entity.SysUserRole;
 import interview.system.auth.model.enums.UserStatus;
 import interview.system.rbac.service.*;
-import interview.system.tenant.EnterpriseTeamMembersService;
-import interview.system.tenant.EnterprisesService;
+import interview.system.tenant.service.EnterpriseTeamMembersService;
+import interview.system.tenant.service.EnterprisesService;
 import interview.system.tenant.model.entity.Enterprise;
 import interview.system.tenant.model.entity.EnterpriseTeamMember;
 import io.jsonwebtoken.Claims;
@@ -332,7 +332,7 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
                     SysUser::getAvatarUrl,
                     SysUser::getStatus
                 )
-                .eq(SysUser::getId, AuthContext.getRequiredUserId())
+                .eq(SysUser::getId, userId)
                 .one();
 
         if (user == null){

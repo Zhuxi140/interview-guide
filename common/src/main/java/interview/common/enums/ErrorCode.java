@@ -1,9 +1,12 @@
 package interview.common.enums;
 
+import lombok.Getter;
+
 /**
  * @author zhuxi
  * @apiNote 错误码枚举类
  */
+@Getter
 public enum ErrorCode {
 
     // ------------ 10xxx 系统/全局级错误码 ------------
@@ -58,6 +61,8 @@ public enum ErrorCode {
     LACK_PHONE_OR_EMAIL(20022,"请填写需要修改的手机号或者邮箱"),
     SMS_TYPE_NOT_MATCH(20023,"该操作需进行二重手机验证，请先进行验证"),
     PHONE_MISMATCH(20024,"手机号匹配错误，请填写刚才进行验证的手机号"),
+    ROLE_NOT_EXIST(20025,"该角色不存在"),
+    NO_ALLOW_ROLE(20026,"只能分配对应域的角色"),
 
     // ------------ 30xxx 企业/多租户错误码 ------------
     ENTERPRISE_NOT_FOUND(30001, "企业不存在"),
@@ -71,9 +76,13 @@ public enum ErrorCode {
     ENTERPRISE_TENANT_MISMATCH(30009, "租户隔离校验不通过"),
     ENTERPRISE_DATA_ANOMALY(30010, "企业数据异常，请联系客服"),
     ENTERPRISE_NAME_ALREADY_EXISTS(30011, "企业名称已存在"),
-    ENTERPRISE_NOT_BELONG(30012,"当前用户不属于该企业"),
+    ENTERPRISE_NOT_BELONG(30012,"用户不属于该企业"),
     SECURE_TOKEN_INVALID(30013, "安全操作令牌无效或已过期"),
     SECURE_TOKEN_USER_MISMATCH(30014, "安全操作令牌与当前用户不匹配"),
+    MEMBER_ALREADY_EXISTS(20027,"用户已在企业中"),
+    NO_OPERATE_ENTERPRISE_OWNER(20028,"不能操作企业所有人"),
+    NO_DELETE_OWNER(20029,"不能移除自己"),
+
 
     // ------------ 40xxx 岗位/简历/候选人错误码 ------------
     JOB_NOT_FOUND(40001, "岗位不存在"),
@@ -194,11 +203,4 @@ public enum ErrorCode {
         this.message = message;
     }
 
-    public Integer getCode() {
-        return code;
-    }
-
-    public String getMessage() {
-        return message;
-    }
 }

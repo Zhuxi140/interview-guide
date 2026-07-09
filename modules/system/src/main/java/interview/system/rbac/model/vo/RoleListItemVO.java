@@ -2,8 +2,6 @@ package interview.system.rbac.model.vo;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Builder;
-
-import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 
 /**
@@ -12,7 +10,7 @@ import java.time.OffsetDateTime;
  */
 @Builder
 public record RoleListItemVO(
-    Long id,
+    Integer id,
     String roleCode,
     String roleName,
     String roleScope,
