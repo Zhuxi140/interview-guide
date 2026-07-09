@@ -1,18 +1,20 @@
 package interview.job.model.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import interview.job.model.enums.JobStatus;
+import lombok.Builder;
 import lombok.Data;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 /**
  * @author zhuxi
- * @apiNote 企业招聘岗位实体
  */
-@TableName("jobs")
+@TableName(value = "jobs")
 @Data
+@Builder
 public class Job implements Serializable {
 
     @TableId(type = IdType.ASSIGN_ID)
@@ -40,7 +42,7 @@ public class Job implements Serializable {
 
     private String skillsJson;
 
-    private Integer status;
+    private JobStatus status;
 
     @TableLogic
     private Boolean isDeleted;
@@ -52,8 +54,8 @@ public class Job implements Serializable {
     private String traceId;
 
     @TableField(fill = FieldFill.INSERT)
-    private LocalDateTime createdAt;
+    private OffsetDateTime createdAt;
 
     @TableField(fill = FieldFill.INSERT_UPDATE)
-    private LocalDateTime updatedAt;
+    private OffsetDateTime updatedAt;
 }
