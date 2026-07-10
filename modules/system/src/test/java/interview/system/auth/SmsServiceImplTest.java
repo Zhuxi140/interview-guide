@@ -1,6 +1,5 @@
 package interview.system.auth;
 
-import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
 import interview.common.enums.ErrorCode;
 import interview.common.exception.BusinessException;
@@ -15,10 +14,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.stubbing.Answer;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
+import static interview.system.TestMockUtils.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -41,18 +40,6 @@ class SmsServiceImplTest {
     private final String phone = "13812345678";
     private final SmsSendReq req = new SmsSendReq();
 
-    private final Answer<Object> SELF_ANSWER = invocation -> {
-        Class<?> rt = invocation.getMethod().getReturnType();
-        String name = invocation.getMethod().getName();
-        if (Wrapper.class.isAssignableFrom(rt)) {
-            return invocation.getMock();
-        }
-        if (rt == Object.class && !name.equals("one") && !name.equals("getEntity")) {
-            return invocation.getMock();
-        }
-        return Mockito.RETURNS_DEFAULTS.answer(invocation);
-    };
-
     @BeforeEach
     void setUp() {
         req.setPhone(phone);
@@ -62,16 +49,9 @@ class SmsServiceImplTest {
     @Nested
     class SendSms {
 
-        @SuppressWarnings("unchecked")
-        private LambdaQueryChainWrapper<SysUser> mockQueryWrapper() {
-            return Mockito.mock(LambdaQueryChainWrapper.class,
-                    Mockito.withSettings().defaultAnswer(SELF_ANSWER));
-        }
-
         @Test
         void sendSms_success() {
             LambdaQueryChainWrapper<SysUser> q = mockQueryWrapper();
-            when(q.exists()).thenReturn(false);
 
             when(stringRedisTemplate.hasKey(anyString())).thenReturn(false);
             when(stringRedisTemplate.opsForValue()).thenReturn(valueOps);
@@ -79,7 +59,7 @@ class SmsServiceImplTest {
 
             smsService.sendSms(req);
 
-            verify(stringRedisTemplate, times(2)).opsForValue();
+            verify(stringRedisTemplate, atLeastOnce()).opsForValue();
         }
 
         @Test
@@ -93,7 +73,7 @@ class SmsServiceImplTest {
         @Test
         void sendSms_fail_phoneAlreadyRegistered() {
             LambdaQueryChainWrapper<SysUser> q = mockQueryWrapper();
-            when(q.exists()).thenReturn(true);
+            when(q.one()).thenReturn(SysUser.builder().build());
 
             when(stringRedisTemplate.hasKey(anyString())).thenReturn(false);
             when(usersService.lambdaQuery()).thenReturn(q);

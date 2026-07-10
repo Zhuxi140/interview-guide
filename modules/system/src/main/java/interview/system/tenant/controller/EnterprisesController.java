@@ -5,7 +5,7 @@ import interview.common.constant.Result;
 import interview.common.constant.SecureActionContext;
 import interview.common.enums.SmsType;
 import interview.framework.annonate.RequireSecure;
-import interview.system.tenant.EnterpriseCovert;
+import interview.system.tenant.EnterpriseConverter;
 import interview.system.tenant.model.bo.EnterpriseCreateBO;
 import interview.system.tenant.model.bo.ListUserEnterprisesBO;
 import interview.system.tenant.model.req.EnterpriseBasicUpdateReq;
@@ -20,6 +20,7 @@ import interview.system.tenant.service.EnterprisesService;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.ServletRequest;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -35,14 +36,14 @@ import java.util.List;
 @RequiredArgsConstructor
 public class EnterprisesController {
     private final EnterprisesService enterprisesService;
-    private final EnterpriseCovert convert;
-    private final ServletRequest request;
+    private final EnterpriseConverter converter;
+    private final HttpServletRequest request;
 
     @ApiResponse(description = "创建企业（创建者自动成为 OWNER）")
     @PostMapping
     public Result<EnterpriseCreateVO> createEnterprise(@RequestBody @Valid EnterpriseCreateReq req) {
         EnterpriseCreateBO enterprise = enterprisesService.createEnterprise(req);
-        EnterpriseCreateVO vo = convert.convertToEnterpriseCreateVO(enterprise);
+        EnterpriseCreateVO vo = converter.convertToEnterpriseCreateVO(enterprise);
         return Result.success(vo);
     }
 
@@ -50,7 +51,7 @@ public class EnterprisesController {
     @GetMapping
     public Result<List<EnterpriseListItemVO>> getUserListEnterprises() {
         List<ListUserEnterprisesBO> listUserEnterprisesBOS = enterprisesService.listUserEnterprises();
-        List<EnterpriseListItemVO> vos = convert.BOCovertToEnterpriseListItemVO(listUserEnterprisesBOS);
+        List<EnterpriseListItemVO> vos = converter.BOCovertToEnterpriseListItemVO(listUserEnterprisesBOS);
         return Result.success(vos);
     }
 

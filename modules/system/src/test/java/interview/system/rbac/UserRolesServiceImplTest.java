@@ -1,10 +1,13 @@
 package interview.system.rbac;
 
-import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
 import com.baomidou.mybatisplus.extension.conditions.update.LambdaUpdateChainWrapper;
+import interview.common.enums.ErrorCode;
+import interview.common.exception.BusinessException;
+import interview.system.auth.model.entity.SysUser;
 import interview.system.auth.service.impl.UsersServiceImpl;
 import interview.system.rbac.mapper.UserRolesMapper;
+import interview.system.rbac.model.entity.SysRole;
 import interview.system.rbac.model.entity.SysUserRole;
 import interview.system.rbac.model.req.AssignUserRolesReq;
 import interview.system.rbac.model.req.RemoveUserRolesReq;
@@ -17,10 +20,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.stubbing.Answer;
 
 import java.util.List;
 
+import static interview.system.TestMockUtils.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -37,28 +40,6 @@ class UserRolesServiceImplTest {
     private UserRolesServiceImpl userRolesService;
     private LambdaQueryChainWrapper<SysUserRole> queryWrapper;
     private LambdaUpdateChainWrapper<SysUserRole> updateWrapper;
-
-    private final Answer<Object> SELF_ANSWER = invocation -> {
-        Class<?> rt = invocation.getMethod().getReturnType();
-        String name = invocation.getMethod().getName();
-        if (Wrapper.class.isAssignableFrom(rt)) {
-            return invocation.getMock();
-        }
-        if (rt == Object.class && !name.equals("one") && !name.equals("getEntity")) {
-            return invocation.getMock();
-        }
-        return Mockito.RETURNS_DEFAULTS.answer(invocation);
-    };
-
-    @SuppressWarnings("unchecked")
-    private <T> LambdaQueryChainWrapper<T> mockQueryWrapper() {
-        return mock(LambdaQueryChainWrapper.class, withSettings().defaultAnswer(SELF_ANSWER));
-    }
-
-    @SuppressWarnings("unchecked")
-    private <T> LambdaUpdateChainWrapper<T> mockUpdateWrapper() {
-        return mock(LambdaUpdateChainWrapper.class, withSettings().defaultAnswer(SELF_ANSWER));
-    }
 
     private final Long userId = 1L;
 
@@ -78,6 +59,14 @@ class UserRolesServiceImplTest {
         void setUp() {
             req = new AssignUserRolesReq();
             doReturn(queryWrapper).when(userRolesService).lambdaQuery();
+
+            LambdaQueryChainWrapper<SysUser> userCheckQ = mockQueryWrapper();
+            when(userCheckQ.exists()).thenReturn(true);
+            when(usersService.lambdaQuery()).thenReturn(userCheckQ);
+
+            LambdaQueryChainWrapper<SysRole> roleCheckQ = mockQueryWrapper();
+            when(roleCheckQ.exists()).thenReturn(true);
+            when(rolesService.lambdaQuery()).thenReturn(roleCheckQ);
         }
 
         /**
@@ -91,7 +80,7 @@ class UserRolesServiceImplTest {
          */
         @Test
         void assignUserRoles_success() {
-            req.setRoleIds(List.of(1L, 2L, 3L));
+            req.setRoleIds(List.of(1, 2, 3));
             when(queryWrapper.list()).thenReturn(List.of());
             doReturn(true).when(userRolesService).saveBatch(anyList());
 
@@ -114,7 +103,7 @@ class UserRolesServiceImplTest {
          */
         @Test
         void assignUserRoles_duplicateInRequest_deduplicates() {
-            req.setRoleIds(List.of(1L, 2L, 1L, 2L));
+            req.setRoleIds(List.of(1, 2, 1, 2));
             when(queryWrapper.list()).thenReturn(List.of());
             doReturn(true).when(userRolesService).saveBatch(anyList());
 
@@ -128,22 +117,22 @@ class UserRolesServiceImplTest {
 
         /**
          * 测试对象：UserRolesServiceImpl.assignUserRoles(Long userId, AssignUserRolesReq req)
-         * 测试功能：请求的所有角色用户已拥有，应跳过插入，saveBatch 不执行
+         * 测试功能：请求的所有角色用户已拥有，应抛出 ROLE_ALREADY_ASSIGNED 异常
          * 输入：userId=1L, req.roleIds=[1, 2]
          *       lambdaQuery().list() 返回 2 条已有 SysUserRole（roleId={1, 2}）
-         * 预期输出：saveBatch 从未被调用
-         * 可能异常：N/A
+         * 预期输出：BusinessException(ErrorCode.ROLE_ALREADY_ASSIGNED)
+         * 可能异常：BusinessException
          */
         @Test
-        void assignUserRoles_allAlreadyExist_skipInsert() {
-            req.setRoleIds(List.of(1L, 2L));
-            SysUserRole existing1 = SysUserRole.builder().userId(userId).roleId(1L).build();
-            SysUserRole existing2 = SysUserRole.builder().userId(userId).roleId(2L).build();
+        void assignUserRoles_allAlreadyExist_throwException() {
+            req.setRoleIds(List.of(1, 2));
+            SysUserRole existing1 = SysUserRole.builder().userId(userId).roleId(1).build();
+            SysUserRole existing2 = SysUserRole.builder().userId(userId).roleId(2).build();
             when(queryWrapper.list()).thenReturn(List.of(existing1, existing2));
 
-            userRolesService.assignUserRoles(userId, req);
-
-            verify(userRolesService, never()).saveBatch(anyList());
+            BusinessException ex = assertThrows(BusinessException.class,
+                () -> userRolesService.assignUserRoles(userId, req));
+            assertEquals(ErrorCode.ROLE_ALREADY_ASSIGNED.getCode(), ex.getCode());
         }
 
         /**
@@ -156,8 +145,8 @@ class UserRolesServiceImplTest {
          */
         @Test
         void assignUserRoles_partialExisting_partialNew() {
-            req.setRoleIds(List.of(1L, 2L, 3L));
-            SysUserRole existing1 = SysUserRole.builder().userId(userId).roleId(1L).build();
+            req.setRoleIds(List.of(1, 2, 3));
+            SysUserRole existing1 = SysUserRole.builder().userId(userId).roleId(1).build();
             when(queryWrapper.list()).thenReturn(List.of(existing1));
             doReturn(true).when(userRolesService).saveBatch(anyList());
 
@@ -166,7 +155,7 @@ class UserRolesServiceImplTest {
             verify(userRolesService).saveBatch(argThat(list -> {
                 List<SysUserRole> roles = cast(list);
                 return roles.size() == 2
-                        && roles.stream().noneMatch(r -> r.getRoleId().equals(1L))
+                        && roles.stream().noneMatch(r -> r.getRoleId().equals(1))
                         && roles.stream().allMatch(r -> r.getUserId().equals(userId));
             }));
         }
@@ -233,47 +222,44 @@ class UserRolesServiceImplTest {
 
         /**
          * 测试对象：UserRolesServiceImpl.removeUserRoles(Long userId, RemoveUserRolesReq req)
-         * 测试功能：移除非已有角色 ID，验证 lambdaUpdate 链路
-         * （当前实现逻辑：只对"不存在"的 roleId 执行 IN 删除，属于已知行为）
+         * 测试功能：只删除已存在的角色 ID，不存在的被过滤掉
          * 输入：userId=1L, req.roleIds=[1, 2]
-         *       lambdaQuery().eq(..., 1L).select(...).list() 返回 roleId=1 存在
-         * 预期输出：lambdaUpdate 执行 eq(userId=1L) + in(roleId=[2]) + remove()
-         *         不包含 roleId=1（因其已存在被过滤掉）
+         *       lambdaQuery().list() 返回 roleId=1 存在
+         * 预期输出：lambdaUpdate 执行 eq(userId=1L) + in(roleId=[1]) + remove()
+         *         roleId=2 未命中因不存在
          * 可能异常：N/A
          */
         @Test
-        void removeUserRoles_removesOnlyNonExistingIds() {
-            req.setRoleIds(List.of(1L, 2L));
-            SysUserRole existing1 = SysUserRole.builder().userId(userId).roleId(1L).build();
+        void removeUserRoles_removesOnlyExistingIds() {
+            req.setRoleIds(List.of(1, 2));
+            SysUserRole existing1 = SysUserRole.builder().userId(userId).roleId(1).build();
             when(queryWrapper.list()).thenReturn(List.of(existing1));
 
             userRolesService.removeUserRoles(userId, req);
 
             verify(updateWrapper).eq(any(), eq(userId));
-            verify(updateWrapper).in(any(), argThat((List<Long> ids) ->
-                    ids.contains(2L) && !ids.contains(1L)));
+            verify(updateWrapper).in(any(), argThat((List<Integer> ids) ->
+                    ids.contains(1) && !ids.contains(2)));
             verify(updateWrapper).remove();
         }
 
         /**
          * 测试对象：UserRolesServiceImpl.removeUserRoles(Long userId, RemoveUserRolesReq req)
-         * 测试功能：移除的用户角色 ID 全都不存在时，不应失败
+         * 测试功能：全部角色 ID 都不存在时，in 传入空列表，remove 无害执行
          * 输入：userId=1L, req.roleIds=[999, 888]
          *       lambdaQuery().list() 返回空（用户无任何角色）
-         * 预期输出：lambdaUpdate 执行 eq(userId=1L) + in(roleId=[999, 888]) + remove()
-         *         （IN 条件在 DB 层命中 0 行，删除操作无害执行）
+         * 预期输出：lambdaUpdate 执行 eq(userId=1L) + in(roleId=[]) + remove()
          * 可能异常：N/A
          */
         @Test
         void removeUserRoles_nonexistentIds() {
-            req.setRoleIds(List.of(999L, 888L));
+            req.setRoleIds(List.of(999, 888));
             when(queryWrapper.list()).thenReturn(List.of());
 
             userRolesService.removeUserRoles(userId, req);
 
             verify(updateWrapper).eq(any(), eq(userId));
-            verify(updateWrapper).in(any(), argThat((List<Long> ids) ->
-                    ids.contains(999L) && ids.contains(888L)));
+            verify(updateWrapper).in(any(), argThat((List<Integer> ids) -> ids.isEmpty()));
             verify(updateWrapper).remove();
         }
     }

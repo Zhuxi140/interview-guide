@@ -1,6 +1,5 @@
 package interview.system.auth;
 
-import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.baomidou.mybatisplus.core.incrementer.IdentifierGenerator;
 import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
 import com.baomidou.mybatisplus.extension.conditions.update.LambdaUpdateChainWrapper;
@@ -29,6 +28,7 @@ import interview.system.auth.model.enums.UserStatus;
 import interview.system.rbac.service.*;
 import interview.system.tenant.service.EnterpriseTeamMembersService;
 import interview.system.tenant.service.EnterprisesService;
+import interview.system.tenant.model.entity.Enterprise;
 import interview.system.tenant.model.entity.EnterpriseTeamMember;
 import io.jsonwebtoken.Claims;
 import org.junit.jupiter.api.AfterEach;
@@ -38,13 +38,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.stubbing.Answer;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
 import java.time.OffsetDateTime;
 import java.util.*;
 
+import static interview.system.TestMockUtils.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -78,28 +78,6 @@ class AuthServiceImplTest {
     private final String ipAddress = "127.0.0.1";
     private final String accessToken = "jwt.token.string";
     private final String refreshToken = "uuid-refresh-token";
-
-    private final Answer<Object> SELF_ANSWER = invocation -> {
-        Class<?> rt = invocation.getMethod().getReturnType();
-        String name = invocation.getMethod().getName();
-        if (Wrapper.class.isAssignableFrom(rt)) {
-            return invocation.getMock();
-        }
-        if (rt == Object.class && !name.equals("one") && !name.equals("getEntity")) {
-            return invocation.getMock();
-        }
-        return Mockito.RETURNS_DEFAULTS.answer(invocation);
-    };
-
-    @SuppressWarnings("unchecked")
-    private <T> LambdaQueryChainWrapper<T> mockQueryWrapper() {
-        return mock(LambdaQueryChainWrapper.class, withSettings().defaultAnswer(SELF_ANSWER));
-    }
-
-    @SuppressWarnings("unchecked")
-    private <T> LambdaUpdateChainWrapper<T> mockUpdateWrapper() {
-        return mock(LambdaUpdateChainWrapper.class, withSettings().defaultAnswer(SELF_ANSWER));
-    }
 
     @BeforeEach
     void setUp() {
@@ -146,6 +124,10 @@ class AuthServiceImplTest {
             when(usersService.lambdaQuery()).thenReturn(q);
             when(customIdGenerator.nextId(any())).thenReturn(userId);
             when(jwttUtil.generatorToken(anyMap(), any())).thenReturn(accessToken);
+
+            LambdaQueryChainWrapper<SysRole> roleCheckQ = mockQueryWrapper();
+            when(roleCheckQ.exists()).thenReturn(true);
+            when(rolesService.lambdaQuery()).thenReturn(roleCheckQ);
 
             RegisterBo result = authService.register(req);
 
@@ -290,7 +272,7 @@ class AuthServiceImplTest {
 
         private void mockRbacContext() {
             SysUserRole userRole = new SysUserRole();
-            userRole.setRoleId(1L);
+            userRole.setRoleId(1);
 
             LambdaQueryChainWrapper<SysUserRole> urq = mockQueryWrapper();
             when(urq.list()).thenReturn(List.of(userRole));
@@ -333,13 +315,36 @@ class AuthServiceImplTest {
 
             when(tokenQueryWrapper.one()).thenReturn(token);
             doReturn(tokenUpdateWrapper).when(authService).lambdaUpdate();
+            LambdaQueryChainWrapper<SysUser> userCheckQ = mockQueryWrapper();
+            when(userCheckQ.exists()).thenReturn(true);
+            LambdaQueryChainWrapper<SysUser> userFreshQ = mockQueryWrapper();
+            when(userFreshQ.one()).thenReturn(SysUser.builder()
+                .username(username).userType(UserType.CANDIDATE).riskLevel(RiskLevel.NO_RISK).build());
+            when(usersService.lambdaQuery()).thenReturn(userCheckQ, userFreshQ);
             when(tokenUpdateWrapper.update()).thenReturn(true);
             doReturn(true).when(authService).save(any(UserToken.class));
+
+            LambdaQueryChainWrapper<SysUserRole> userRoleQ = mockQueryWrapper();
+            SysUserRole userRole = SysUserRole.builder().roleId(1).build();
+            when(userRoleQ.list()).thenReturn(List.of(userRole));
+            when(userRolesService.lambdaQuery()).thenReturn(userRoleQ);
+
+            LambdaQueryChainWrapper<EnterpriseTeamMember> memberQ = mockQueryWrapper();
+            when(enterpriseTeamMembersService.lambdaQuery()).thenReturn(memberQ);
+
+            LambdaQueryChainWrapper<SysRole> roleQ = mockQueryWrapper();
+            SysRole sysRole = new SysRole();
+            sysRole.setRoleCode("ROLE_USER");
+            sysRole.setRoleScope(RoleScope.PLATFORM);
+            when(roleQ.list()).thenReturn(List.of(sysRole));
+            when(rolesService.lambdaQuery()).thenReturn(roleQ);
+
+            when(permissionsMapper.getPermCodeByRoleId(anyList())).thenReturn(List.of());
 
             Claims claims = mock(Claims.class);
             when(claims.getExpiration()).thenReturn(new Date(System.currentTimeMillis() + 5000));
             when(jwttUtil.parseToken(accessToken)).thenReturn(claims);
-            when(jwttUtil.generatorToken(claims, userId)).thenReturn("new-jwt-token");
+            when(jwttUtil.generatorToken(anyMap(), eq(userId))).thenReturn("new-jwt-token");
             when(stringRedisTemplate.opsForValue()).thenReturn(valueOps);
 
             RefreshTokenVO result = authService.refreshToken(req);
@@ -366,6 +371,9 @@ class AuthServiceImplTest {
 
             when(tokenQueryWrapper.one()).thenReturn(revokedToken);
             doReturn(tokenUpdateWrapper).when(authService).lambdaUpdate();
+            LambdaQueryChainWrapper<SysUser> userCheckQ = mockQueryWrapper();
+            when(userCheckQ.exists()).thenReturn(true);
+            when(usersService.lambdaQuery()).thenReturn(userCheckQ);
 
             BusinessException ex = assertThrows(BusinessException.class, () -> authService.refreshToken(req));
             assertEquals(ErrorCode.RISK_CONTROL.getCode(), ex.getCode());

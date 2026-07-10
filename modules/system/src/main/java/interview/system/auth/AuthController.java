@@ -30,7 +30,7 @@ public class AuthController {
 
     private final SmsService smsService;
     private final AuthService authService;
-    private final AuthConvertor authConvertor;
+    private final AuthConverter authConverter;
 
     @ApiResponse(description = "发送短信验证码")
     @PostMapping("/send-sms")
@@ -51,7 +51,7 @@ public class AuthController {
     @PostMapping("/register")
     public Result<RegisterVO> register(@RequestBody @Valid RegisterReq register) {
         RegisterBo registerBo = authService.register(register);
-        RegisterVO registerVO = authConvertor.toRegisterVO(registerBo);
+        RegisterVO registerVO = authConverter.toRegisterVO(registerBo);
         return Result.success(registerVO);
     }
 
@@ -60,7 +60,7 @@ public class AuthController {
     @PostMapping("/login")
     public Result<LoginVO> login(@RequestBody @Valid LoginReq loginReq) {
         LoginBO login = authService.login(loginReq);
-        LoginVO loginVO = authConvertor.toLoginVO(login);
+        LoginVO loginVO = authConverter.toLoginVO(login);
         return Result.success(loginVO);
     }
 
@@ -94,7 +94,7 @@ public class AuthController {
     @GetMapping("/me")
     public Result<UserInfoVO> getUserInfo() {
         UserInfoBO userInfo = authService.getUserInfo();
-        UserInfoVO userInfoVO = authConvertor.toUserInfoVO(userInfo);
+        UserInfoVO userInfoVO = authConverter.toUserInfoVO(userInfo);
 
         return Result.success(userInfoVO);
     }

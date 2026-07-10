@@ -10,6 +10,11 @@ public enum UserType {
     CANDIDATE,
     PLATFORM_ADMIN;
 
+    /**
+     * 根据名称获取枚举类
+     * @param value 字符串
+     * @return 枚举类
+     */
     public static UserType fromString(String value) {
         for (UserType type : UserType.values()) {
             if (type.name().equalsIgnoreCase(value)) {

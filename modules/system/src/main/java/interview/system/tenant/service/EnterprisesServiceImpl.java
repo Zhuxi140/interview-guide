@@ -88,12 +88,6 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
             throw new BusinessException(ErrorCode.ENTERPRISE_NAME_ALREADY_EXISTS);
         }
         //在 enterprise_team_members 中创建一条 OWNER 记录（当前用户 + role_id=ENTERPRISE_OWNER）
-        SysUserRole role = SysUserRole.builder()
-                .userId(AuthContext.getRequiredUserId())
-                .roleId(Role.ENTERPRISE_OWNER.getCode())
-                .build();
-
-        userRolesService.save(role);
         EnterpriseTeamMember enterpriseTeamMember = EnterpriseTeamMember.builder()
                 .userId(AuthContext.getRequiredUserId())
                 .roleId(Role.ENTERPRISE_OWNER.getCode())
@@ -160,7 +154,7 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
         //返回 List<ListUserEnterprisesBO>
         return bos.stream()
                 .map(bo ->{
-                    String roleCode = roleCodeMap.get(bo.roleId());
+                    String roleCode = roleCodeMap.getOrDefault(bo.roleId(),Role.UNKNOWN.name());
                     if (roleCode == null){
                         log.warn("[数据一致性警告] 未找到对应的 RoleCode! 脏数据企业关联 ID: {}, 缺失的 RoleID:{}",
                                 bo.enterpriseId(), bo.roleId());
@@ -171,7 +165,6 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
                             .shortName(bo.shortName())
                             .industry(bo.industry())
                             .status(bo.status())
-                            // FIXME: 若 roleCode 为 null，前端应拦截并提示用户其数据有异常 建议联系客服
                             .roleCode(roleCode)
                             .memberCount(memberCountMap.get(bo.enterpriseId()))
                             .build();

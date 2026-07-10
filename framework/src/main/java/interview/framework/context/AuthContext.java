@@ -1,6 +1,7 @@
 package interview.framework.context;
 
 import interview.common.enums.RiskLevel;
+import interview.common.enums.Role;
 import interview.common.enums.RoleScope;
 import interview.common.enums.UserType;
 import interview.common.exception.UnauthorizedException;
@@ -101,9 +102,9 @@ public class AuthContext {
             Long userId,
             UserType userType,
             RiskLevel riskLevel,
-            RoleScope roleScope,
+            List<RoleScope> roleScope,
             Long enterpriseId,
             String username,
-            List<String> roleCodes
+            List<Role> roleCodes
     ){}
 }

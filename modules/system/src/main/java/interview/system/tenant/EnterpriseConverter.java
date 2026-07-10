@@ -15,7 +15,7 @@ import java.util.List;
  */
 
 @Mapper(componentModel = "spring")
-public interface EnterpriseCovert {
+public interface EnterpriseConverter {
 
     EnterpriseCreateVO convertToEnterpriseCreateVO(EnterpriseCreateBO bo);
 

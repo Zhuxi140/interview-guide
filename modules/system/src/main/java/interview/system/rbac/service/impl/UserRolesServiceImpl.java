@@ -3,9 +3,10 @@ package interview.system.rbac.service.impl;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import interview.common.enums.ErrorCode;
 import interview.common.exception.BusinessException;
+import interview.system.auth.service.UsersService;
+import interview.system.rbac.service.RolesService;
 import org.springframework.dao.DataIntegrityViolationException;
 import interview.system.auth.model.entity.SysUser;
-import interview.system.auth.service.impl.UsersServiceImpl;
 import interview.system.rbac.mapper.UserRolesMapper;
 import interview.system.rbac.model.entity.SysRole;
 import interview.system.rbac.model.entity.SysUserRole;
@@ -27,8 +28,8 @@ import java.util.List;
 public class UserRolesServiceImpl extends ServiceImpl<UserRolesMapper, SysUserRole> implements UserRolesService {
 
     private final UserRolesMapper userRolesMapper;
-    private final RolesServiceImpl rolesService;
-    private final UsersServiceImpl usersService;
+    private final RolesService rolesService;
+    private final UsersService usersService;
 
     @Override
     @Transactional(rollbackFor = BusinessException.class)

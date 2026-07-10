@@ -82,16 +82,16 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
         checkUnique( register);
 
         // 构建用户
-        Long number = (Long)customIdGenerator.nextId(null);
+        Long number = (Long)customIdGenerator.nextId(SysUser.class);
         SysUser user = buildUser(register, number);
         usersService.save(user);
 
         // FK检查
         Integer code = Role.CANDIDATE.getCode();
         if (!rolesService.lambdaQuery()
-                .eq(SysRole::getRoleCode, code)
+                .eq(SysRole::getId, code)
                 .exists()) {
-            log.error("外键拦截: 角色:[{}]在Role表内已不存在",Role.CANDIDATE.getCode());
+            log.error("外键拦截: 角色:[{}]在Role表内已不存在",Role.CANDIDATE);
             throw new BusinessException(ErrorCode.SYSTEM_ERROR);
         }
 
@@ -126,13 +126,15 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
         RbacContext rbacContext = loadRbacContext(userId, enterpriseContext.enterpriseId);
 
         List<String> roleCodes = rbacContext.roleCodes;
+        List<String> roleScopes = rbacContext.roleScopes;
 
         Map<String, Object> claims = new HashMap<>();
         claims.put("userId", userId);
         claims.put("username", user.getUsername());
         claims.put("userType", user.getUserType().name());
         claims.put("riskLevel", user.getRiskLevel().getCode());
-        claims.put("roleScope", roleCodes);
+        claims.put("roleCodes", roleCodes);
+        claims.put("roleScopes", roleScopes);
         Long enterpriseId = enterpriseContext.enterpriseId;
         if (enterpriseId != null) {
             claims.put("enterpriseId", enterpriseId);
@@ -226,8 +228,35 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
             );
         }
 
+        // 加载企业信息、用户信息 和 角色权限信息
+        SysUser user = usersService.lambdaQuery()
+                .select(
+                        SysUser::getUsername,
+                        SysUser::getUserType,
+                        SysUser::getRiskLevel
+                )
+                .eq(SysUser::getId, userId)
+                .one();
+        EnterpriseContext enterpriseContext = loadEnterpriseContext(userId);
+        RbacContext rbacContext = loadRbacContext(userId, enterpriseContext.enterpriseId);
+
+        List<String> roleCodes = rbacContext.roleCodes;
+        List<String> roleScopes = rbacContext.roleScopes;
+
+        Map<String, Object> newClaims = new HashMap<>();
+        newClaims.put("userId", userId);
+        newClaims.put("username", user.getUsername());
+        newClaims.put("userType", user.getUserType().name());
+        newClaims.put("riskLevel", user.getRiskLevel().getCode());
+        newClaims.put("roleCodes", roleCodes);
+        newClaims.put("roleScopes", roleScopes);
+        Long enterpriseId = enterpriseContext.enterpriseId;
+        if (enterpriseId != null) {
+            newClaims.put("enterpriseId", enterpriseId);
+        }
+
         // 生成新的accessToken
-        String accessToken = jwttUtil.generatorToken(claims,token.getUserId());
+        String accessToken = jwttUtil.generatorToken(newClaims, token.getUserId());
 
         return RefreshTokenVO.builder()
                     .accessToken(accessToken)
@@ -257,6 +286,7 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
         String hashToken = DigestUtil.sha256Hex(logout.getRefreshToken());
         lambdaUpdate()
                     .eq(UserToken::getRefreshTokenHash, hashToken)
+                    .eq(UserToken::getUserId,AuthContext.getRequiredUserId())
                     .set(UserToken::getIsRevoked, true)
                     .update();
     }
@@ -511,6 +541,7 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
                 .list()
                 .stream()
                 .map(SysUserRole::getRoleId)
+                .distinct()
                 .collect(Collectors.toCollection(ArrayList::new));
         if (enterpriseId != null){
             List<Integer> enterpriseRoleIds = enterpriseTeamMembersService.lambdaQuery()
@@ -544,8 +575,14 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
     }
 
     // 企业上下文载体
-    private record EnterpriseContext(Long enterpriseId, String name, String logoUrl) {}
+    private record EnterpriseContext(
+            Long enterpriseId,
+            String name,
+            String logoUrl) {}
 
     // 权限上下文载体
-    private record RbacContext(List<String> roleCodes, List<String> roleScopes, List<String> permissions) {}
+    private record RbacContext(
+            List<String> roleCodes,
+            List<String> roleScopes,
+            List<String> permissions) {}
 }

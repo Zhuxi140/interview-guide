@@ -2,6 +2,7 @@ package interview.framework.security.interceptor;
 
 import cn.hutool.core.util.StrUtil;
 import interview.common.enums.RiskLevel;
+import interview.common.enums.Role;
 import interview.common.enums.RoleScope;
 import interview.common.enums.UserType;
 import interview.common.exception.UnauthorizedException;
@@ -10,14 +11,16 @@ import interview.framework.context.AuthContext;
 import io.jsonwebtoken.Claims;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import lombok.AllArgsConstructor;
+import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
-import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
+
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 
 /**
@@ -31,7 +34,7 @@ public class JwtInterceptor implements HandlerInterceptor {
     private final JwttUtil jwttUtil;
 
     @Override
-    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler){
+    public boolean preHandle(HttpServletRequest request,HttpServletResponse response,Object handler){
         String token = request.getHeader("Authorization");
 
         if(!StrUtil.isNotBlank(token) || !token.startsWith("Bearer ")){
@@ -66,15 +69,25 @@ public class JwtInterceptor implements HandlerInterceptor {
         Number number = claims.get("enterpriseId", Number.class);
         Long enterpriseId = number != null ? number.longValue() : null;
         String username = claims.get("username", String.class);
-        String roleScopeString = claims.get("roleScope", String.class);
-        List<String> roleCodes = claims.get("roleCodes", List.class);
+        List<String> roleScopeStrings = claims.get("roleScopes", List.class);
+        List<RoleScope> roleScopes = roleScopeStrings != null
+                ? roleScopeStrings.stream()
+                .map(RoleScope::getRoleScope)
+                .toList()
+                : Collections.emptyList();
+        List<String> stringRoleCodes = claims.get("roleCodes", List.class);
+        List<Role> roleCodes = stringRoleCodes != null
+                ? stringRoleCodes.stream()
+                    .map(Role::fromString)
+                    .collect(Collectors.toList())
+                : Collections.emptyList();
 
 
         AuthContext.setAuthContext(new AuthContext.AuthUser(
                 userId,
                 UserType.valueOf(userTypeString),
                 RiskLevel.codeToRiskLevel(riskLevel),
-                RoleScope.valueOf(roleScopeString),
+                roleScopes,
                 enterpriseId,
                 username,
                 roleCodes

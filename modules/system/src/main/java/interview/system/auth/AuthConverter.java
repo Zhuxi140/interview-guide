@@ -16,7 +16,7 @@ import org.mapstruct.Mapper;
 
 
 @Mapper(componentModel = "spring")
-public interface AuthConvertor {
+public interface AuthConverter {
     RegisterVO toRegisterVO(RegisterBo registerBo);
 
     LoginVO toLoginVO(LoginBO loginBO);

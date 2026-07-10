@@ -1,6 +1,5 @@
 package interview.system.rbac;
 
-import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
 import interview.common.enums.RoleScope;
 import interview.system.rbac.mapper.RolesMapper;
@@ -14,11 +13,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.stubbing.Answer;
 
 import java.time.OffsetDateTime;
 import java.util.List;
 
+import static interview.system.TestMockUtils.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
@@ -30,23 +29,6 @@ class RolesServiceImplTest {
 
     private RolesServiceImpl rolesService;
     private LambdaQueryChainWrapper<SysRole> roleQueryWrapper;
-
-    private final Answer<Object> SELF_ANSWER = invocation -> {
-        Class<?> rt = invocation.getMethod().getReturnType();
-        String name = invocation.getMethod().getName();
-        if (Wrapper.class.isAssignableFrom(rt)) {
-            return invocation.getMock();
-        }
-        if (rt == Object.class && !name.equals("one") && !name.equals("getEntity")) {
-            return invocation.getMock();
-        }
-        return Mockito.RETURNS_DEFAULTS.answer(invocation);
-    };
-
-    @SuppressWarnings("unchecked")
-    private <T> LambdaQueryChainWrapper<T> mockQueryWrapper() {
-        return mock(LambdaQueryChainWrapper.class, withSettings().defaultAnswer(SELF_ANSWER));
-    }
 
     @BeforeEach
     void setUp() {
@@ -71,14 +53,14 @@ class RolesServiceImplTest {
         @Test
         void listRoles_success() {
             SysRole role1 = new SysRole();
-            role1.setId(1L);
+            role1.setId(1);
             role1.setRoleCode("PLATFORM_ADMIN");
             role1.setRoleName("平台管理员");
             role1.setRoleScope(RoleScope.PLATFORM);
             role1.setCreatedAt(OffsetDateTime.now());
 
             SysRole role2 = new SysRole();
-            role2.setId(2L);
+            role2.setId(2);
             role2.setRoleCode("HR_MANAGER");
             role2.setRoleName("HR管理员");
             role2.setRoleScope(RoleScope.ENTERPRISE);
@@ -90,7 +72,7 @@ class RolesServiceImplTest {
             List<RoleListItemVO> result = rolesService.listRoles();
 
             assertEquals(2, result.size());
-            assertEquals(1L, result.get(0).id());
+            assertEquals(1, result.get(0).id());
             assertEquals("PLATFORM_ADMIN", result.get(0).roleCode());
             assertEquals("PLATFORM", result.get(0).roleScope());
             assertEquals("HR_MANAGER", result.get(1).roleCode());
