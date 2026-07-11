@@ -22,7 +22,9 @@ import interview.system.auth.model.bo.RegisterBo;
 import interview.system.auth.model.entity.UserToken;
 import interview.system.auth.model.req.*;
 import interview.system.auth.model.vo.RefreshTokenVO;
+import interview.system.auth.model.vo.SwitchEnterpriseVO;
 import interview.system.auth.model.vo.TokenInfoVO;
+import interview.system.auth.model.vo.UserEnterpriseVO;
 import interview.system.auth.service.AuthService;
 import interview.system.auth.service.SmsService;
 import interview.system.auth.service.UsersService;
@@ -125,16 +127,15 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
         EnterpriseContext enterpriseContext = loadEnterpriseContext(userId);
         RbacContext rbacContext = loadRbacContext(userId, enterpriseContext.enterpriseId);
 
-        List<String> roleCodes = rbacContext.roleCodes;
-        List<String> roleScopes = rbacContext.roleScopes;
+        List<String> platformRoleCodes = rbacContext.platformRoleCodes;
 
         Map<String, Object> claims = new HashMap<>();
         claims.put("userId", userId);
         claims.put("username", user.getUsername());
         claims.put("userType", user.getUserType().name());
         claims.put("riskLevel", user.getRiskLevel().getCode());
-        claims.put("roleCodes", roleCodes);
-        claims.put("roleScopes", roleScopes);
+        claims.put("platformRoleCodes", platformRoleCodes);
+        claims.put("entRoleMap", rbacContext.entRoleMap);
         Long enterpriseId = enterpriseContext.enterpriseId;
         if (enterpriseId != null) {
             claims.put("enterpriseId", enterpriseId);
@@ -146,11 +147,12 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
                     .enterpriseId(enterpriseId)
                     .enterpriseName(enterpriseContext.name)
                     .logoUrl(enterpriseContext.logoUrl)
+                    .enterprises(enterpriseContext.enterprises)
                     .username(user.getUsername())
                     .nickname(user.getNickname())
                     .avatarUrl(user.getAvatarUrl())
                     .userType(user.getUserType().name())
-                    .roles(roleCodes)
+                    .roles(platformRoleCodes)
                     .permissions(rbacContext.permissions)
                     .accessToken(token)
                     .refreshToken(raw)
@@ -240,16 +242,15 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
         EnterpriseContext enterpriseContext = loadEnterpriseContext(userId);
         RbacContext rbacContext = loadRbacContext(userId, enterpriseContext.enterpriseId);
 
-        List<String> roleCodes = rbacContext.roleCodes;
-        List<String> roleScopes = rbacContext.roleScopes;
+        List<String> platformRoleCodes = rbacContext.platformRoleCodes;
 
         Map<String, Object> newClaims = new HashMap<>();
         newClaims.put("userId", userId);
         newClaims.put("username", user.getUsername());
         newClaims.put("userType", user.getUserType().name());
         newClaims.put("riskLevel", user.getRiskLevel().getCode());
-        newClaims.put("roleCodes", roleCodes);
-        newClaims.put("roleScopes", roleScopes);
+        newClaims.put("platformRoleCodes", platformRoleCodes);
+        newClaims.put("entRoleMap", rbacContext.entRoleMap);
         Long enterpriseId = enterpriseContext.enterpriseId;
         if (enterpriseId != null) {
             newClaims.put("enterpriseId", enterpriseId);
@@ -263,6 +264,59 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
                     .refreshToken(raw)
                     .expiresIn(jwtProperties.getExpiration() * 60)
                     .build();
+    }
+
+    @Override
+    @Transactional(rollbackFor = BusinessException.class)
+    public SwitchEnterpriseVO switchEnterprise(Long enterpriseId, String accessToken) {
+        AuthContext.AuthUser authUser = AuthContext.getRequiredAuthContext();
+        Long userId = authUser.userId();
+        Map<Long, List<Role>> entRoleMap = authUser.entRoleMap();
+
+        if (entRoleMap == null || !entRoleMap.containsKey(enterpriseId)) {
+            throw new BusinessException(ErrorCode.ENTERPRISE_NOT_BELONG);
+        }
+
+        // 旧 JWT 加入黑名单（同 refreshToken 逻辑）
+        try {
+            Claims claims = jwttUtil.parseToken(accessToken);
+            long expire = claims.getExpiration().getTime() - System.currentTimeMillis();
+            if (expire > 0) {
+                stringRedisTemplate.opsForValue().set(
+                        AuthKeyConstant.getTokenBanKey(accessToken),
+                        "1",
+                        expire,
+                        TimeUnit.MILLISECONDS
+                );
+            }
+        } catch (Exception ignored) {
+            // token 已过期或无效，无需加入黑名单
+        }
+
+        // 将 entRoleMap 中的 Role 枚举转为 name 字符串（保持一致于登录时的 claims 格式）
+        Map<Long, List<String>> entRoleMapStr = new HashMap<>();
+        for (Map.Entry<Long, List<Role>> entry : entRoleMap.entrySet()) {
+            entRoleMapStr.put(entry.getKey(),
+                    entry.getValue().stream().map(Role::name).toList());
+        }
+
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("userId", userId);
+        claims.put("username", authUser.username());
+        claims.put("userType", authUser.userType().name());
+        claims.put("riskLevel", authUser.riskLevel().getCode());
+        claims.put("platformRoleCodes", authUser.platformRoleCodes().stream()
+                .map(Role::name)
+                .toList());
+        claims.put("entRoleMap", entRoleMapStr);
+        claims.put("enterpriseId", enterpriseId);
+
+        String newToken = jwttUtil.generatorToken(claims, userId);
+
+        return SwitchEnterpriseVO.builder()
+                .accessToken(newToken)
+                .expiresIn(jwtProperties.getExpiration() * 60L)
+                .build();
     }
 
     @Override
@@ -443,12 +497,14 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
 
     private RegisterBo buildRegisterBo(String raw,SysUser user,Long number){
         // 生成JWT令牌
-        String jwtToken = jwttUtil.generatorToken(Map.of(
-                "userId", number,
-                "username", user.getUsername(),
-                "userType", user.getUserType().name(),
-                "riskLevel", RiskLevel.NO_RISK.getCode()
-        ), number);
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("userId", number);
+        claims.put("username", user.getUsername());
+        claims.put("userType", user.getUserType().name());
+        claims.put("riskLevel", RiskLevel.NO_RISK.getCode());
+        claims.put("platformRoleCodes", List.of());
+        claims.put("entRoleMap", Map.of());
+        String jwtToken = jwttUtil.generatorToken(claims, number);
 
         return RegisterBo.builder()
                 .userId(number)
@@ -511,78 +567,130 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
     }
 
     private EnterpriseContext loadEnterpriseContext(Long userId) {
-        Long enterpriseId = enterpriseTeamMembersService.lambdaQuery()
+        // 查用户所有企业成员记录，按加入时间降序（最新加入的排第一）
+        List<EnterpriseTeamMember> members = enterpriseTeamMembersService.lambdaQuery()
                 .select(EnterpriseTeamMember::getEnterpriseId)
                 .eq(EnterpriseTeamMember::getUserId, userId)
-                .oneOpt()
+                .orderByDesc(EnterpriseTeamMember::getCreatedAt)
+                .list();
+
+        if (members.isEmpty()) {
+            return new EnterpriseContext(null, null, null, List.of());
+        }
+
+        List<Long> enterpriseIds = members.stream()
                 .map(EnterpriseTeamMember::getEnterpriseId)
+                .toList();
+
+        // 批量查企业信息
+        List<Enterprise> enterprises = enterprisesService.lambdaQuery()
+                .select(Enterprise::getId, Enterprise::getName, Enterprise::getShortName, Enterprise::getLogoUrl)
+                .in(Enterprise::getId, enterpriseIds)
+                .list();
+
+        List<UserEnterpriseVO> enterpriseBriefs = enterprises.stream()
+                .map(e -> UserEnterpriseVO.builder()
+                        .id(e.getId())
+                        .name(e.getName())
+                        .shortName(e.getShortName())
+                        .logoUrl(e.getLogoUrl())
+                        .build())
+                .toList();
+
+        // 取最近加入的企业作为活跃企业
+        Long activeEnterpriseId = members.get(0).getEnterpriseId();
+        Enterprise activeEnterprise = enterprises.stream()
+                .filter(e -> e.getId().equals(activeEnterpriseId))
+                .findFirst()
                 .orElse(null);
 
-        if (enterpriseId == null) {
-            return new EnterpriseContext(null, null, null);
-        }
-
-        Enterprise enterprise = enterprisesService.lambdaQuery()
-                .select(Enterprise::getName, Enterprise::getLogoUrl)
-                .eq(Enterprise::getId, enterpriseId)
-                .one();
-
-        if (enterprise == null) {
-            log.error("脏数据拦截: 用户ID [{}], 其关联的企业ID [{}] 在 enterprises 表中查不到实体记录！", userId, enterpriseId);
+        if (activeEnterprise == null) {
+            log.error("脏数据拦截: 用户ID [{}], 其关联的企业ID [{}] 在 enterprises 表中查不到实体记录！", userId, activeEnterpriseId);
             throw new BusinessException(ErrorCode.ENTERPRISE_DATA_ANOMALY);
         }
-        return new EnterpriseContext(enterpriseId, enterprise.getName(), enterprise.getLogoUrl());
+
+        return new EnterpriseContext(activeEnterpriseId, activeEnterprise.getName(), activeEnterprise.getLogoUrl(), enterpriseBriefs);
     }
 
     private RbacContext loadRbacContext(Long userId,Long enterpriseId) {
-        ArrayList<Integer> roleIds = userRolesService.lambdaQuery()
+        // 平台角色 — sys_user_roles
+        List<Integer> platformRoleIds = userRolesService.lambdaQuery()
                 .select(SysUserRole::getRoleId)
                 .eq(SysUserRole::getUserId, userId)
                 .list()
                 .stream()
                 .map(SysUserRole::getRoleId)
                 .distinct()
-                .collect(Collectors.toCollection(ArrayList::new));
-        if (enterpriseId != null){
-            List<Integer> enterpriseRoleIds = enterpriseTeamMembersService.lambdaQuery()
-                    .select(EnterpriseTeamMember::getRoleId)
-                    .eq(EnterpriseTeamMember::getUserId, userId)
-                    .eq(EnterpriseTeamMember::getEnterpriseId, enterpriseId)
+                .toList();
+
+        List<String> platformRoleCodes = platformRoleIds.isEmpty()
+                ? List.of()
+                : rolesService.lambdaQuery()
+                    .select(SysRole::getRoleCode)
+                    .in(SysRole::getId, platformRoleIds)
                     .list()
                     .stream()
-                    .map(EnterpriseTeamMember::getRoleId)
+                    .map(SysRole::getRoleCode)
                     .toList();
 
-            roleIds.addAll(enterpriseRoleIds);
+        // 企业角色 — enterprise_team_members（全企业）
+        List<EnterpriseTeamMember> teamMembers = enterpriseTeamMembersService.lambdaQuery()
+                .select(EnterpriseTeamMember::getEnterpriseId, EnterpriseTeamMember::getRoleId)
+                .eq(EnterpriseTeamMember::getUserId, userId)
+                .list();
+
+        Map<Long, List<String>> entRoleMap = new HashMap<>();
+        if (!teamMembers.isEmpty()) {
+            Map<Long, List<Integer>> entRoleIdsMap = new HashMap<>();
+            for (EnterpriseTeamMember member : teamMembers) {
+                Long entId = member.getEnterpriseId();
+                entRoleIdsMap.computeIfAbsent(entId, k -> new ArrayList<>()).add(member.getRoleId());
+            }
+
+            List<Integer> allEnterpriseRoleIds = entRoleIdsMap.values().stream()
+                    .flatMap(List::stream)
+                    .toList();
+
+            Map<Integer, String> roleCodeMap = rolesService.lambdaQuery()
+                    .select(SysRole::getId, SysRole::getRoleCode)
+                    .in(SysRole::getId, allEnterpriseRoleIds)
+                    .list()
+                    .stream()
+                    .collect(Collectors.toMap(SysRole::getId, SysRole::getRoleCode));
+
+            for (Map.Entry<Long, List<Integer>> entry : entRoleIdsMap.entrySet()) {
+                Long entId = entry.getKey();
+                List<String> codes = entry.getValue().stream()
+                        .map(roleCodeMap::get)
+                        .toList();
+                entRoleMap.put(entId, codes);
+            }
         }
 
+        // 汇总所有 roleId 查权限
+        List<Integer> allRoleIds = new ArrayList<>(platformRoleIds);
+        teamMembers.stream().map(EnterpriseTeamMember::getRoleId).forEach(allRoleIds::add);
 
-        if (CollUtil.isEmpty(roleIds)) {
+        if (CollUtil.isEmpty(allRoleIds)) {
             log.error("脏数据拦截: 用户ID [{}], 企业Id [{}], 其关联的角色ID 在 user_roles 和 EnterprisesTeamMembers 表中查不到实体记录！", userId, enterpriseId);
             throw new BusinessException(ErrorCode.ACCOUNT_DATA_ANOMALY);
         }
 
-        List<SysRole> sysRoles = rolesService.lambdaQuery()
-                .select(SysRole::getRoleCode, SysRole::getRoleScope)
-                .in(SysRole::getId, roleIds)
-                .list();
+        List<String> permissions = permissionsMapper.getPermCodeByRoleId(allRoleIds);
 
-        List<String> roleCodes = sysRoles.stream().map(SysRole::getRoleCode).toList();
-        List<String> roleScopes = sysRoles.stream().map(SysRole::getRoleScope).map(RoleScope::name).toList();
-        List<String> permissions = permissionsMapper.getPermCodeByRoleId(roleIds);
-
-        return new RbacContext(roleCodes, roleScopes, permissions);
+        return new RbacContext(platformRoleCodes, entRoleMap, permissions);
     }
 
     // 企业上下文载体
     private record EnterpriseContext(
             Long enterpriseId,
             String name,
-            String logoUrl) {}
+            String logoUrl,
+            List<UserEnterpriseVO> enterprises) {}
 
     // 权限上下文载体
     private record RbacContext(
-            List<String> roleCodes,
-            List<String> roleScopes,
+            List<String> platformRoleCodes,
+            Map<Long,List<String>> entRoleMap,
             List<String> permissions) {}
 }

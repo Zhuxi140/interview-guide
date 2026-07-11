@@ -2,7 +2,12 @@ package interview.system.tenant.controller;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import interview.common.constant.ApiVersion;
+import interview.common.constant.Perm;
 import interview.common.constant.Result;
+import interview.common.enums.PermissionScope;
+import interview.common.enums.RiskLevel;
+import interview.framework.annonate.MaxRiskLevel;
+import interview.framework.annonate.RequirePermission;
 import interview.system.tenant.model.req.TeamMemberCreateReq;
 import interview.system.tenant.model.req.TeamMemberUpdateReq;
 import interview.system.tenant.model.vo.TeamMemberCreateVO;
@@ -25,6 +30,8 @@ public class EnterpriseTeamMembersController {
 
     private final EnterpriseTeamMembersService teamMembersService;
 
+    @MaxRiskLevel(RiskLevel.MID_RISK)
+    @RequirePermission(permissions = Perm.Team.LIST, scope = PermissionScope.ENTERPRISE)
     @ApiResponse(description = "查询团队成员列表（分页）")
     @GetMapping
     public Result<IPage<TeamMemberItemVO>> listTeamMembers(
@@ -37,6 +44,8 @@ public class EnterpriseTeamMembersController {
         return Result.success(pageResult);
     }
 
+    @MaxRiskLevel(RiskLevel.LOW_RISK)
+    @RequirePermission(permissions = Perm.Team.INVITE, scope = PermissionScope.ENTERPRISE)
     @ApiResponse(description = "邀请成员加入企业")
     @PostMapping
     public Result<TeamMemberCreateVO> inviteMember(@PathVariable("enterpriseId") Long enterpriseId,
@@ -45,6 +54,8 @@ public class EnterpriseTeamMembersController {
         return Result.success(vo);
     }
 
+    @MaxRiskLevel(RiskLevel.LOW_RISK)
+    @RequirePermission(permissions = Perm.Team.UPDATE, scope = PermissionScope.ENTERPRISE)
     @ApiResponse(description = "修改成员角色")
     @PutMapping("/{memberId}")
     public Result<Void> updateMemberRole(@PathVariable("enterpriseId") Long enterpriseId,
@@ -54,6 +65,8 @@ public class EnterpriseTeamMembersController {
         return Result.success();
     }
 
+    @MaxRiskLevel(RiskLevel.LOW_RISK)
+    @RequirePermission(permissions = Perm.Team.REMOVE, scope = PermissionScope.ENTERPRISE)
     @ApiResponse(description = "移除团队成员")
     @DeleteMapping("/{memberId}")
     public Result<Void> removeMember(@PathVariable("enterpriseId") Long enterpriseId,

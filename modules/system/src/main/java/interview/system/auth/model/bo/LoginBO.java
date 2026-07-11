@@ -1,6 +1,6 @@
 package interview.system.auth.model.bo;
 
-
+import interview.system.auth.model.vo.UserEnterpriseVO;
 import lombok.Builder;
 
 import java.util.List;
@@ -11,6 +11,7 @@ public record LoginBO(
         Long enterpriseId,
         String enterpriseName,
         String logoUrl,
+        List<UserEnterpriseVO> enterprises,
         String username,
         String nickname,
         String avatarUrl,

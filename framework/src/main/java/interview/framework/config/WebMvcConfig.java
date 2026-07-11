@@ -2,6 +2,7 @@ package interview.framework.config;
 
 import interview.common.util.JwttUtil;
 import interview.framework.security.interceptor.JwtInterceptor;
+import interview.framework.security.interceptor.RiskCheckInterceptor;
 import interview.framework.security.interceptor.SecureActionInterceptor;
 import lombok.AllArgsConstructor;
 import lombok.RequiredArgsConstructor;
@@ -35,8 +36,30 @@ public class WebMvcConfig implements WebMvcConfigurer {
                         "/swagger-ui/**",
                         "/swagger-ui.html",
                         "/api-docs/**"
-                        );
-        registry.addInterceptor(new SecureActionInterceptor(stringRedisTemplate));
+                        )
+                        .order(1);
+
+        registry.addInterceptor(new RiskCheckInterceptor())
+                .excludePathPatterns(
+                        "/api/v1/auth/register",
+                        "/api/v1/auth/send-sms",
+                        "/api/v1/auth/login",
+                        "/swagger-ui/**",
+                        "/swagger-ui.html",
+                        "/api-docs/**"
+                )
+                .order(2);
+
+        registry.addInterceptor(new SecureActionInterceptor(stringRedisTemplate))
+                .excludePathPatterns(
+                        "/api/v1/auth/register",
+                        "/api/v1/auth/login",
+                        "/api/v1/auth/send-sms",
+                        "/swagger-ui/**",
+                        "/swagger-ui.html",
+                        "/api-docs/**"
+                )
+                .order(3);
     }
 
 

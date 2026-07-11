@@ -240,7 +240,7 @@ COMMENT ON COLUMN enterprise_team_members.updated_by IS '[逻辑外键]→sys_us
 COMMENT ON COLUMN enterprise_team_members.trace_id IS '调用链 ID';
 COMMENT ON COLUMN enterprise_team_members.updated_at IS '更新时间';
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_team_member ON enterprise_team_members (enterprise_id, user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_team_member_role ON enterprise_team_members (enterprise_id, user_id, role_id);
 
 
 -- ==================== 9. jobs ====================

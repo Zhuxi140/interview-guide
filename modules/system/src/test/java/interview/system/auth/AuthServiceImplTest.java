@@ -16,6 +16,7 @@ import interview.system.auth.model.entity.UserToken;
 import interview.common.enums.SmsType;
 import interview.system.auth.model.req.*;
 import interview.system.auth.model.vo.RefreshTokenVO;
+import interview.system.auth.model.vo.SwitchEnterpriseVO;
 import interview.system.auth.model.vo.TokenInfoVO;
 import interview.system.auth.service.impl.AuthServiceImpl;
 import interview.system.auth.service.SmsService;
@@ -258,6 +259,53 @@ class AuthServiceImplTest {
             when(usersService.lambdaQuery()).thenReturn(q);
         }
 
+        @Test
+        void login_success_withEnterprise() {
+            when(jwtProperties.getExpiration()).thenReturn(30L);
+            Long enterpriseId = 100L;
+
+            try (MockedStatic<CryptoUtil> cryptoUtil = mockStatic(CryptoUtil.class)) {
+                cryptoUtil.when(() -> CryptoUtil.checkPassword(eq(password), anyString())).thenReturn(true);
+
+                mockCheckAndGetUser();
+                prepareChainWrappers();
+                mockEnterpriseContext_withEnterprise(enterpriseId);
+                mockRbacContext();
+
+                LoginBO result = authService.login(req);
+
+                assertNotNull(result);
+                assertEquals(userId, result.userId());
+                assertEquals(enterpriseId, result.enterpriseId());
+                assertNotNull(result.enterprises());
+                assertEquals(1, result.enterprises().size());
+                assertEquals("TestCorp", result.enterprises().get(0).name());
+                assertNotNull(result.accessToken());
+                assertNotNull(result.refreshToken());
+            }
+        }
+
+        private void mockEnterpriseContext_withEnterprise(Long enterpriseId) {
+            EnterpriseTeamMember member = EnterpriseTeamMember.builder()
+                    .enterpriseId(enterpriseId)
+                    .build();
+
+            LambdaQueryChainWrapper<EnterpriseTeamMember> q = mockQueryWrapper();
+            when(q.list()).thenReturn(List.of(member));
+            when(enterpriseTeamMembersService.lambdaQuery()).thenReturn(q);
+
+            Enterprise enterprise = Enterprise.builder()
+                    .id(enterpriseId)
+                    .name("TestCorp")
+                    .shortName("TC")
+                    .logoUrl("http://logo.url")
+                    .build();
+
+            LambdaQueryChainWrapper<Enterprise> eq = mockQueryWrapper();
+            when(eq.list()).thenReturn(List.of(enterprise));
+            when(enterprisesService.lambdaQuery()).thenReturn(eq);
+        }
+
         private void prepareChainWrappers() {
             doReturn(tokenUpdateWrapper).when(authService).lambdaUpdate();
             doReturn(true).when(authService).save(any(UserToken.class));
@@ -266,7 +314,7 @@ class AuthServiceImplTest {
 
         private void mockEnterpriseContext_noEnterprise() {
             LambdaQueryChainWrapper<EnterpriseTeamMember> q = mockQueryWrapper();
-            when(q.oneOpt()).thenReturn(Optional.empty());
+            when(q.list()).thenReturn(List.of());
             when(enterpriseTeamMembersService.lambdaQuery()).thenReturn(q);
         }
 
@@ -389,6 +437,8 @@ class AuthServiceImplTest {
 
         @BeforeEach
         void setUp() {
+            AuthContext.setAuthContext(AuthContext.AuthUser.builder()
+                .userId(userId).build());
             req = new LogoutReq();
             req.setAccessToken(accessToken);
             req.setRefreshToken(refreshToken);
@@ -483,6 +533,54 @@ class AuthServiceImplTest {
 
             BusinessException ex = assertThrows(BusinessException.class, () -> authService.revoke(1L, req));
             assertEquals(ErrorCode.ACCOUNT_DATA_ANOMALY.getCode(), ex.getCode());
+        }
+    }
+
+    // ============================== switchEnterprise ==============================
+
+    @Nested
+    class SwitchEnterprise {
+
+        private final Long targetEnterpriseId = 200L;
+        private final String oldAccessToken = "old-jwt-token";
+
+        @BeforeEach
+        void setUp() {
+            Map<Long, List<Role>> entRoleMap = new HashMap<>();
+            entRoleMap.put(targetEnterpriseId, List.of(Role.ENTERPRISE_OWNER));
+
+            AuthContext.setAuthContext(AuthContext.AuthUser.builder()
+                    .userId(userId)
+                    .username(username)
+                    .userType(UserType.HR)
+                    .riskLevel(RiskLevel.NO_RISK)
+                    .platformRoleCodes(List.of())
+                    .entRoleMap(entRoleMap)
+                    .build());
+        }
+
+        @Test
+        void switchEnterprise_success() {
+            Claims claims = mock(Claims.class);
+            when(claims.getExpiration()).thenReturn(new Date(System.currentTimeMillis() + 5000));
+            when(jwttUtil.parseToken(oldAccessToken)).thenReturn(claims);
+            when(stringRedisTemplate.opsForValue()).thenReturn(valueOps);
+            when(jwtProperties.getExpiration()).thenReturn(30L);
+            when(jwttUtil.generatorToken(anyMap(), eq(userId))).thenReturn("new-jwt-token");
+
+            SwitchEnterpriseVO result = authService.switchEnterprise(targetEnterpriseId, oldAccessToken);
+
+            assertNotNull(result);
+            assertEquals("new-jwt-token", result.accessToken());
+            assertEquals(1800L, result.expiresIn());
+            verify(valueOps).set(anyString(), anyString(), anyLong(), any());
+        }
+
+        @Test
+        void switchEnterprise_fail_notBelong() {
+            BusinessException ex = assertThrows(BusinessException.class,
+                    () -> authService.switchEnterprise(999L, oldAccessToken));
+            assertEquals(ErrorCode.ENTERPRISE_NOT_BELONG.getCode(), ex.getCode());
         }
     }
 

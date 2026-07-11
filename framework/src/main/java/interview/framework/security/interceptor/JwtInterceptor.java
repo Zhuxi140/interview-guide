@@ -3,7 +3,6 @@ package interview.framework.security.interceptor;
 import cn.hutool.core.util.StrUtil;
 import interview.common.enums.RiskLevel;
 import interview.common.enums.Role;
-import interview.common.enums.RoleScope;
 import interview.common.enums.UserType;
 import interview.common.exception.UnauthorizedException;
 import interview.common.util.JwttUtil;
@@ -18,7 +17,9 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -69,28 +70,36 @@ public class JwtInterceptor implements HandlerInterceptor {
         Number number = claims.get("enterpriseId", Number.class);
         Long enterpriseId = number != null ? number.longValue() : null;
         String username = claims.get("username", String.class);
-        List<String> roleScopeStrings = claims.get("roleScopes", List.class);
-        List<RoleScope> roleScopes = roleScopeStrings != null
-                ? roleScopeStrings.stream()
-                .map(RoleScope::getRoleScope)
-                .toList()
-                : Collections.emptyList();
-        List<String> stringRoleCodes = claims.get("roleCodes", List.class);
-        List<Role> roleCodes = stringRoleCodes != null
-                ? stringRoleCodes.stream()
+
+        // 解析平台角色
+        List<String> stringPlatformRoleCodes = claims.get("platformRoleCodes", List.class);
+        List<Role> platformRoleCodes = stringPlatformRoleCodes != null
+                ? stringPlatformRoleCodes.stream()
                     .map(Role::fromString)
-                    .collect(Collectors.toList())
+                    .toList()
                 : Collections.emptyList();
 
+        // 解析企业角色映射
+        Map<Long, List<Role>> entRoleMap = new HashMap<>();
+        Object rawEntRoleMap = claims.get("entRoleMap", Map.class);
+        if (rawEntRoleMap instanceof Map<?,?> rawMap) {
+            for (Map.Entry<?,?> entry : rawMap.entrySet()) {
+                Long entId = Long.valueOf(entry.getKey().toString());
+                List<Role> roles = ((List<?>)entry.getValue()).stream()
+                        .map(o -> Role.fromString(o.toString()))
+                        .toList();
+                entRoleMap.put(entId, roles);
+            }
+        }
 
         AuthContext.setAuthContext(new AuthContext.AuthUser(
                 userId,
                 UserType.valueOf(userTypeString),
                 RiskLevel.codeToRiskLevel(riskLevel),
-                roleScopes,
                 enterpriseId,
                 username,
-                roleCodes
+                platformRoleCodes,
+                entRoleMap
         ));
 
         return true;

@@ -127,11 +127,12 @@ public class EnterpriseTeamMembersServiceImpl extends ServiceImpl<EnterpriseTeam
         //  校验操作人权限（HR_MANAGER 及以上可邀请成员）
         //  邀请并分配ENTERPRISE_ADMIN 需要ENTERPRISE_OWNER权限
 
-        //       防止重复邀请：校验 (enterprise_id, user_id) 唯一性
+        //       防止重复邀请：校验 (enterprise_id, user_id, role_id) 唯一性
         Long userId = req.getUserId();
         boolean exists2 = lambdaQuery()
                 .eq(EnterpriseTeamMember::getEnterpriseId, enterpriseId)
                 .eq(EnterpriseTeamMember::getUserId, userId)
+                .eq(EnterpriseTeamMember::getRoleId, roleId)
                 .exists();
         if (exists2) {
             throw new BusinessException(ErrorCode.MEMBER_ALREADY_EXISTS);

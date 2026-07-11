@@ -25,6 +25,9 @@ public record LoginVO (
     @Schema(description = "企业logo URL")
     String logoUrl,
 
+    @Schema(description = "用户所属企业列表")
+    List<UserEnterpriseVO> enterprises,
+
     @Schema(description = "用户名")
     String username,
 

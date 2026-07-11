@@ -2,6 +2,8 @@ package interview.system.rbac.controller;
 
 import interview.common.constant.ApiVersion;
 import interview.common.constant.Result;
+import interview.common.enums.RiskLevel;
+import interview.framework.annonate.MaxRiskLevel;
 import interview.system.rbac.model.vo.RoleDetailVO;
 import interview.system.rbac.model.vo.RoleListItemVO;
 import interview.system.rbac.service.RolesService;
@@ -27,12 +29,14 @@ public class RolesController {
 
     private final RolesService rolesService;
 
+    @MaxRiskLevel(RiskLevel.HIGH_RISK)
     @ApiResponse(description = "角色列表")
     @GetMapping
     public Result<List<RoleListItemVO>> listRoles() {
         return Result.success(rolesService.listRoles());
     }
 
+    @MaxRiskLevel(RiskLevel.HIGH_RISK)
     @ApiResponse(description = "角色详情（含绑定的权限）")
     @GetMapping("/{roleId}")
     public Result<RoleDetailVO> getRoleDetail(@PathVariable Long roleId) {

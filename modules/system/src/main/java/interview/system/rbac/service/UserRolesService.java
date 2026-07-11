@@ -35,4 +35,5 @@ public interface UserRolesService extends IService<SysUserRole> {
      * @param req 角色ID列表
      */
     void removeUserRoles(Long userId, RemoveUserRolesReq req);
+
 }

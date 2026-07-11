@@ -8,6 +8,7 @@ import interview.system.auth.model.entity.UserToken;
 import interview.system.auth.model.req.*;
 import interview.system.auth.model.vo.RefreshTokenVO;
 import interview.system.auth.model.vo.TokenInfoVO;
+import interview.system.auth.model.vo.SwitchEnterpriseVO;
 
 import java.util.List;
 
@@ -63,5 +64,12 @@ public interface AuthService extends IService<UserToken> {
      */
     UserInfoBO getUserInfo();
 
+    /**
+     * 切换当前活跃企业
+     * @param enterpriseId 目标企业 ID
+     * @param accessToken 当前 JWT（需加入黑名单）
+     * @return 新 JWT
+     */
+    SwitchEnterpriseVO switchEnterprise(Long enterpriseId, String accessToken);
 
 }

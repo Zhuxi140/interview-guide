@@ -1,13 +1,14 @@
 package interview.framework.context;
 
+import interview.common.enums.ErrorCode;
 import interview.common.enums.RiskLevel;
 import interview.common.enums.Role;
-import interview.common.enums.RoleScope;
 import interview.common.enums.UserType;
 import interview.common.exception.UnauthorizedException;
 import lombok.Builder;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * @author zhuxi
@@ -48,6 +49,22 @@ public class AuthContext {
             throw new UnauthorizedException();
         }
         return authUser;
+    }
+
+    /**
+     *  获取风控信息
+     * @return RiskLevel 风控等级
+     * <P>
+     *  如果当前未登录，则会抛出UnauthorizedException异常
+     * </P>
+     */
+    public static RiskLevel getRequiredRiskLevel(){
+        AuthUser authContext = getRequiredAuthContext();
+        RiskLevel riskLevel = authContext.riskLevel;
+        if (riskLevel == null){
+            throw new UnauthorizedException("无法获取风控信息");
+        }
+        return riskLevel;
     }
 
     /**
@@ -102,9 +119,9 @@ public class AuthContext {
             Long userId,
             UserType userType,
             RiskLevel riskLevel,
-            List<RoleScope> roleScope,
             Long enterpriseId,
             String username,
-            List<Role> roleCodes
+            List<Role> platformRoleCodes,
+            Map<Long,List<Role>> entRoleMap
     ){}
 }

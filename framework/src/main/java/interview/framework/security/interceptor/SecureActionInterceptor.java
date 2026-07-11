@@ -32,6 +32,7 @@ public class SecureActionInterceptor implements HandlerInterceptor {
         if (!(handler instanceof HandlerMethod handlerMethod)) {
             return true;
         }
+
         // 验证是否使用了@RequireSecure注解
         RequireSecure annotation = handlerMethod.getMethodAnnotation(RequireSecure.class);
         if (annotation == null) {

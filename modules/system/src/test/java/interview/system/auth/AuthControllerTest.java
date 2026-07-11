@@ -10,6 +10,7 @@ import interview.system.auth.model.req.*;
 import interview.system.auth.model.vo.*;
 import interview.system.auth.service.AuthService;
 import interview.system.auth.service.SmsService;
+import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -31,12 +32,14 @@ class AuthControllerTest {
     private AuthService authService;
     @Mock
     private AuthConverter authConverter;
+    @Mock
+    private HttpServletRequest request;
 
     private AuthController authController;
 
     @BeforeEach
     void setUp() {
-        authController = new AuthController(smsService, authService, authConverter);
+        authController = new AuthController(smsService, authService, authConverter, request);
     }
 
     @Nested
@@ -202,6 +205,27 @@ class AuthControllerTest {
 
             assertNotNull(result);
             verify(authService).revoke(1L, req);
+        }
+    }
+
+    @Nested
+    class SwitchEnterprise {
+
+        private final String authHeader = "Bearer old-jwt-token";
+
+        @Test
+        void switchEnterprise_success() {
+            SwitchEnterpriseVO vo = SwitchEnterpriseVO.builder()
+                    .accessToken("new-jwt").expiresIn(1800L).build();
+            when(request.getHeader("Authorization")).thenReturn(authHeader);
+            when(authService.switchEnterprise(200L, "old-jwt-token")).thenReturn(vo);
+
+            Result<SwitchEnterpriseVO> result = authController.switchEnterprise(200L);
+
+            assertNotNull(result.getData());
+            assertEquals("new-jwt", result.getData().accessToken());
+            assertEquals(1800L, result.getData().expiresIn());
+            verify(authService).switchEnterprise(200L, "old-jwt-token");
         }
     }
 

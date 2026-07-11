@@ -1,7 +1,12 @@
 package interview.system.rbac.controller;
 
 import interview.common.constant.ApiVersion;
+import interview.common.constant.Perm;
 import interview.common.constant.Result;
+import interview.common.enums.PermissionScope;
+import interview.common.enums.RiskLevel;
+import interview.framework.annonate.MaxRiskLevel;
+import interview.framework.annonate.RequirePermission;
 import interview.system.rbac.model.req.AssignUserRolesReq;
 import interview.system.rbac.model.req.RemoveUserRolesReq;
 import interview.system.rbac.model.vo.UserRoleItemVO;
@@ -26,6 +31,8 @@ public class UserRolesController {
 
     private final UserRolesService userRolesService;
 
+    @MaxRiskLevel(RiskLevel.NO_RISK)
+    @RequirePermission(permissions = Perm.AdminUserRoles.ASSIGN, scope = PermissionScope.PLATFORM)
     @ApiResponse(description = "为用户分配平台角色")
     @PostMapping("/{userId}/roles")
     public Result<Void> assignUserRoles(@PathVariable Long userId, @RequestBody @Valid AssignUserRolesReq req) {
@@ -33,6 +40,8 @@ public class UserRolesController {
         return Result.success();
     }
 
+    @MaxRiskLevel(RiskLevel.LOW_RISK)
+    @RequirePermission(permissions = Perm.AdminUserRoles.LIST, scope = PermissionScope.PLATFORM)
     @ApiResponse(description = "查询用户的平台角色")
     @GetMapping("/{userId}/roles")
     public Result<List<UserRoleItemVO>> getUserRoles(@PathVariable Long userId) {
@@ -40,6 +49,8 @@ public class UserRolesController {
         return Result.success(userRoles);
     }
 
+    @MaxRiskLevel(RiskLevel.NO_RISK)
+    @RequirePermission(permissions = Perm.AdminUserRoles.REMOVE, scope = PermissionScope.PLATFORM)
     @ApiResponse(description = "移除用户的指定平台角色")
     @DeleteMapping("/{userId}/roles")
     public Result<Void> removeUserRoles(@PathVariable Long userId, @RequestBody @Valid RemoveUserRolesReq req) {
