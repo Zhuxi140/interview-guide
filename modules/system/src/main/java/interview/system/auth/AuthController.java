@@ -12,7 +12,7 @@ import interview.system.auth.model.vo.*;
 import interview.system.auth.service.AuthService;
 import interview.system.auth.service.SmsService;
 import cn.hutool.core.util.StrUtil;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -37,7 +37,7 @@ public class AuthController {
     private final AuthConverter authConverter;
     private final HttpServletRequest request;
 
-    @ApiResponse(description = "发送短信验证码")
+    @Operation(summary = "发送短信验证码")
     @PostMapping("/send-sms")
     public Result<?> sendSms(@RequestBody @Valid SmsSendReq smsReq) {
         smsService.sendSms(smsReq);
@@ -45,7 +45,7 @@ public class AuthController {
     }
 
     @MaxRiskLevel(RiskLevel.HIGH_RISK)
-    @ApiResponse(description = "敏感操作授权令牌")
+    @Operation(summary = "敏感操作授权令牌")
     @PostMapping("/verify-sms")
     public Result<String> verifyCode(@RequestBody @Valid VerifyReq verifyReq) {
         String token = smsService.verifyForSensitiveAction(verifyReq);
@@ -53,7 +53,7 @@ public class AuthController {
     }
 
 
-    @ApiResponse(description = "用户注册")
+    @Operation(summary = "用户注册")
     @PostMapping("/register")
     public Result<RegisterVO> register(@RequestBody @Valid RegisterReq register) {
         RegisterBo registerBo = authService.register(register);
@@ -62,7 +62,7 @@ public class AuthController {
     }
 
 
-    @ApiResponse(description = "用户登录")
+    @Operation(summary = "用户登录")
     @PostMapping("/login")
     public Result<LoginVO> login(@RequestBody @Valid LoginReq loginReq) {
         LoginBO login = authService.login(loginReq);
@@ -71,7 +71,7 @@ public class AuthController {
     }
 
     @MaxRiskLevel(RiskLevel.HIGH_RISK)
-    @ApiResponse(description = "用户登出")
+    @Operation(summary = "用户登出")
     @PostMapping("/logout")
     public Result<Void> logout(@RequestBody @Valid LogoutReq logout) {
         authService.logout(logout);
@@ -79,21 +79,21 @@ public class AuthController {
     }
 
     @MaxRiskLevel(RiskLevel.HIGH_RISK)
-    @ApiResponse(description = "刷新令牌")
+    @Operation(summary = "刷新令牌")
     @PostMapping("/refresh")
     public Result<RefreshTokenVO> refreshToken(@RequestBody @Valid RefreshTokenReq refreshToken) {
         return Result.success(authService.refreshToken(refreshToken));
     }
 
     @MaxRiskLevel(RiskLevel.HIGH_RISK)
-    @ApiResponse(description = "查询当前用户的活跃设备列表")
+    @Operation(summary = "查询当前用户的活跃设备列表")
     @GetMapping("/tokens")
     public Result<List<TokenInfoVO>> getUserTokens() {
         return Result.success(authService.getUserToken());
     }
 
     @MaxRiskLevel(RiskLevel.MID_RISK)
-    @ApiResponse(description = "注销当前用户的某个设备")
+    @Operation(summary = "注销当前用户的某个设备")
     @PostMapping("/revoke/{tokenId}")
     public Result<Void> revoke(@PathVariable Long tokenId, @RequestBody @Valid RevokeDeviceReq code ) {
         authService.revoke(tokenId, code);
@@ -101,7 +101,7 @@ public class AuthController {
     }
 
     @MaxRiskLevel(RiskLevel.MID_RISK)
-    @ApiResponse(description = "切换当前活跃企业（旧 JWT 将被加入黑名单）")
+    @Operation(summary = "切换当前活跃企业（旧 JWT 将被加入黑名单）")
     @PutMapping("/enterprise/{enterpriseId}")
     public Result<SwitchEnterpriseVO> switchEnterprise(@PathVariable Long enterpriseId) {
         String header = request.getHeader("Authorization");
@@ -110,7 +110,7 @@ public class AuthController {
     }
 
     @MaxRiskLevel(RiskLevel.HIGH_RISK)
-    @ApiResponse(description = "查询当前用户信息")
+    @Operation(summary = "查询当前用户信息")
     @GetMapping("/me")
     public Result<UserInfoVO> getUserInfo() {
         UserInfoBO userInfo = authService.getUserInfo();

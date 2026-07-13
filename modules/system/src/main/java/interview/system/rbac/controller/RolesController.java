@@ -7,7 +7,7 @@ import interview.framework.annonate.MaxRiskLevel;
 import interview.system.rbac.model.vo.RoleDetailVO;
 import interview.system.rbac.model.vo.RoleListItemVO;
 import interview.system.rbac.service.RolesService;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -30,14 +30,14 @@ public class RolesController {
     private final RolesService rolesService;
 
     @MaxRiskLevel(RiskLevel.HIGH_RISK)
-    @ApiResponse(description = "角色列表")
+    @Operation(summary = "角色列表")
     @GetMapping
     public Result<List<RoleListItemVO>> listRoles() {
         return Result.success(rolesService.listRoles());
     }
 
     @MaxRiskLevel(RiskLevel.HIGH_RISK)
-    @ApiResponse(description = "角色详情（含绑定的权限）")
+    @Operation(summary = "角色详情（含绑定的权限）")
     @GetMapping("/{roleId}")
     public Result<RoleDetailVO> getRoleDetail(@PathVariable Long roleId) {
         return Result.success(rolesService.getRoleDetail(roleId));

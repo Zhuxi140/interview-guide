@@ -196,11 +196,14 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
         if (token.getIsRevoked()){
             log.error("检测到过期Refresh Token 再次被使用! userId:[{}], IP:[{}]", userId, ipAddress);
 
-
-            lambdaUpdate()
+            boolean updated = lambdaUpdate()
                     .eq(UserToken::getUserId, userId)
                     .set(UserToken::getIsRevoked, true)
                     .update();
+
+            if (!updated) {
+                log.warn("重放撤销未影响任何记录: userId [{}]", userId);
+            }
 
             throw new BusinessException(ErrorCode.RISK_CONTROL);
         }
@@ -338,11 +341,15 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
         }
 
         String hashToken = DigestUtil.sha256Hex(logout.getRefreshToken());
-        lambdaUpdate()
+        boolean updated = lambdaUpdate()
                     .eq(UserToken::getRefreshTokenHash, hashToken)
                     .eq(UserToken::getUserId,AuthContext.getRequiredUserId())
                     .set(UserToken::getIsRevoked, true)
                     .update();
+
+        if (!updated) {
+            log.warn("登出时未找到匹配的 Refresh Token: userId [{}]", AuthContext.getRequiredUserId());
+        }
     }
 
     @Override

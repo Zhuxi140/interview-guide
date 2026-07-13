@@ -2,14 +2,19 @@ package interview.job.controller;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import interview.common.constant.ApiVersion;
+import interview.common.constant.Perm;
 import interview.common.constant.Result;
+import interview.common.enums.PermissionScope;
+import interview.common.enums.RiskLevel;
+import interview.framework.annonate.MaxRiskLevel;
+import interview.framework.annonate.RequirePermission;
 import interview.job.model.req.JobCreateReq;
 import interview.job.model.req.JobListQuery;
 import interview.job.model.req.JobStatusReq;
 import interview.job.model.req.JobUpdateReq;
 import interview.job.model.vo.*;
 import interview.job.service.JobService;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -26,7 +31,9 @@ public class JobController {
 
     private final JobService jobService;
 
-    @ApiResponse(description = "发布岗位")
+    @RequirePermission(permissions = Perm.Job.CREATE, scope = PermissionScope.ENTERPRISE)
+    @MaxRiskLevel(RiskLevel.MID_RISK)
+    @Operation(summary = "发布岗位")
     @PostMapping
     public Result<JobCreateVO> createJob(@PathVariable("enterpriseId") Long enterpriseId,
                                          @RequestBody @Valid JobCreateReq req) {
@@ -34,7 +41,9 @@ public class JobController {
         return Result.success(vo);
     }
 
-    @ApiResponse(description = "查询企业岗位列表（分页）")
+    @RequirePermission(permissions = Perm.Job.LIST, scope = PermissionScope.ENTERPRISE)
+    @MaxRiskLevel(RiskLevel.NO_RISK)
+    @Operation(summary = "查询企业岗位列表（分页）")
     @GetMapping
     public Result<IPage<JobListItemVO>> listJobs(@PathVariable("enterpriseId") Long enterpriseId,
                                                  @Valid JobListQuery query) {
@@ -42,7 +51,9 @@ public class JobController {
         return Result.success(page);
     }
 
-    @ApiResponse(description = "查询岗位详情")
+    @RequirePermission(permissions = Perm.Job.DETAIL, scope = PermissionScope.ENTERPRISE)
+    @MaxRiskLevel(RiskLevel.NO_RISK)
+    @Operation(summary = "查询岗位详情")
     @GetMapping("/{jobId}")
     public Result<JobDetailVO> getJobDetail(@PathVariable("enterpriseId") Long enterpriseId,
                                             @PathVariable("jobId") Long jobId) {
@@ -50,29 +61,35 @@ public class JobController {
         return Result.success(vo);
     }
 
-    @ApiResponse(description = "编辑岗位")
-    @PutMapping("/{jobId}")
-    public Result<JobUpdateVO> updateJob(@PathVariable("enterpriseId") Long enterpriseId,
-                                         @PathVariable("jobId") Long jobId,
-                                         @RequestBody @Valid JobUpdateReq req) {
-        JobUpdateVO vo = jobService.updateJob(enterpriseId, jobId, req);
-        return Result.success(vo);
+    @RequirePermission(permissions = Perm.Job.UPDATE, scope = PermissionScope.ENTERPRISE)
+    @MaxRiskLevel(RiskLevel.MID_RISK)
+    @Operation(summary = "编辑岗位")
+    @PatchMapping("/{jobId}")
+    public Result<Void> updateJob(@PathVariable("enterpriseId") Long enterpriseId,
+                                           @PathVariable("jobId") Long jobId,
+                                           @RequestBody @Valid JobUpdateReq req) {
+        jobService.updateJob(enterpriseId, jobId, req);
+        return Result.success();
     }
 
-    @ApiResponse(description = "开关岗位（开放/关闭）")
+    @RequirePermission(permissions = Perm.Job.TOGGLE_STATUS, scope = PermissionScope.ENTERPRISE)
+    @MaxRiskLevel(RiskLevel.MID_RISK)
+    @Operation(summary = "开关岗位（开放/关闭）")
     @PatchMapping("/{jobId}/status")
-    public Result<JobStatusVO> updateJobStatus(@PathVariable("enterpriseId") Long enterpriseId,
-                                               @PathVariable("jobId") Long jobId,
-                                               @RequestBody @Valid JobStatusReq req) {
-        JobStatusVO vo = jobService.updateJobStatus(enterpriseId, jobId, req);
-        return Result.success(vo);
+    public Result<Void> updateJobStatus(@PathVariable("enterpriseId") Long enterpriseId,
+                                                 @PathVariable("jobId") Long jobId,
+                                                 @RequestBody @Valid JobStatusReq req) {
+        jobService.updateJobStatus(enterpriseId, jobId, req);
+        return Result.success();
     }
 
-    @ApiResponse(description = "删除岗位（逻辑删除）")
+    @RequirePermission(permissions = Perm.Job.DELETE, scope = PermissionScope.ENTERPRISE)
+    @MaxRiskLevel(RiskLevel.MID_RISK)
+    @Operation(summary = "删除岗位（逻辑删除）")
     @DeleteMapping("/{jobId}")
-    public Result<JobDeleteVO> deleteJob(@PathVariable("enterpriseId") Long enterpriseId,
+    public Result<Void> deleteJob(@PathVariable("enterpriseId") Long enterpriseId,
                                          @PathVariable("jobId") Long jobId) {
-        JobDeleteVO vo = jobService.deleteJob(enterpriseId, jobId);
-        return Result.success(vo);
+        jobService.deleteJob(enterpriseId, jobId);
+        return Result.success();
     }
 }

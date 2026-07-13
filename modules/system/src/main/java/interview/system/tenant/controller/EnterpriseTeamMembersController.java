@@ -13,7 +13,7 @@ import interview.system.tenant.model.req.TeamMemberUpdateReq;
 import interview.system.tenant.model.vo.TeamMemberCreateVO;
 import interview.system.tenant.model.vo.TeamMemberItemVO;
 import interview.system.tenant.service.EnterpriseTeamMembersService;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -32,7 +32,7 @@ public class EnterpriseTeamMembersController {
 
     @MaxRiskLevel(RiskLevel.MID_RISK)
     @RequirePermission(permissions = Perm.Team.LIST, scope = PermissionScope.ENTERPRISE)
-    @ApiResponse(description = "查询团队成员列表（分页）")
+    @Operation(summary = "查询团队成员列表（分页）")
     @GetMapping
     public Result<IPage<TeamMemberItemVO>> listTeamMembers(
             @PathVariable("enterpriseId") Long enterpriseId,
@@ -46,7 +46,7 @@ public class EnterpriseTeamMembersController {
 
     @MaxRiskLevel(RiskLevel.LOW_RISK)
     @RequirePermission(permissions = Perm.Team.INVITE, scope = PermissionScope.ENTERPRISE)
-    @ApiResponse(description = "邀请成员加入企业")
+    @Operation(summary = "邀请成员加入企业")
     @PostMapping
     public Result<TeamMemberCreateVO> inviteMember(@PathVariable("enterpriseId") Long enterpriseId,
                                                    @RequestBody @Valid TeamMemberCreateReq req) {
@@ -56,7 +56,7 @@ public class EnterpriseTeamMembersController {
 
     @MaxRiskLevel(RiskLevel.LOW_RISK)
     @RequirePermission(permissions = Perm.Team.UPDATE, scope = PermissionScope.ENTERPRISE)
-    @ApiResponse(description = "修改成员角色")
+    @Operation(summary = "修改成员角色")
     @PutMapping("/{memberId}")
     public Result<Void> updateMemberRole(@PathVariable("enterpriseId") Long enterpriseId,
                                                        @PathVariable("memberId") Long memberId,
@@ -67,7 +67,7 @@ public class EnterpriseTeamMembersController {
 
     @MaxRiskLevel(RiskLevel.LOW_RISK)
     @RequirePermission(permissions = Perm.Team.REMOVE, scope = PermissionScope.ENTERPRISE)
-    @ApiResponse(description = "移除团队成员")
+    @Operation(summary = "移除团队成员")
     @DeleteMapping("/{memberId}")
     public Result<Void> removeMember(@PathVariable("enterpriseId") Long enterpriseId,
                                        @PathVariable("memberId") Long memberId) {

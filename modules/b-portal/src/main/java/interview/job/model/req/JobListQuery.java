@@ -1,6 +1,7 @@
 package interview.job.model.req;
 
 import interview.job.model.enums.JobStatus;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.Data;
@@ -10,16 +11,21 @@ import lombok.Data;
  * @apiNote 岗位列表查询参数
  */
 @Data
+@Schema(description = "岗位列表查询参数")
 public class JobListQuery {
 
     @Min(value = 1, message = "页码最小为 1")
+    @Schema(description = "页码")
     private Integer page = 1;
 
     @Min(value = 1, message = "每页条数最小为 1")
     @Max(value = 100, message = "每页条数最大为 100")
+    @Schema(description = "每页条数")
     private Integer size = 20;
 
+    @Schema(description = "岗位状态筛选")
     private JobStatus status;
 
+    @Schema(description = "搜索关键词")
     private String keyword;
 }

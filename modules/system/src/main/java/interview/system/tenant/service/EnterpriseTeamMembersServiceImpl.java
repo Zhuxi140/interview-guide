@@ -173,11 +173,15 @@ public class EnterpriseTeamMembersServiceImpl extends ServiceImpl<EnterpriseTeam
         //       校验 req.roleId 是否为 ENTERPRISE 域角色
         verifyRoleId(req.getRoleId());
         //       UPDATE enterprise_team_members SET role_id = req.roleId
-        lambdaUpdate()
+        boolean updated = lambdaUpdate()
                 .eq(EnterpriseTeamMember::getEnterpriseId, enterpriseId)
                 .eq(EnterpriseTeamMember::getId, memberId)
                 .set(EnterpriseTeamMember::getRoleId, req.getRoleId())
                 .update();
+
+        if (!updated) {
+            throw new BusinessException(ErrorCode.ENTERPRISE_DATA_ANOMALY);
+        }
     }
 
     @Override
@@ -213,11 +217,15 @@ public class EnterpriseTeamMembersServiceImpl extends ServiceImpl<EnterpriseTeam
             throw new BusinessException(ErrorCode.NO_DELETE_OWNER);
         }
         //       逻辑删除 enterprise_team_members（is_deleted = true）
-        lambdaUpdate()
+        boolean deleted = lambdaUpdate()
                 .eq(EnterpriseTeamMember::getEnterpriseId, enterpriseId)
                 .eq(EnterpriseTeamMember::getId, memberId)
                 .set(EnterpriseTeamMember::getIsDeleted,true)
                 .update();
+
+        if (!deleted) {
+            throw new BusinessException(ErrorCode.ENTERPRISE_DATA_ANOMALY);
+        }
     }
 
 

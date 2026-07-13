@@ -1,9 +1,13 @@
 package interview.job.model.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import interview.common.enums.EducationLevel;
+import interview.common.enums.ExperienceLevel;
 import interview.job.model.enums.JobStatus;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
@@ -15,6 +19,8 @@ import java.time.OffsetDateTime;
 @TableName(value = "jobs")
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class Job implements Serializable {
 
     @TableId(type = IdType.ASSIGN_ID)
@@ -36,9 +42,9 @@ public class Job implements Serializable {
 
     private BigDecimal maxSalary;
 
-    private String experienceReq;
+    private ExperienceLevel experienceReq;
 
-    private String educationReq;
+    private EducationLevel educationReq;
 
     private String skillsJson;
 

@@ -224,7 +224,10 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
             update.setLogoUrl(req.getLogoUrl());
         }
 
-        baseMapper.updateById(update);
+        if (baseMapper.updateById(update) == 0) {
+            log.error("更新企业基本信息未影响任何记录: enterpriseId [{}]", enterpriseId);
+            throw new BusinessException(ErrorCode.ENTERPRISE_DATA_ANOMALY);
+        }
         Enterprise updated = baseMapper.selectById(enterpriseId);
         return new EnterpriseUpdateVO(updated.getId(), updated.getName(), updated.getShortName(), updated.getIndustry());
     }
@@ -244,11 +247,16 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
             throw new BusinessException(ErrorCode.PHONE_MISMATCH);
         }
 
-        lambdaUpdate()
+        boolean updated = lambdaUpdate()
                 .eq(Enterprise::getId,enterpriseId)
                 .set(contactPhone != null,Enterprise::getContactPhone,contactPhone)
                 .set(contactEmail != null,Enterprise::getContactEmail, req.getContactEmail())
                 .update();
+
+        if (!updated) {
+            log.error("更新企业联系方式未影响任何记录: enterpriseId [{}]", enterpriseId);
+            throw new BusinessException(ErrorCode.ENTERPRISE_DATA_ANOMALY);
+        }
 
         return new EnterpriseContactUpdateVO(enterpriseId, contactEmail, contactPhone);
     }
@@ -280,10 +288,15 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
 
 
         //逻辑删除 enterprises（is_deleted = true）
-        lambdaUpdate()
+        boolean updated = lambdaUpdate()
                 .eq(Enterprise::getId, enterpriseId)
                 .set(Enterprise::getIsDeleted, true)
                 .update();
+
+        if (!updated) {
+            log.error("删除企业未影响任何记录: enterpriseId [{}]", enterpriseId);
+            throw new BusinessException(ErrorCode.ENTERPRISE_DATA_ANOMALY);
+        }
         //级联逻辑删除 enterprise_team_members 相关记录
         enterpriseTeamMembersService.lambdaUpdate()
                 .eq(EnterpriseTeamMember::getEnterpriseId, enterpriseId)
