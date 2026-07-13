@@ -207,7 +207,6 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
     public EnterpriseUpdateVO updateEnterpriseBasic(Long enterpriseId, EnterpriseBasicUpdateReq req) {
         validateEnterpriseBelong(enterpriseId);
 
-        // TODO: 权限效验体系补全后，需对其进行权限效验  仅Enterprise_ADMIN以上权限可修改
         Enterprise update = Enterprise.builder().id(enterpriseId).build();
         if (req.getName() != null){
             update.setName(req.getName());
@@ -234,8 +233,6 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
     @Transactional(rollbackFor = BusinessException.class)
     public EnterpriseContactUpdateVO updateEnterpriseContact(Long enterpriseId,SecureActionContext secureActionContext, EnterpriseContactUpdateReq req) {
         validateEnterpriseBelong(enterpriseId);
-        // TODO: 权限效验体系补全后，需对其进行权限效验  仅Enterprise_ADMIN以上权限可修改
-
         String contactEmail = req.getContactEmail();
         String contactPhone = req.getContactPhone();
         if (contactEmail == null && contactPhone == null) {
@@ -256,8 +253,11 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
         return new EnterpriseContactUpdateVO(enterpriseId, contactEmail, contactPhone);
     }
 
+    /**
+     * 校验 enterpriseId 合法且当前用户为企业成员
+     * @param enterpriseId 企业 ID
+     */
     private void validateEnterpriseBelong(Long enterpriseId) {
-        // 效验EnterpriseId合法性
         verifyEnterpriseId(enterpriseId);
 
         Long userId = AuthContext.getRequiredUserId();
@@ -272,7 +272,6 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
 
     @Override
     public void deleteEnterprise(Long enterpriseId) {
-        // TODO: 权限体系完善后，需先检查权限（仅 OWNER 可注销企业）
         //校验 enterpriseId 合法性
         verifyEnterpriseId(enterpriseId);
 
@@ -294,6 +293,10 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
         // TODO: Phase 8 扩展：需校验 sys_enterprise_cert 已通过认证
     }
 
+    /**
+     * 校验企业存在且未被逻辑删除
+     * @param enterpriseId 企业 ID
+     */
     public void verifyEnterpriseId(Long enterpriseId) {
         boolean exists = lambdaQuery()
                 .eq(Enterprise::getId, enterpriseId)

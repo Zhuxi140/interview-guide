@@ -221,6 +221,10 @@ public class EnterpriseTeamMembersServiceImpl extends ServiceImpl<EnterpriseTeam
     }
 
 
+    /**
+     * 校验企业存在且未被逻辑删除
+     * @param enterpriseId 企业 ID
+     */
     public void verifyEnterpriseId(Long enterpriseId) {
         boolean exists = enterprisesService.lambdaQuery()
                 .eq(Enterprise::getId, enterpriseId)
@@ -230,14 +234,22 @@ public class EnterpriseTeamMembersServiceImpl extends ServiceImpl<EnterpriseTeam
         }
     }
 
+    /**
+     * 校验角色 ID 属于 ENTERPRISE 域
+     * @param roleId 角色 ID
+     */
     public void verifyRoleId(Integer roleId) {
-        //校验 req.roleId 是否为 ENTERPRISE域的角色
         if (!Role.fromCode(roleId).getRoleScope().equals(RoleScope.ENTERPRISE))
         {
             throw new BusinessException(ErrorCode.NO_ALLOW_ROLE);
         }
     }
 
+    /**
+     * 校验团队成员记录存在且属于指定企业
+     * @param enterpriseId 企业 ID
+     * @param memberId 团队成员 ID
+     */
     public void verifyMemberIdBelong(Long enterpriseId, Long memberId) {
         EnterpriseTeamMember one = lambdaQuery()
                 .select(EnterpriseTeamMember::getEnterpriseId)
