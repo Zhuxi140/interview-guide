@@ -5,13 +5,10 @@ import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapp
 import com.baomidou.mybatisplus.extension.conditions.update.LambdaUpdateChainWrapper;
 import interview.common.constant.SecureActionContext;
 import interview.common.enums.ErrorCode;
-import interview.common.enums.Role;
-import interview.common.enums.RoleScope;
 import interview.common.exception.BusinessException;
 import interview.framework.config.CustomIdGenerator;
 import interview.framework.context.AuthContext;
-import interview.system.rbac.model.entity.SysRole;
-import interview.system.rbac.model.entity.SysUserRole;
+import interview.system.rbac.model.entity.Role;
 import interview.system.rbac.service.RolesService;
 import interview.system.rbac.service.UserRolesService;
 import interview.system.tenant.mapper.EnterprisesMapper;
@@ -35,7 +32,6 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -157,17 +153,17 @@ class EnterprisesServiceImplTest {
 
         @Test
         void listUserEnterprises_success_withRoleCodeAndMemberCount() {
-            UserEnterprisesBO bo1 = new UserEnterprisesBO(enterpriseId, enterpriseName, shortName, industry, EnterpriseStatus.NORMAL, Role.ENTERPRISE_OWNER.getCode());
-            UserEnterprisesBO bo2 = new UserEnterprisesBO(20002L, "另一企业", "另一", "教育", EnterpriseStatus.PENDING, Role.ENTERPRISE_ADMIN.getCode());
+            UserEnterprisesBO bo1 = new UserEnterprisesBO(enterpriseId, enterpriseName, shortName, industry, EnterpriseStatus.NORMAL, interview.common.enums.Role.ENTERPRISE_OWNER.getCode());
+            UserEnterprisesBO bo2 = new UserEnterprisesBO(20002L, "另一企业", "另一", "教育", EnterpriseStatus.PENDING, interview.common.enums.Role.ENTERPRISE_ADMIN.getCode());
             when(enterprisesMapper.getListUserEnterprises(userId)).thenReturn(List.of(bo1, bo2));
 
-            SysRole role1 = new SysRole();
-            role1.setId(Role.ENTERPRISE_OWNER.getCode());
+            Role role1 = new Role();
+            role1.setId(interview.common.enums.Role.ENTERPRISE_OWNER.getCode());
             role1.setRoleCode("ENTERPRISE_OWNER");
-            SysRole role2 = new SysRole();
-            role2.setId(Role.ENTERPRISE_ADMIN.getCode());
+            Role role2 = new Role();
+            role2.setId(interview.common.enums.Role.ENTERPRISE_ADMIN.getCode());
             role2.setRoleCode("ENTERPRISE_ADMIN");
-            LambdaQueryChainWrapper<SysRole> roleQueryWrapper = mockQueryWrapper();
+            LambdaQueryChainWrapper<Role> roleQueryWrapper = mockQueryWrapper();
             when(roleQueryWrapper.list()).thenReturn(List.of(role1, role2));
             when(rolesService.lambdaQuery()).thenReturn(roleQueryWrapper);
 

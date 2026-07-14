@@ -10,6 +10,10 @@ import interview.system.tenant.service.EnterprisesService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
 /**
  * @author zhuxi
  */
@@ -40,5 +44,15 @@ public class EnterpriseValidationApiImpl implements EnterpriseValidationApi {
             throw new BusinessException(ErrorCode.CURREMT_USER_NOT_ENTERPRISE_MEMBER);
         }
 
+    }
+
+    @Override
+    public Map<Long,String> getNameList(List<Long> enterpriseId) {
+        return enterprisesService.lambdaQuery()
+                .select(Enterprise::getName)
+                .eq(Enterprise::getId, enterpriseId)
+                .list()
+                .stream()
+                .collect(Collectors.toMap(Enterprise::getId, Enterprise::getName));
     }
 }

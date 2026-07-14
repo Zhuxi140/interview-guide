@@ -1,7 +1,7 @@
 package interview.system.rbac.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import interview.system.rbac.model.entity.SysRolePermission;
+import interview.system.rbac.model.entity.RolePermission;
 import org.apache.ibatis.annotations.Mapper;
 
 /**
@@ -12,6 +12,6 @@ import org.apache.ibatis.annotations.Mapper;
  * @author zhuxi
  */
 @Mapper
-public interface RolePermissionsMapper extends BaseMapper<SysRolePermission> {
+public interface RolePermissionsMapper extends BaseMapper<RolePermission> {
 
 }

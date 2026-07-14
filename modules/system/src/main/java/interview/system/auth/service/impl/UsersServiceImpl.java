@@ -1,6 +1,6 @@
 package interview.system.auth.service.impl;
 
-import interview.system.auth.model.entity.SysUser;
+import interview.system.auth.model.entity.User;
 import interview.system.auth.service.UsersService;
 import interview.system.rbac.mapper.UsersMapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -14,6 +14,6 @@ import org.springframework.stereotype.Service;
  * @author zhuxi
  */
 @Service
-public class UsersServiceImpl extends ServiceImpl<UsersMapper, SysUser> implements UsersService {
+public class UsersServiceImpl extends ServiceImpl<UsersMapper, User> implements UsersService {
 
 }

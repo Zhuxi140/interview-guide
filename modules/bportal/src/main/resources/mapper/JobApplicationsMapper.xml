@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="interview.matching.mapper.JobApplicationsMapper">
+
+    <select id="pageApplicationsWithJoin" resultType="interview.matching.model.bo.JobApplicationListBO">
+        SELECT
+            ja.id,
+            ja.candidate_id,
+            r.file_name AS resume_file_name,
+            ja.ai_match_score,
+            ja.status,
+            ja.created_at
+        FROM job_applications ja
+            LEFT JOIN resumes r ON r.id = ja.resume_id
+        WHERE
+            ja.is_deleted = false
+          AND
+            ja.job_id = #{jobId}
+          AND
+            ja.enterprise_id = #{enterpriseId}
+        <if test="status != null">
+          AND ja.status = #{status}
+        </if>
+    </select>
+    <select id="getApplicationWithJoin" resultType="interview.matching.model.bo.JobApplicationBO">
+        SELECT
+            ja.job_id,
+            ja.candidate_id,
+            r.id AS resume_id,
+            r.file_name AS resume_file_name,
+            ja.ai_match_score,
+            ja.status,
+            ja.created_at,
+            ja.updated_at
+            FROM job_applications ja
+        join resumes r ON ja.resume_id = r.id
+        WHERE
+            ja.is_deleted = false
+          AND
+            ja.id = #{applicationId}
+          AND
+            ja.enterprise_id = #{enterpriseId}
+
+    </select>
+    <select id="pageMyApplicationsWithJoin" resultType="interview.matching.model.bo.MyApplicationListBO">
+        SELECT
+            ja.id,
+            ja.job_id,
+            ja.enterprise_id,
+            j.title AS job_title,
+            ja.ai_match_score,
+            ja.status,
+            ja.created_at
+        FROM job_applications ja
+        JOIN jobs j ON ja.job_id = j.id
+        WHERE ja.candidate_id = #{candidateId}
+          AND ja.is_deleted = false
+        <if test="status != null">
+            AND ja.status = #{status}
+        </if>
+    </select>
+</mapper>

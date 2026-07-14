@@ -5,13 +5,12 @@ import com.baomidou.mybatisplus.core.metadata.OrderItem;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import interview.common.enums.ErrorCode;
-import interview.common.enums.Role;
 import interview.common.enums.RoleScope;
 import interview.common.enums.SelectOrder;
 import interview.common.exception.BusinessException;
 import interview.framework.config.CustomIdGenerator;
 import interview.framework.context.AuthContext;
-import interview.system.rbac.model.entity.SysRole;
+import interview.system.rbac.model.entity.Role;
 import interview.system.rbac.service.RolesService;
 import interview.system.tenant.mapper.EnterpriseTeamMembersMapper;
 import interview.system.tenant.model.bo.TeamMemberItemBO;
@@ -86,12 +85,12 @@ public class EnterpriseTeamMembersServiceImpl extends ServiceImpl<EnterpriseTeam
 
         // 查询sys_roles（role_code）
         Map<Integer, String> roleCodeMap = rolesService.lambdaQuery()
-                .select(SysRole::getId, SysRole::getRoleCode)
-                .in(SysRole::getId, list)
+                .select(Role::getId, Role::getRoleCode)
+                .in(Role::getId, list)
                 .list()
                 .stream()
                 .collect(
-                        Collectors.toMap(SysRole::getId, SysRole::getRoleCode)
+                        Collectors.toMap(Role::getId, Role::getRoleCode)
                 );
 
         List<TeamMemberItemVO> teamMemberItemVO = records.stream()
@@ -102,7 +101,7 @@ public class EnterpriseTeamMembersServiceImpl extends ServiceImpl<EnterpriseTeam
                                 .username(bo.username())
                                 .nickname(bo.nickname())
                                 .email(bo.email())
-                                .roleCode(roleCodeMap.getOrDefault(bo.roleId(), Role.UNKNOWN.getMsg()))
+                                .roleCode(roleCodeMap.getOrDefault(bo.roleId(), interview.common.enums.Role.UNKNOWN.getMsg()))
                                 .createdAt(bo.createdAt())
                                 .build()
                 ).toList();
@@ -167,7 +166,7 @@ public class EnterpriseTeamMembersServiceImpl extends ServiceImpl<EnterpriseTeam
         verifyMemberIdBelong(enterpriseId,memberId);
 
         //不允许修改 OWNER 角色
-        if (Role.ENTERPRISE_OWNER.getCode().equals(req.getRoleId())){
+        if (interview.common.enums.Role.ENTERPRISE_OWNER.getCode().equals(req.getRoleId())){
             throw new BusinessException(ErrorCode.NO_OPERATE_ENTERPRISE_OWNER);
         }
         //       校验 req.roleId 是否为 ENTERPRISE 域角色
@@ -208,7 +207,7 @@ public class EnterpriseTeamMembersServiceImpl extends ServiceImpl<EnterpriseTeam
         }
 
         //       不允许移除 OWNER
-        if (Role.ENTERPRISE_OWNER.getCode().equals(one.getRoleId())){
+        if (interview.common.enums.Role.ENTERPRISE_OWNER.getCode().equals(one.getRoleId())){
             throw new BusinessException(ErrorCode.NO_OPERATE_ENTERPRISE_OWNER);
         }
 
@@ -247,7 +246,7 @@ public class EnterpriseTeamMembersServiceImpl extends ServiceImpl<EnterpriseTeam
      * @param roleId 角色 ID
      */
     public void verifyRoleId(Integer roleId) {
-        if (!Role.fromCode(roleId).getRoleScope().equals(RoleScope.ENTERPRISE))
+        if (!interview.common.enums.Role.fromCode(roleId).getRoleScope().equals(RoleScope.ENTERPRISE))
         {
             throw new BusinessException(ErrorCode.NO_ALLOW_ROLE);
         }

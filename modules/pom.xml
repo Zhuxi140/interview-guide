@@ -13,9 +13,9 @@
     <packaging>pom</packaging>
     <name>modules</name>
     <modules>
-        <module>ai-core</module>
-        <module>b-portal</module>
-        <module>c-portal</module>
+        <module>aicore</module>
+        <module>bportal</module>
+        <module>cportal</module>
         <module>admin</module>
         <module>engine</module>
         <module>Spark</module>

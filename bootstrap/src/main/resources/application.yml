@@ -24,7 +24,7 @@ spring:
   sql:
     init:
       mode: always
-      schema-locations: classpath:sql/phase1-init.sql
+      schema-locations: classpath:sql/1/phase1-init.sql
       #data-locations:
 
   ai:

@@ -4,12 +4,10 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import interview.common.constant.SecureActionContext;
 import interview.common.enums.ErrorCode;
-import interview.common.enums.Role;
 import interview.common.exception.BusinessException;
 import interview.framework.config.CustomIdGenerator;
 import interview.framework.context.AuthContext;
-import interview.system.rbac.model.entity.SysRole;
-import interview.system.rbac.model.entity.SysUserRole;
+import interview.system.rbac.model.entity.Role;
 import interview.system.rbac.service.RolesService;
 import interview.system.rbac.service.UserRolesService;
 import interview.system.tenant.mapper.EnterprisesMapper;
@@ -25,7 +23,6 @@ import interview.system.tenant.model.req.EnterpriseCreateReq;
 import interview.system.tenant.model.vo.EnterpriseContactUpdateVO;
 import interview.system.tenant.model.vo.EnterpriseDetailVO;
 import interview.system.tenant.model.vo.EnterpriseUpdateVO;
-import jakarta.servlet.ServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -90,7 +87,7 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
         //在 enterprise_team_members 中创建一条 OWNER 记录（当前用户 + role_id=ENTERPRISE_OWNER）
         EnterpriseTeamMember enterpriseTeamMember = EnterpriseTeamMember.builder()
                 .userId(AuthContext.getRequiredUserId())
-                .roleId(Role.ENTERPRISE_OWNER.getCode())
+                .roleId(interview.common.enums.Role.ENTERPRISE_OWNER.getCode())
                 .enterpriseId(number)
                 .build();
 
@@ -125,11 +122,11 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
                 .collect(Collectors.toSet());
 
         Map<Integer, String> roleCodeMap = rolesService.lambdaQuery()
-                .select(SysRole::getId,SysRole::getRoleCode)
-                .in(SysRole::getId, roleIds)
+                .select(Role::getId, Role::getRoleCode)
+                .in(Role::getId, roleIds)
                 .list()
                 .stream()
-                .collect(Collectors.toMap(SysRole::getId, SysRole::getRoleCode));
+                .collect(Collectors.toMap(Role::getId, Role::getRoleCode));
 
         //统计每个企业的 memberCount
         Set<Long> enterpriseIds = bos.stream()
@@ -154,7 +151,7 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
         //返回 List<ListUserEnterprisesBO>
         return bos.stream()
                 .map(bo ->{
-                    String roleCode = roleCodeMap.getOrDefault(bo.roleId(),Role.UNKNOWN.name());
+                    String roleCode = roleCodeMap.getOrDefault(bo.roleId(), interview.common.enums.Role.UNKNOWN.name());
                     if (roleCode == null){
                         log.warn("[数据一致性警告] 未找到对应的 RoleCode! 脏数据企业关联 ID: {}, 缺失的 RoleID:{}",
                                 bo.enterpriseId(), bo.roleId());

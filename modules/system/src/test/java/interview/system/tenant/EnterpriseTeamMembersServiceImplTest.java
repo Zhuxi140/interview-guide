@@ -5,12 +5,10 @@ import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapp
 import com.baomidou.mybatisplus.extension.conditions.update.LambdaUpdateChainWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import interview.common.enums.ErrorCode;
-import interview.common.enums.Role;
-import interview.common.enums.RoleScope;
 import interview.common.exception.BusinessException;
 import interview.framework.config.CustomIdGenerator;
 import interview.framework.context.AuthContext;
-import interview.system.rbac.model.entity.SysRole;
+import interview.system.rbac.model.entity.Role;
 import interview.system.rbac.service.RolesService;
 import interview.system.tenant.mapper.EnterpriseTeamMembersMapper;
 import interview.system.tenant.model.bo.TeamMemberItemBO;
@@ -33,7 +31,6 @@ import org.springframework.dao.DataIntegrityViolationException;
 
 import java.time.OffsetDateTime;
 import java.util.List;
-import java.util.Map;
 
 import static interview.system.TestMockUtils.*;
 import static org.junit.jupiter.api.Assertions.*;
@@ -55,9 +52,9 @@ class EnterpriseTeamMembersServiceImplTest {
     private final Long userId = 1L;
     private final Long enterpriseId = 10001L;
     private final Long memberId = 50001L;
-    private final Integer hrManagerRoleId = Role.HR_MANAGER.getCode();
-    private final Integer ownerRoleId = Role.ENTERPRISE_OWNER.getCode();
-    private final Integer adminRoleId = Role.ENTERPRISE_ADMIN.getCode();
+    private final Integer hrManagerRoleId = interview.common.enums.Role.HR_MANAGER.getCode();
+    private final Integer ownerRoleId = interview.common.enums.Role.ENTERPRISE_OWNER.getCode();
+    private final Integer adminRoleId = interview.common.enums.Role.ENTERPRISE_ADMIN.getCode();
 
     @BeforeEach
     void setUp() {
@@ -107,13 +104,13 @@ class EnterpriseTeamMembersServiceImplTest {
             boPage.setTotal(2);
             when(enterpriseTeamMembersMapper.getTeamMembersPage(any(Page.class), eq(enterpriseId))).thenReturn(boPage);
 
-            SysRole role1 = new SysRole();
+            Role role1 = new Role();
             role1.setId(hrManagerRoleId);
             role1.setRoleCode("HR_MANAGER");
-            SysRole role2 = new SysRole();
+            Role role2 = new Role();
             role2.setId(adminRoleId);
             role2.setRoleCode("ENTERPRISE_ADMIN");
-            LambdaQueryChainWrapper<SysRole> roleQueryWrapper = mockQueryWrapper();
+            LambdaQueryChainWrapper<Role> roleQueryWrapper = mockQueryWrapper();
             when(roleQueryWrapper.list()).thenReturn(List.of(role1, role2));
             when(rolesService.lambdaQuery()).thenReturn(roleQueryWrapper);
 
@@ -147,10 +144,10 @@ class EnterpriseTeamMembersServiceImplTest {
             boPage.setTotal(1);
             when(enterpriseTeamMembersMapper.getTeamMembersPage(any(Page.class), eq(enterpriseId))).thenReturn(boPage);
 
-            SysRole role = new SysRole();
+            Role role = new Role();
             role.setId(hrManagerRoleId);
             role.setRoleCode("HR_MANAGER");
-            LambdaQueryChainWrapper<SysRole> roleQueryWrapper = mockQueryWrapper();
+            LambdaQueryChainWrapper<Role> roleQueryWrapper = mockQueryWrapper();
             when(roleQueryWrapper.list()).thenReturn(List.of(role));
             when(rolesService.lambdaQuery()).thenReturn(roleQueryWrapper);
 

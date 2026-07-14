@@ -33,12 +33,12 @@
         <!-- business modules -->
         <dependency>
             <groupId>interview.guide</groupId>
-            <artifactId>b-portal</artifactId>
+            <artifactId>bportal</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>interview.guide</groupId>
-            <artifactId>c-portal</artifactId>
+            <artifactId>cportal</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>

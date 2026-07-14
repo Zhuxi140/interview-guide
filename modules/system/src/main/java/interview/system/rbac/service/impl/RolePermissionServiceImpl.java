@@ -2,7 +2,7 @@ package interview.system.rbac.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import interview.system.rbac.mapper.RolePermissionsMapper;
-import interview.system.rbac.model.entity.SysRolePermission;
+import interview.system.rbac.model.entity.RolePermission;
 import interview.system.rbac.service.RolePermissionService;
 import org.springframework.stereotype.Service;
 
@@ -11,6 +11,6 @@ import org.springframework.stereotype.Service;
  */
 
 @Service
-public class RolePermissionServiceImpl extends ServiceImpl<RolePermissionsMapper, SysRolePermission> implements RolePermissionService {
+public class RolePermissionServiceImpl extends ServiceImpl<RolePermissionsMapper, RolePermission> implements RolePermissionService {
 
 }

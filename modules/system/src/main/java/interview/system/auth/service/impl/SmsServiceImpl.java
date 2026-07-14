@@ -11,7 +11,7 @@ import interview.common.constant.AuthKeyConstant;
 import interview.common.constant.SecureActionContext;
 import interview.common.enums.SmsType;
 import interview.system.auth.model.req.SmsSendReq;
-import interview.system.auth.model.entity.SysUser;
+import interview.system.auth.model.entity.User;
 import interview.system.auth.model.req.VerifyReq;
 import interview.system.auth.service.SmsService;
 import interview.system.auth.service.UsersService;
@@ -57,9 +57,9 @@ public class SmsServiceImpl implements SmsService {
             throw new BusinessException(ErrorCode.CODE_ONE_MINUTE);
         }
 
-        SysUser user = usersService.lambdaQuery()
-                .select(SysUser::getId,SysUser::getPhone)
-                .eq(SysUser::getPhone, phone)
+        User user = usersService.lambdaQuery()
+                .select(User::getId, User::getPhone)
+                .eq(User::getPhone, phone)
                 .one();
 
         // 注册流程：校验手机号是否已被注册

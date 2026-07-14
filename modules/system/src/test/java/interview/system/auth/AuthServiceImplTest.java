@@ -22,9 +22,9 @@ import interview.system.auth.service.impl.AuthServiceImpl;
 import interview.system.auth.service.SmsService;
 import interview.system.auth.service.UsersService;
 import interview.system.rbac.mapper.PermissionsMapper;
-import interview.system.rbac.model.entity.SysRole;
-import interview.system.auth.model.entity.SysUser;
-import interview.system.rbac.model.entity.SysUserRole;
+import interview.system.rbac.model.entity.Role;
+import interview.system.auth.model.entity.User;
+import interview.system.rbac.model.entity.UserRole;
 import interview.system.auth.model.enums.UserStatus;
 import interview.system.rbac.service.*;
 import interview.system.tenant.service.EnterpriseTeamMembersService;
@@ -120,13 +120,13 @@ class AuthServiceImplTest {
             when(jwtProperties.getExpiration()).thenReturn(30L);
             doReturn(true).when(authService).save(any(UserToken.class));
 
-            LambdaQueryChainWrapper<SysUser> q = mockQueryWrapper();
+            LambdaQueryChainWrapper<User> q = mockQueryWrapper();
             when(q.exists()).thenReturn(false);
             when(usersService.lambdaQuery()).thenReturn(q);
             when(customIdGenerator.nextId(any())).thenReturn(userId);
             when(jwttUtil.generatorToken(anyMap(), any())).thenReturn(accessToken);
 
-            LambdaQueryChainWrapper<SysRole> roleCheckQ = mockQueryWrapper();
+            LambdaQueryChainWrapper<Role> roleCheckQ = mockQueryWrapper();
             when(roleCheckQ.exists()).thenReturn(true);
             when(rolesService.lambdaQuery()).thenReturn(roleCheckQ);
 
@@ -138,15 +138,15 @@ class AuthServiceImplTest {
             assertNotNull(result.accessToken());
             assertNotNull(result.refreshToken());
             verify(smsService).verifyCode(phone, "1234", SmsType.REGISTER);
-            verify(usersService).save(any(SysUser.class));
-            verify(userRolesService).save(any(SysUserRole.class));
+            verify(usersService).save(any(User.class));
+            verify(userRolesService).save(any(UserRole.class));
         }
 
         @Test
         void register_fail_usernameDuplicated() {
             doNothing().when(smsService).verifyCode(phone, "1234", SmsType.REGISTER);
 
-            LambdaQueryChainWrapper<SysUser> q = mockQueryWrapper();
+            LambdaQueryChainWrapper<User> q = mockQueryWrapper();
             when(q.exists()).thenReturn(true);
             when(usersService.lambdaQuery()).thenReturn(q);
 
@@ -158,7 +158,7 @@ class AuthServiceImplTest {
         void register_fail_phoneDuplicated() {
             doNothing().when(smsService).verifyCode(phone, "1234", SmsType.REGISTER);
 
-            LambdaQueryChainWrapper<SysUser> q = mockQueryWrapper();
+            LambdaQueryChainWrapper<User> q = mockQueryWrapper();
             when(q.exists()).thenReturn(false, true);
             when(usersService.lambdaQuery()).thenReturn(q);
 
@@ -229,8 +229,8 @@ class AuthServiceImplTest {
         }
 
         private void mockCheckAndGetUser() {
-            LambdaQueryChainWrapper<SysUser> q = mockQueryWrapper();
-            SysUser user = SysUser.builder()
+            LambdaQueryChainWrapper<User> q = mockQueryWrapper();
+            User user = User.builder()
                 .id(userId).username(username).phone(phone).email(email)
                 .passwordHash("$2a$10$hashed").nickname("test")
                 .userType(UserType.CANDIDATE).riskLevel(RiskLevel.NO_RISK)
@@ -241,14 +241,14 @@ class AuthServiceImplTest {
         }
 
         private void mockCheckAndGetUserNotFound() {
-            LambdaQueryChainWrapper<SysUser> q = mockQueryWrapper();
+            LambdaQueryChainWrapper<User> q = mockQueryWrapper();
             when(q.one()).thenReturn(null);
             when(usersService.lambdaQuery()).thenReturn(q);
         }
 
         private void mockCheckAndGetUserFrozen() {
-            LambdaQueryChainWrapper<SysUser> q = mockQueryWrapper();
-            SysUser user = SysUser.builder()
+            LambdaQueryChainWrapper<User> q = mockQueryWrapper();
+            User user = User.builder()
                 .id(userId).username(username)
                 .passwordHash("$2a$10$hashed")
                 .userType(UserType.CANDIDATE)
@@ -319,15 +319,15 @@ class AuthServiceImplTest {
         }
 
         private void mockRbacContext() {
-            SysUserRole userRole = new SysUserRole();
+            UserRole userRole = new UserRole();
             userRole.setRoleId(1);
 
-            LambdaQueryChainWrapper<SysUserRole> urq = mockQueryWrapper();
+            LambdaQueryChainWrapper<UserRole> urq = mockQueryWrapper();
             when(urq.list()).thenReturn(List.of(userRole));
             when(userRolesService.lambdaQuery()).thenReturn(urq);
 
-            LambdaQueryChainWrapper<SysRole> rq = mockQueryWrapper();
-            SysRole role1 = new SysRole();
+            LambdaQueryChainWrapper<Role> rq = mockQueryWrapper();
+            Role role1 = new Role();
             role1.setRoleCode("CANDIDATE");
             role1.setRoleScope(RoleScope.PLATFORM);
             when(rq.list()).thenReturn(List.of(role1));
@@ -363,28 +363,28 @@ class AuthServiceImplTest {
 
             when(tokenQueryWrapper.one()).thenReturn(token);
             doReturn(tokenUpdateWrapper).when(authService).lambdaUpdate();
-            LambdaQueryChainWrapper<SysUser> userCheckQ = mockQueryWrapper();
+            LambdaQueryChainWrapper<User> userCheckQ = mockQueryWrapper();
             when(userCheckQ.exists()).thenReturn(true);
-            LambdaQueryChainWrapper<SysUser> userFreshQ = mockQueryWrapper();
-            when(userFreshQ.one()).thenReturn(SysUser.builder()
+            LambdaQueryChainWrapper<User> userFreshQ = mockQueryWrapper();
+            when(userFreshQ.one()).thenReturn(User.builder()
                 .username(username).userType(UserType.CANDIDATE).riskLevel(RiskLevel.NO_RISK).build());
             when(usersService.lambdaQuery()).thenReturn(userCheckQ, userFreshQ);
             when(tokenUpdateWrapper.update()).thenReturn(true);
             doReturn(true).when(authService).save(any(UserToken.class));
 
-            LambdaQueryChainWrapper<SysUserRole> userRoleQ = mockQueryWrapper();
-            SysUserRole userRole = SysUserRole.builder().roleId(1).build();
+            LambdaQueryChainWrapper<UserRole> userRoleQ = mockQueryWrapper();
+            UserRole userRole = UserRole.builder().roleId(1).build();
             when(userRoleQ.list()).thenReturn(List.of(userRole));
             when(userRolesService.lambdaQuery()).thenReturn(userRoleQ);
 
             LambdaQueryChainWrapper<EnterpriseTeamMember> memberQ = mockQueryWrapper();
             when(enterpriseTeamMembersService.lambdaQuery()).thenReturn(memberQ);
 
-            LambdaQueryChainWrapper<SysRole> roleQ = mockQueryWrapper();
-            SysRole sysRole = new SysRole();
-            sysRole.setRoleCode("ROLE_USER");
-            sysRole.setRoleScope(RoleScope.PLATFORM);
-            when(roleQ.list()).thenReturn(List.of(sysRole));
+            LambdaQueryChainWrapper<Role> roleQ = mockQueryWrapper();
+            Role role = new Role();
+            role.setRoleCode("ROLE_USER");
+            role.setRoleScope(RoleScope.PLATFORM);
+            when(roleQ.list()).thenReturn(List.of(role));
             when(rolesService.lambdaQuery()).thenReturn(roleQ);
 
             when(permissionsMapper.getPermCodeByRoleId(anyList())).thenReturn(List.of());
@@ -419,7 +419,7 @@ class AuthServiceImplTest {
 
             when(tokenQueryWrapper.one()).thenReturn(revokedToken);
             doReturn(tokenUpdateWrapper).when(authService).lambdaUpdate();
-            LambdaQueryChainWrapper<SysUser> userCheckQ = mockQueryWrapper();
+            LambdaQueryChainWrapper<User> userCheckQ = mockQueryWrapper();
             when(userCheckQ.exists()).thenReturn(true);
             when(usersService.lambdaQuery()).thenReturn(userCheckQ);
 
@@ -508,9 +508,9 @@ class AuthServiceImplTest {
 
         @Test
         void revoke_success() {
-            SysUser user = SysUser.builder().phone(phone).build();
+            User user = User.builder().phone(phone).build();
 
-            LambdaQueryChainWrapper<SysUser> q = mockQueryWrapper();
+            LambdaQueryChainWrapper<User> q = mockQueryWrapper();
             when(q.one()).thenReturn(user);
             when(usersService.lambdaQuery()).thenReturn(q);
 
@@ -522,9 +522,9 @@ class AuthServiceImplTest {
 
         @Test
         void revoke_fail_tokenNotFound() {
-            SysUser user = SysUser.builder().phone(phone).build();
+            User user = User.builder().phone(phone).build();
 
-            LambdaQueryChainWrapper<SysUser> q = mockQueryWrapper();
+            LambdaQueryChainWrapper<User> q = mockQueryWrapper();
             when(q.one()).thenReturn(user);
             when(usersService.lambdaQuery()).thenReturn(q);
 
@@ -546,8 +546,8 @@ class AuthServiceImplTest {
 
         @BeforeEach
         void setUp() {
-            Map<Long, List<Role>> entRoleMap = new HashMap<>();
-            entRoleMap.put(targetEnterpriseId, List.of(Role.ENTERPRISE_OWNER));
+            Map<Long, List<interview.common.enums.Role>> entRoleMap = new HashMap<>();
+            entRoleMap.put(targetEnterpriseId, List.of(interview.common.enums.Role.ENTERPRISE_OWNER));
 
             AuthContext.setAuthContext(AuthContext.AuthUser.builder()
                     .userId(userId)
@@ -597,12 +597,12 @@ class AuthServiceImplTest {
 
         @Test
         void getUserInfo_success() {
-            SysUser user = SysUser.builder()
+            User user = User.builder()
                 .username(username).nickname("testuser").phone(phone).email(email)
                 .avatarUrl("http://avatar.url").status(UserStatus.NORMAL)
                 .build();
 
-            LambdaQueryChainWrapper<SysUser> q = mockQueryWrapper();
+            LambdaQueryChainWrapper<User> q = mockQueryWrapper();
             when(q.one()).thenReturn(user);
             when(usersService.lambdaQuery()).thenReturn(q);
 
@@ -616,7 +616,7 @@ class AuthServiceImplTest {
 
         @Test
         void getUserInfo_fail_userNotFound() {
-            LambdaQueryChainWrapper<SysUser> q = mockQueryWrapper();
+            LambdaQueryChainWrapper<User> q = mockQueryWrapper();
             when(q.one()).thenReturn(null);
             when(usersService.lambdaQuery()).thenReturn(q);
 
@@ -626,9 +626,9 @@ class AuthServiceImplTest {
 
         @Test
         void getUserInfo_fail_userFrozen() {
-            SysUser user = SysUser.builder().status(UserStatus.DISABLED).build();
+            User user = User.builder().status(UserStatus.DISABLED).build();
 
-            LambdaQueryChainWrapper<SysUser> q = mockQueryWrapper();
+            LambdaQueryChainWrapper<User> q = mockQueryWrapper();
             when(q.one()).thenReturn(user);
             when(usersService.lambdaQuery()).thenReturn(q);
 

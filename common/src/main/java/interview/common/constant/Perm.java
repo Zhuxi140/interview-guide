@@ -40,4 +40,18 @@ public interface Perm {
         String TOGGLE_STATUS = "job:toggle-status";
         String DELETE = "job:delete";
     }
+
+    interface Resume {
+        String UPLOAD = "resume:upload";
+        String LIST = "resume:list";
+        String DETAIL = "resume:detail";
+        String DELETE = "resume:delete";
+        String ANALYZE = "resume:analyze";
+    }
+
+    interface Application {
+        String LIST = "application:list";
+        String DETAIL = "application:detail";
+        String UPDATE = "application:update";
+    }
 }

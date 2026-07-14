@@ -4,11 +4,11 @@ import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapp
 import com.baomidou.mybatisplus.extension.conditions.update.LambdaUpdateChainWrapper;
 import interview.common.enums.ErrorCode;
 import interview.common.exception.BusinessException;
-import interview.system.auth.model.entity.SysUser;
+import interview.system.auth.model.entity.User;
 import interview.system.auth.service.impl.UsersServiceImpl;
 import interview.system.rbac.mapper.UserRolesMapper;
-import interview.system.rbac.model.entity.SysRole;
-import interview.system.rbac.model.entity.SysUserRole;
+import interview.system.rbac.model.entity.Role;
+import interview.system.rbac.model.entity.UserRole;
 import interview.system.rbac.model.req.AssignUserRolesReq;
 import interview.system.rbac.model.req.RemoveUserRolesReq;
 import interview.system.rbac.model.vo.UserRoleItemVO;
@@ -38,8 +38,8 @@ class UserRolesServiceImplTest {
     @Mock
     private UsersServiceImpl usersService;
     private UserRolesServiceImpl userRolesService;
-    private LambdaQueryChainWrapper<SysUserRole> queryWrapper;
-    private LambdaUpdateChainWrapper<SysUserRole> updateWrapper;
+    private LambdaQueryChainWrapper<UserRole> queryWrapper;
+    private LambdaUpdateChainWrapper<UserRole> updateWrapper;
 
     private final Long userId = 1L;
 
@@ -60,11 +60,11 @@ class UserRolesServiceImplTest {
             req = new AssignUserRolesReq();
             doReturn(queryWrapper).when(userRolesService).lambdaQuery();
 
-            LambdaQueryChainWrapper<SysUser> userCheckQ = mockQueryWrapper();
+            LambdaQueryChainWrapper<User> userCheckQ = mockQueryWrapper();
             when(userCheckQ.exists()).thenReturn(true);
             when(usersService.lambdaQuery()).thenReturn(userCheckQ);
 
-            LambdaQueryChainWrapper<SysRole> roleCheckQ = mockQueryWrapper();
+            LambdaQueryChainWrapper<Role> roleCheckQ = mockQueryWrapper();
             when(roleCheckQ.exists()).thenReturn(true);
             when(rolesService.lambdaQuery()).thenReturn(roleCheckQ);
         }
@@ -87,7 +87,7 @@ class UserRolesServiceImplTest {
             userRolesService.assignUserRoles(userId, req);
 
             verify(userRolesService).saveBatch(argThat(list -> {
-                List<SysUserRole> roles = cast(list);
+                List<UserRole> roles = cast(list);
                 return roles.size() == 3
                         && roles.stream().allMatch(r -> r.getUserId().equals(userId));
             }));
@@ -110,7 +110,7 @@ class UserRolesServiceImplTest {
             userRolesService.assignUserRoles(userId, req);
 
             verify(userRolesService).saveBatch(argThat(list -> {
-                List<SysUserRole> roles = cast(list);
+                List<UserRole> roles = cast(list);
                 return roles.size() == 2;
             }));
         }
@@ -126,8 +126,8 @@ class UserRolesServiceImplTest {
         @Test
         void assignUserRoles_allAlreadyExist_throwException() {
             req.setRoleIds(List.of(1, 2));
-            SysUserRole existing1 = SysUserRole.builder().userId(userId).roleId(1).build();
-            SysUserRole existing2 = SysUserRole.builder().userId(userId).roleId(2).build();
+            UserRole existing1 = UserRole.builder().userId(userId).roleId(1).build();
+            UserRole existing2 = UserRole.builder().userId(userId).roleId(2).build();
             when(queryWrapper.list()).thenReturn(List.of(existing1, existing2));
 
             BusinessException ex = assertThrows(BusinessException.class,
@@ -146,14 +146,14 @@ class UserRolesServiceImplTest {
         @Test
         void assignUserRoles_partialExisting_partialNew() {
             req.setRoleIds(List.of(1, 2, 3));
-            SysUserRole existing1 = SysUserRole.builder().userId(userId).roleId(1).build();
+            UserRole existing1 = UserRole.builder().userId(userId).roleId(1).build();
             when(queryWrapper.list()).thenReturn(List.of(existing1));
             doReturn(true).when(userRolesService).saveBatch(anyList());
 
             userRolesService.assignUserRoles(userId, req);
 
             verify(userRolesService).saveBatch(argThat(list -> {
-                List<SysUserRole> roles = cast(list);
+                List<UserRole> roles = cast(list);
                 return roles.size() == 2
                         && roles.stream().noneMatch(r -> r.getRoleId().equals(1))
                         && roles.stream().allMatch(r -> r.getUserId().equals(userId));
@@ -232,7 +232,7 @@ class UserRolesServiceImplTest {
         @Test
         void removeUserRoles_removesOnlyExistingIds() {
             req.setRoleIds(List.of(1, 2));
-            SysUserRole existing1 = SysUserRole.builder().userId(userId).roleId(1).build();
+            UserRole existing1 = UserRole.builder().userId(userId).roleId(1).build();
             when(queryWrapper.list()).thenReturn(List.of(existing1));
 
             userRolesService.removeUserRoles(userId, req);

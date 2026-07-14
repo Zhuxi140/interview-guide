@@ -1,10 +1,9 @@
 package interview.system.rbac.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import interview.system.rbac.model.entity.SysPermission;
+import interview.system.rbac.model.entity.Permission;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
-import org.apache.ibatis.annotations.Select;
 
 import java.util.List;
 
@@ -17,7 +16,7 @@ import java.util.List;
  */
 
 @Mapper
-public interface PermissionsMapper extends BaseMapper<SysPermission> {
+public interface PermissionsMapper extends BaseMapper<Permission> {
 
     List<String> getPermCodeByRoleId(@Param("roleIds") List<Integer> roleIds);
 

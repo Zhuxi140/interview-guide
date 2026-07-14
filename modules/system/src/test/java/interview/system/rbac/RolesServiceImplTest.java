@@ -3,7 +3,7 @@ package interview.system.rbac;
 import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
 import interview.common.enums.RoleScope;
 import interview.system.rbac.mapper.RolesMapper;
-import interview.system.rbac.model.entity.SysRole;
+import interview.system.rbac.model.entity.Role;
 import interview.system.rbac.model.vo.RoleDetailVO;
 import interview.system.rbac.model.vo.RoleListItemVO;
 import interview.system.rbac.service.impl.RolesServiceImpl;
@@ -28,7 +28,7 @@ class RolesServiceImplTest {
     private RolesMapper rolesMapper;
 
     private RolesServiceImpl rolesService;
-    private LambdaQueryChainWrapper<SysRole> roleQueryWrapper;
+    private LambdaQueryChainWrapper<Role> roleQueryWrapper;
 
     @BeforeEach
     void setUp() {
@@ -52,14 +52,14 @@ class RolesServiceImplTest {
          */
         @Test
         void listRoles_success() {
-            SysRole role1 = new SysRole();
+            Role role1 = new Role();
             role1.setId(1);
             role1.setRoleCode("PLATFORM_ADMIN");
             role1.setRoleName("平台管理员");
             role1.setRoleScope(RoleScope.PLATFORM);
             role1.setCreatedAt(OffsetDateTime.now());
 
-            SysRole role2 = new SysRole();
+            Role role2 = new Role();
             role2.setId(2);
             role2.setRoleCode("HR_MANAGER");
             role2.setRoleName("HR管理员");

@@ -6,10 +6,10 @@ import interview.common.exception.BusinessException;
 import interview.system.auth.service.UsersService;
 import interview.system.rbac.service.RolesService;
 import org.springframework.dao.DataIntegrityViolationException;
-import interview.system.auth.model.entity.SysUser;
+import interview.system.auth.model.entity.User;
 import interview.system.rbac.mapper.UserRolesMapper;
-import interview.system.rbac.model.entity.SysRole;
-import interview.system.rbac.model.entity.SysUserRole;
+import interview.system.rbac.model.entity.Role;
+import interview.system.rbac.model.entity.UserRole;
 import interview.system.rbac.model.req.AssignUserRolesReq;
 import interview.system.rbac.model.req.RemoveUserRolesReq;
 import interview.system.rbac.model.vo.UserRoleItemVO;
@@ -25,7 +25,7 @@ import java.util.List;
  */
 @Service
 @AllArgsConstructor
-public class UserRolesServiceImpl extends ServiceImpl<UserRolesMapper, SysUserRole> implements UserRolesService {
+public class UserRolesServiceImpl extends ServiceImpl<UserRolesMapper, UserRole> implements UserRolesService {
 
     private final UserRolesMapper userRolesMapper;
     private final RolesService rolesService;
@@ -41,16 +41,16 @@ public class UserRolesServiceImpl extends ServiceImpl<UserRolesMapper, SysUserRo
         FKCheck(userId, roleIds);
 
         List<Integer> existing = lambdaQuery()
-                .eq(SysUserRole::getUserId, userId)
-                .select(SysUserRole::getRoleId)
+                .eq(UserRole::getUserId, userId)
+                .select(UserRole::getRoleId)
                 .list()
                 .stream()
-                .map(SysUserRole::getRoleId)
+                .map(UserRole::getRoleId)
                 .toList();
 
-        List<SysUserRole> toInsert = roleIds.stream()
+        List<UserRole> toInsert = roleIds.stream()
                 .filter(rid -> !existing.contains(rid))
-                .map(roleId -> SysUserRole.builder()
+                .map(roleId -> UserRole.builder()
                         .userId(userId)
                         .roleId(roleId)
                         .build())
@@ -78,16 +78,16 @@ public class UserRolesServiceImpl extends ServiceImpl<UserRolesMapper, SysUserRo
         List<Integer> roleIds = req.getRoleIds().stream().distinct().toList();
 
         List<Integer> existing = lambdaQuery()
-                .eq(SysUserRole::getUserId, userId)
-                .select(SysUserRole::getRoleId)
+                .eq(UserRole::getUserId, userId)
+                .select(UserRole::getRoleId)
                 .list()
                 .stream()
-                .map(SysUserRole::getRoleId)
+                .map(UserRole::getRoleId)
                 .toList();
 
         lambdaUpdate()
-                .eq(SysUserRole::getUserId, userId)
-                .in(SysUserRole::getRoleId,
+                .eq(UserRole::getUserId, userId)
+                .in(UserRole::getRoleId,
                         roleIds.stream()
                         .filter(existing::contains)
                         .toList())
@@ -97,12 +97,12 @@ public class UserRolesServiceImpl extends ServiceImpl<UserRolesMapper, SysUserRo
 
     public void FKCheck(Long userId, List<Integer> roleId) {
         if (!usersService.lambdaQuery()
-                        .eq(SysUser::getId, userId)
+                        .eq(User::getId, userId)
                         .exists()) {
             throw new BusinessException(ErrorCode.ACCOUNT_DATA_ANOMALY);
         }
         if (!rolesService.lambdaQuery()
-                    .in(SysRole::getId, roleId)
+                    .in(Role::getId, roleId)
                     .exists()) {
             throw new BusinessException(ErrorCode.ACCOUNT_DATA_ANOMALY);
         }

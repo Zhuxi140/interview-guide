@@ -1,7 +1,7 @@
 package interview.system.auth.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
-import interview.system.auth.model.entity.SysUser;
+import interview.system.auth.model.entity.User;
 
 /**
  * <p>
@@ -10,6 +10,6 @@ import interview.system.auth.model.entity.SysUser;
  *
  * @author zhuxi
  */
-public interface UsersService extends IService<SysUser> {
+public interface UsersService extends IService<User> {
 
 }

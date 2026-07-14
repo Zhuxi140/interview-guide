@@ -5,7 +5,7 @@ import interview.common.enums.ErrorCode;
 import interview.common.exception.BusinessException;
 import interview.common.enums.SmsType;
 import interview.system.auth.model.req.SmsSendReq;
-import interview.system.auth.model.entity.SysUser;
+import interview.system.auth.model.entity.User;
 import interview.system.auth.service.impl.SmsServiceImpl;
 import interview.system.auth.service.UsersService;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,7 +51,7 @@ class SmsServiceImplTest {
 
         @Test
         void sendSms_success() {
-            LambdaQueryChainWrapper<SysUser> q = mockQueryWrapper();
+            LambdaQueryChainWrapper<User> q = mockQueryWrapper();
 
             when(stringRedisTemplate.hasKey(anyString())).thenReturn(false);
             when(stringRedisTemplate.opsForValue()).thenReturn(valueOps);
@@ -72,8 +72,8 @@ class SmsServiceImplTest {
 
         @Test
         void sendSms_fail_phoneAlreadyRegistered() {
-            LambdaQueryChainWrapper<SysUser> q = mockQueryWrapper();
-            when(q.one()).thenReturn(SysUser.builder().build());
+            LambdaQueryChainWrapper<User> q = mockQueryWrapper();
+            when(q.one()).thenReturn(User.builder().build());
 
             when(stringRedisTemplate.hasKey(anyString())).thenReturn(false);
             when(usersService.lambdaQuery()).thenReturn(q);

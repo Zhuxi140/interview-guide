@@ -1,7 +1,7 @@
 package interview.system.rbac.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
-import interview.system.rbac.model.entity.SysUserRole;
+import interview.system.rbac.model.entity.UserRole;
 import interview.system.rbac.model.req.AssignUserRolesReq;
 import interview.system.rbac.model.req.RemoveUserRolesReq;
 import interview.system.rbac.model.vo.UserRoleItemVO;
@@ -13,7 +13,7 @@ import java.util.List;
  * @apiNote 用户角色服务
  */
 
-public interface UserRolesService extends IService<SysUserRole> {
+public interface UserRolesService extends IService<UserRole> {
 
     /**
      * 分配用户角色

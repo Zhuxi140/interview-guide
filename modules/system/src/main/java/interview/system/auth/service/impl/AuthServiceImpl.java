@@ -29,9 +29,9 @@ import interview.system.auth.service.AuthService;
 import interview.system.auth.service.SmsService;
 import interview.system.auth.service.UsersService;
 import interview.system.rbac.mapper.PermissionsMapper;
-import interview.system.rbac.model.entity.SysRole;
-import interview.system.auth.model.entity.SysUser;
-import interview.system.rbac.model.entity.SysUserRole;
+import interview.system.rbac.model.entity.Role;
+import interview.system.auth.model.entity.User;
+import interview.system.rbac.model.entity.UserRole;
 import interview.system.auth.model.enums.UserStatus;
 import interview.system.rbac.service.*;
 import interview.system.tenant.service.EnterpriseTeamMembersService;
@@ -84,24 +84,24 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
         checkUnique( register);
 
         // 构建用户
-        Long number = (Long)customIdGenerator.nextId(SysUser.class);
-        SysUser user = buildUser(register, number);
+        Long number = (Long)customIdGenerator.nextId(User.class);
+        User user = buildUser(register, number);
         usersService.save(user);
 
         // FK检查
-        Integer code = Role.CANDIDATE.getCode();
+        Integer code = interview.common.enums.Role.CANDIDATE.getCode();
         if (!rolesService.lambdaQuery()
-                .eq(SysRole::getId, code)
+                .eq(Role::getId, code)
                 .exists()) {
-            log.error("外键拦截: 角色:[{}]在Role表内已不存在",Role.CANDIDATE);
+            log.error("外键拦截: 角色:[{}]在Role表内已不存在", interview.common.enums.Role.CANDIDATE);
             throw new BusinessException(ErrorCode.SYSTEM_ERROR);
         }
 
         // 构建角色(默认求职者)
-        SysUserRole sysUserRole = new SysUserRole();
-        sysUserRole.setUserId(user.getId());
-        sysUserRole.setRoleId(code);
-        userRolesService.save(sysUserRole);
+        UserRole userRole = new UserRole();
+        userRole.setUserId(user.getId());
+        userRole.setRoleId(code);
+        userRolesService.save(userRole);
 
 
         // 构建Token
@@ -117,7 +117,7 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
     public LoginBO login(LoginReq login) {
 
         // 验证用户名、状态、密码
-        SysUser user = checkAndGetUser(login);
+        User user = checkAndGetUser(login);
 
         Long userId = user.getId();
         // 构建Token 并 去除本设备的旧Token
@@ -186,7 +186,7 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
 
         //FK检查
         if (!usersService.lambdaQuery()
-                .eq(SysUser::getId,userId)
+                .eq(User::getId,userId)
                 .exists()) {
             log.error("外键拦截: 外键UserId：[{}]在User表已不存在",userId);
             throw new BusinessException(ErrorCode.SYSTEM_ERROR);
@@ -234,13 +234,13 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
         }
 
         // 加载企业信息、用户信息 和 角色权限信息
-        SysUser user = usersService.lambdaQuery()
+        User user = usersService.lambdaQuery()
                 .select(
-                        SysUser::getUsername,
-                        SysUser::getUserType,
-                        SysUser::getRiskLevel
+                        User::getUsername,
+                        User::getUserType,
+                        User::getRiskLevel
                 )
-                .eq(SysUser::getId, userId)
+                .eq(User::getId, userId)
                 .one();
         EnterpriseContext enterpriseContext = loadEnterpriseContext(userId);
         RbacContext rbacContext = loadRbacContext(userId, enterpriseContext.enterpriseId);
@@ -274,7 +274,7 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
     public SwitchEnterpriseVO switchEnterprise(Long enterpriseId, String accessToken) {
         AuthContext.AuthUser authUser = AuthContext.getRequiredAuthContext();
         Long userId = authUser.userId();
-        Map<Long, List<Role>> entRoleMap = authUser.entRoleMap();
+        Map<Long, List<interview.common.enums.Role>> entRoleMap = authUser.entRoleMap();
 
         if (entRoleMap == null || !entRoleMap.containsKey(enterpriseId)) {
             throw new BusinessException(ErrorCode.ENTERPRISE_NOT_BELONG);
@@ -298,9 +298,9 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
 
         // 将 entRoleMap 中的 Role 枚举转为 name 字符串（保持一致于登录时的 claims 格式）
         Map<Long, List<String>> entRoleMapStr = new HashMap<>();
-        for (Map.Entry<Long, List<Role>> entry : entRoleMap.entrySet()) {
+        for (Map.Entry<Long, List<interview.common.enums.Role>> entry : entRoleMap.entrySet()) {
             entRoleMapStr.put(entry.getKey(),
-                    entry.getValue().stream().map(Role::name).toList());
+                    entry.getValue().stream().map(interview.common.enums.Role::name).toList());
         }
 
         Map<String, Object> claims = new HashMap<>();
@@ -309,7 +309,7 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
         claims.put("userType", authUser.userType().name());
         claims.put("riskLevel", authUser.riskLevel().getCode());
         claims.put("platformRoleCodes", authUser.platformRoleCodes().stream()
-                .map(Role::name)
+                .map(interview.common.enums.Role::name)
                 .toList());
         claims.put("entRoleMap", entRoleMapStr);
         claims.put("enterpriseId", enterpriseId);
@@ -385,9 +385,9 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
 
         Long userId = AuthContext.getRequiredUserId();
 
-        SysUser user = usersService.lambdaQuery()
-                .select(SysUser::getPhone)
-                .eq(SysUser::getId, userId)
+        User user = usersService.lambdaQuery()
+                .select(User::getPhone)
+                .eq(User::getId, userId)
                 .one();
         if (user == null){
             log.error("｛revoke｝——token有效，但数据库无此实体，userId：[{}]", userId);
@@ -414,16 +414,16 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
     public UserInfoBO getUserInfo() {
 
         Long userId = AuthContext.getRequiredUserId();
-        SysUser user = usersService.lambdaQuery()
+        User user = usersService.lambdaQuery()
                 .select(
-                    SysUser::getUsername,
-                    SysUser::getNickname,
-                    SysUser::getPhone,
-                    SysUser::getEmail,
-                    SysUser::getAvatarUrl,
-                    SysUser::getStatus
+                    User::getUsername,
+                    User::getNickname,
+                    User::getPhone,
+                    User::getEmail,
+                    User::getAvatarUrl,
+                    User::getStatus
                 )
-                .eq(SysUser::getId, userId)
+                .eq(User::getId, userId)
                 .one();
 
         if (user == null){
@@ -452,7 +452,7 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
     private void checkUnique(RegisterReq register){
         //查库确认用户名是否存在
         boolean isExists = usersService.lambdaQuery()
-                .eq(SysUser::getUsername, register.getUsername())
+                .eq(User::getUsername, register.getUsername())
                 .exists();
 
         if (isExists) {
@@ -461,7 +461,7 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
 
         //效验手机号是否已存在
         isExists = usersService.lambdaQuery()
-                .eq(SysUser::getPhone, register.getPhone())
+                .eq(User::getPhone, register.getPhone())
                 .exists();
         if (isExists) {
             throw new BusinessException(ErrorCode.PHONE_ALREADY_EXISTS);
@@ -470,7 +470,7 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
         //验邮箱是否存在
         if (StrUtil.isNotBlank(register.getEmail())) {
             isExists = usersService.lambdaQuery()
-                    .eq(SysUser::getEmail, register.getEmail())
+                    .eq(User::getEmail, register.getEmail())
                     .exists();
             if (isExists) {
                 throw new BusinessException(ErrorCode.EMAIL_ALREADY_EXISTS);
@@ -478,8 +478,8 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
         }
     }
 
-    private SysUser buildUser(RegisterReq register,Long number){
-        return SysUser.builder()
+    private User buildUser(RegisterReq register, Long number){
+        return User.builder()
                 .id(number)
                 .username(register.getUsername())
                 .email(register.getEmail())
@@ -502,7 +502,7 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
                 .build();
     }
 
-    private RegisterBo buildRegisterBo(String raw,SysUser user,Long number){
+    private RegisterBo buildRegisterBo(String raw, User user, Long number){
         // 生成JWT令牌
         Map<String, Object> claims = new HashMap<>();
         claims.put("userId", number);
@@ -522,20 +522,20 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
                 .build();
     }
 
-    private SysUser checkAndGetUser(LoginReq login){
-        SysUser user = usersService.lambdaQuery()
+    private User checkAndGetUser(LoginReq login){
+        User user = usersService.lambdaQuery()
                 .select(
-                        SysUser::getId,
-                        SysUser::getUsername,
-                        SysUser::getPhone,
-                        SysUser::getEmail,
-                        SysUser::getPasswordHash,
-                        SysUser::getNickname,
-                        SysUser::getUserType,
-                        SysUser::getRiskLevel,
-                        SysUser::getStatus
+                        User::getId,
+                        User::getUsername,
+                        User::getPhone,
+                        User::getEmail,
+                        User::getPasswordHash,
+                        User::getNickname,
+                        User::getUserType,
+                        User::getRiskLevel,
+                        User::getStatus
                 )
-                .eq(SysUser::getUsername, login.getUsername())
+                .eq(User::getUsername, login.getUsername())
                 .one();
 
         if (user == null){
@@ -622,22 +622,22 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
     private RbacContext loadRbacContext(Long userId,Long enterpriseId) {
         // 平台角色 — sys_user_roles
         List<Integer> platformRoleIds = userRolesService.lambdaQuery()
-                .select(SysUserRole::getRoleId)
-                .eq(SysUserRole::getUserId, userId)
+                .select(UserRole::getRoleId)
+                .eq(UserRole::getUserId, userId)
                 .list()
                 .stream()
-                .map(SysUserRole::getRoleId)
+                .map(UserRole::getRoleId)
                 .distinct()
                 .toList();
 
         List<String> platformRoleCodes = platformRoleIds.isEmpty()
                 ? List.of()
                 : rolesService.lambdaQuery()
-                    .select(SysRole::getRoleCode)
-                    .in(SysRole::getId, platformRoleIds)
+                    .select(Role::getRoleCode)
+                    .in(Role::getId, platformRoleIds)
                     .list()
                     .stream()
-                    .map(SysRole::getRoleCode)
+                    .map(Role::getRoleCode)
                     .toList();
 
         // 企业角色 — enterprise_team_members（全企业）
@@ -659,11 +659,11 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
                     .toList();
 
             Map<Integer, String> roleCodeMap = rolesService.lambdaQuery()
-                    .select(SysRole::getId, SysRole::getRoleCode)
-                    .in(SysRole::getId, allEnterpriseRoleIds)
+                    .select(Role::getId, Role::getRoleCode)
+                    .in(Role::getId, allEnterpriseRoleIds)
                     .list()
                     .stream()
-                    .collect(Collectors.toMap(SysRole::getId, SysRole::getRoleCode));
+                    .collect(Collectors.toMap(Role::getId, Role::getRoleCode));
 
             for (Map.Entry<Long, List<Integer>> entry : entRoleIdsMap.entrySet()) {
                 Long entId = entry.getKey();

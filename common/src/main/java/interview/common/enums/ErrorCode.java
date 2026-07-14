@@ -99,6 +99,7 @@ public enum ErrorCode {
     JOB_APPLICATION_STATUS_INVALID(40011, "投递记录状态不合法"),
     RESUME_ANALYSIS_NOT_FOUND(40012, "简历分析结果不存在"),
     CANDIDATE_PROFILE_NOT_FOUND(40013, "候选人画像不存在"),
+    APPLICATION_NOT_FOUND(40014, "投递记录不存在"),
 
     // ------------ 50xxx 文本/面试流程错误码 ------------
     INTERVIEW_SCHEDULE_NOT_FOUND(50001, "面试排期不存在"),

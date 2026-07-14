@@ -15,7 +15,7 @@
     <dependencies>
         <dependency>
             <groupId>interview.guide</groupId>
-            <artifactId>ai-core</artifactId>
+            <artifactId>aicore</artifactId>
             <version>${project.version}</version>
         </dependency>
     </dependencies>
