@@ -5,10 +5,10 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableLogic;
+import interview.resume.model.enums.AnalyzeStatus;
 import lombok.*;
-
 import java.io.Serializable;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 /**
  * <p>
@@ -71,15 +71,13 @@ public class Resumes implements Serializable {
      */
     private String resumeText;
 
-    /**
-     * PENDING / PROCESSING / COMPLETED / FAILED
-     */
-    private String analyzeStatus;
+    private AnalyzeStatus analyzeStatus;
 
     /**
      * 上传时间
      */
-    private LocalDateTime uploadedAt;
+    @TableField(fill = FieldFill.INSERT_UPDATE)
+    private OffsetDateTime createdAt;
 
     /**
      * 逻辑删除
@@ -103,5 +101,5 @@ public class Resumes implements Serializable {
      * 最后更新时间
      */
     @TableField(fill = FieldFill.INSERT_UPDATE)
-    private LocalDateTime updatedAt;
+    private OffsetDateTime updatedAt;
 }

@@ -199,6 +199,8 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
             boolean updated = lambdaUpdate()
                     .eq(UserToken::getUserId, userId)
                     .set(UserToken::getIsRevoked, true)
+                    .set(UserToken::getTraceId, null)
+                    // TODO: traceId完善后，要传入
                     .update();
 
             if (!updated) {
@@ -345,6 +347,8 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
                     .eq(UserToken::getRefreshTokenHash, hashToken)
                     .eq(UserToken::getUserId,AuthContext.getRequiredUserId())
                     .set(UserToken::getIsRevoked, true)
+                    .set(UserToken::getTraceId, null)
+                    // TODO: traceId完善后，要传入
                     .update();
 
         if (!updated) {
@@ -400,6 +404,8 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
                 .eq(UserToken::getId, tokenId)
                 .eq(UserToken::getUserId, userId)
                 .set(UserToken::getIsRevoked, true)
+                .set(UserToken::getTraceId, null)
+                // TODO: traceId完善后，要传入
                 .update();
 
         if (!update){
@@ -567,6 +573,8 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
                     .eq(UserToken::getDeviceInfo, deviceInfo)
                     .eq(UserToken::getIsRevoked,false)
                     .set(UserToken::getIsRevoked, true)
+                    .set(UserToken::getTraceId, null)
+                    // TODO: traceId完善后，要传入
                     .update();
 
             save(userToken);

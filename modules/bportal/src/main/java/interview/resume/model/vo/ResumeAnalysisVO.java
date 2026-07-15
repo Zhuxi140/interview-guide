@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Builder;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 
 /**
  * @author zhuxi
@@ -11,14 +12,26 @@ import java.time.OffsetDateTime;
  */
 @Builder
 public record ResumeAnalysisVO(
-        Long id,
-        Long resumeId,
         Integer overallScore,
         String strengthsJson,
         String suggestionsJson,
         @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
         OffsetDateTime analyzedAt,
-        @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-        OffsetDateTime createdAt
+        List<SkillScoreItem> skillScores,
+        List<CandidateProfileItem> candidateProfile
 ) {
+
+    @Builder
+    public record SkillScoreItem(
+            String dimensionCode,
+            Integer score,
+            String aiJustification
+    ) {}
+
+    @Builder
+    public record CandidateProfileItem(
+            String dimensionCode,
+            Integer avgScore,
+            String latestJustification
+    ) {}
 }

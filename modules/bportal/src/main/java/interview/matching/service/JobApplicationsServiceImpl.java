@@ -25,6 +25,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -162,10 +163,13 @@ public class JobApplicationsServiceImpl extends ServiceImpl<JobApplicationsMappe
         }
 
         // ③ 构造条件更新：id + enterpriseId + isDeleted=false，set status + updatedBy + updatedAt
+        Long userId = AuthContext.getRequiredUserId();
         lambdaUpdate()
                 .eq(JobApplications::getEnterpriseId, enterpriseId)
                 .eq(JobApplications::getId, applicationId)
                 .set(JobApplications::getStatus, req.getStatus())
+                .set(JobApplications::getUpdatedBy,userId)
+                .set(JobApplications::getUpdatedAt, OffsetDateTime.now())
                 .update();
     }
 

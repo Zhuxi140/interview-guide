@@ -29,6 +29,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -244,13 +245,13 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
             throw new BusinessException(ErrorCode.PHONE_MISMATCH);
         }
 
-        boolean updated = lambdaUpdate()
-                .eq(Enterprise::getId,enterpriseId)
-                .set(contactPhone != null,Enterprise::getContactPhone,contactPhone)
-                .set(contactEmail != null,Enterprise::getContactEmail, req.getContactEmail())
-                .update();
+        Enterprise entity = new Enterprise();
+        entity.setId(enterpriseId);
+        if (contactPhone != null) entity.setContactPhone(contactPhone);
+        if (contactEmail != null) entity.setContactEmail(req.getContactEmail());
+        // MetaObjectHandler auto-fills updatedAt, traceId
 
-        if (!updated) {
+        if (baseMapper.updateById(entity) == 0) {
             log.error("更新企业联系方式未影响任何记录: enterpriseId [{}]", enterpriseId);
             throw new BusinessException(ErrorCode.ENTERPRISE_DATA_ANOMALY);
         }
@@ -285,9 +286,13 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
 
 
         //逻辑删除 enterprises（is_deleted = true）
+        Long deleteUserId = AuthContext.getRequiredUserId();
         boolean updated = lambdaUpdate()
                 .eq(Enterprise::getId, enterpriseId)
                 .set(Enterprise::getIsDeleted, true)
+                .set(Enterprise::getUpdatedAt, OffsetDateTime.now())
+                .set(Enterprise::getTraceId, null)
+                // TODO: traceId完善后，要传入
                 .update();
 
         if (!updated) {
@@ -298,6 +303,10 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
         enterpriseTeamMembersService.lambdaUpdate()
                 .eq(EnterpriseTeamMember::getEnterpriseId, enterpriseId)
                 .set(EnterpriseTeamMember::getIsDeleted, true)
+                .set(EnterpriseTeamMember::getUpdatedBy, deleteUserId)
+                .set(EnterpriseTeamMember::getUpdatedAt, OffsetDateTime.now())
+                .set(EnterpriseTeamMember::getTraceId, null)
+                // TODO: traceId完善后，要传入
                 .update();
 
         // TODO: Phase 8 扩展：需校验 sys_enterprise_cert 已通过认证

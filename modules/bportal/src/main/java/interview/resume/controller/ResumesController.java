@@ -8,7 +8,7 @@ import interview.common.enums.PermissionScope;
 import interview.common.enums.RiskLevel;
 import interview.framework.annonate.MaxRiskLevel;
 import interview.framework.annonate.RequirePermission;
-import interview.resume.model.req.ResumeListQuery;
+import interview.resume.model.enums.AnalyzeStatus;
 import interview.resume.model.req.ResumeUploadReq;
 import interview.resume.model.vo.ResumeAnalysisVO;
 import interview.resume.model.vo.ResumeListItemVO;
@@ -16,7 +16,7 @@ import interview.resume.model.vo.ResumeVO;
 import interview.resume.service.ResumesService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -45,9 +45,12 @@ public class ResumesController {
     @Operation(summary = "查询简历列表（分页）")
     @GetMapping
     public Result<IPage<ResumeListItemVO>> listResumes(@PathVariable("enterpriseId") Long enterpriseId,
-                                                        @Valid ResumeListQuery query) {
-        IPage<ResumeListItemVO> page = resumesService.pageResumes(enterpriseId, query);
-        return Result.success(page);
+                                                        @RequestParam(defaultValue = "1") @Min(1) Integer page,
+                                                        @RequestParam(defaultValue = "20") @Min(1) Integer size,
+                                                        @RequestParam(required = false) String fileName,
+                                                        @RequestParam(required = false) AnalyzeStatus analyzeStatus) {
+        IPage<ResumeListItemVO> result = resumesService.pageResumes(enterpriseId, page, size, fileName, analyzeStatus);
+        return Result.success(result);
     }
 
     @RequirePermission(permissions = Perm.Resume.DETAIL, scope = PermissionScope.ENTERPRISE)

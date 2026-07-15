@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS resumes (
     storage_url     TEXT,
     resume_text     TEXT,
     analyze_status  VARCHAR(20),
-    uploaded_at     TIMESTAMPTZ     NOT NULL,
+    created_at     TIMESTAMPTZ     NOT NULL,
     is_deleted      BOOLEAN         DEFAULT FALSE,
     updated_by      BIGINT,
     trace_id        VARCHAR(128),
@@ -38,7 +38,7 @@ COMMENT ON COLUMN resumes.file_hash IS 'SHA-256 文件哈希';
 COMMENT ON COLUMN resumes.storage_url IS 'RustFS / OSS 存储 URL';
 COMMENT ON COLUMN resumes.resume_text IS '解析后的简历纯文本';
 COMMENT ON COLUMN resumes.analyze_status IS 'PENDING / PROCESSING / COMPLETED / FAILED';
-COMMENT ON COLUMN resumes.uploaded_at IS '上传时间';
+COMMENT ON COLUMN resumes.created_at IS '上传时间';
 COMMENT ON COLUMN resumes.is_deleted IS '逻辑删除';
 COMMENT ON COLUMN resumes.updated_by IS '[逻辑外键]→sys_users';
 COMMENT ON COLUMN resumes.trace_id IS '触发解析的调用链 ID';

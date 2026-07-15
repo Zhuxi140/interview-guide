@@ -24,6 +24,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -172,10 +173,15 @@ public class EnterpriseTeamMembersServiceImpl extends ServiceImpl<EnterpriseTeam
         //       校验 req.roleId 是否为 ENTERPRISE 域角色
         verifyRoleId(req.getRoleId());
         //       UPDATE enterprise_team_members SET role_id = req.roleId
+        Long userId = AuthContext.getRequiredUserId();
         boolean updated = lambdaUpdate()
                 .eq(EnterpriseTeamMember::getEnterpriseId, enterpriseId)
                 .eq(EnterpriseTeamMember::getId, memberId)
                 .set(EnterpriseTeamMember::getRoleId, req.getRoleId())
+                .set(EnterpriseTeamMember::getUpdatedBy, userId)
+                .set(EnterpriseTeamMember::getUpdatedAt, OffsetDateTime.now())
+                .set(EnterpriseTeamMember::getTraceId, null)
+                // TODO: traceId完善后，要传入
                 .update();
 
         if (!updated) {
@@ -216,10 +222,15 @@ public class EnterpriseTeamMembersServiceImpl extends ServiceImpl<EnterpriseTeam
             throw new BusinessException(ErrorCode.NO_DELETE_OWNER);
         }
         //       逻辑删除 enterprise_team_members（is_deleted = true）
+        Long deleteUserId = AuthContext.getRequiredUserId();
         boolean deleted = lambdaUpdate()
                 .eq(EnterpriseTeamMember::getEnterpriseId, enterpriseId)
                 .eq(EnterpriseTeamMember::getId, memberId)
                 .set(EnterpriseTeamMember::getIsDeleted,true)
+                .set(EnterpriseTeamMember::getUpdatedBy, deleteUserId)
+                .set(EnterpriseTeamMember::getUpdatedAt, OffsetDateTime.now())
+                .set(EnterpriseTeamMember::getTraceId, null)
+                // TODO: traceId完善后，要传入
                 .update();
 
         if (!deleted) {

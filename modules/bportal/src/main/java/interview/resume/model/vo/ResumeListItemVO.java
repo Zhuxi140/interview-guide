@@ -1,6 +1,7 @@
 package interview.resume.model.vo;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import interview.resume.model.enums.AnalyzeStatus;
 import lombok.Builder;
 
 import java.time.OffsetDateTime;
@@ -15,8 +16,8 @@ public record ResumeListItemVO(
         String fileName,
         String fileType,
         Long fileSize,
-        String analyzeStatus,
+        AnalyzeStatus analyzeStatus,
         @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-        OffsetDateTime uploadedAt
+        OffsetDateTime createdAt
 ) {
 }

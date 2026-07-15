@@ -10,6 +10,7 @@ import lombok.*;
 
 import java.io.Serializable;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 /**
  * <p>
@@ -62,7 +63,7 @@ public class ResumeAnalyses implements Serializable {
     /**
      * 评测时间
      */
-    private LocalDateTime analyzedAt;
+    private OffsetDateTime analyzedAt;
 
     /**
      * 逻辑删除
@@ -80,5 +81,5 @@ public class ResumeAnalyses implements Serializable {
      * 创建时间
      */
     @TableField(fill = FieldFill.INSERT)
-    private LocalDateTime createdAt;
+    private OffsetDateTime createdAt;
 }

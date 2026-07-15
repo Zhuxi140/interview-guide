@@ -3,7 +3,7 @@ package interview.resume.service;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.IService;
 import interview.resume.model.entity.Resumes;
-import interview.resume.model.req.ResumeListQuery;
+import interview.resume.model.enums.AnalyzeStatus;
 import interview.resume.model.req.ResumeUploadReq;
 import interview.resume.model.vo.ResumeAnalysisVO;
 import interview.resume.model.vo.ResumeListItemVO;
@@ -14,7 +14,7 @@ public interface ResumesService extends IService<Resumes> {
 
     ResumeVO uploadResume(Long enterpriseId, MultipartFile file, ResumeUploadReq metadata);
 
-    IPage<ResumeListItemVO> pageResumes(Long enterpriseId, ResumeListQuery query);
+    IPage<ResumeListItemVO> pageResumes(Long enterpriseId, Integer page, Integer size, String fileName, AnalyzeStatus analyzeStatus);
 
     ResumeVO getResumeDetail(Long enterpriseId, Long resumeId);
 
