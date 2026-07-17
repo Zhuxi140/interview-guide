@@ -13,6 +13,13 @@
     <name>bootstrap</name>
 
     <dependencies>
+        <!-- test -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
         <!-- platform base -->
         <dependency>
             <groupId>interview.guide</groupId>
@@ -24,6 +31,7 @@
             <artifactId>api</artifactId>
             <version>${project.version}</version>
         </dependency>
+
         <dependency>
             <groupId>interview.guide</groupId>
             <artifactId>framework</artifactId>
@@ -34,6 +42,11 @@
         <dependency>
             <groupId>interview.guide</groupId>
             <artifactId>bportal</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>interview.guide</groupId>
+            <artifactId>aicore</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>

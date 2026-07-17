@@ -26,8 +26,11 @@ public enum ErrorCode {
     TRACE_ID_MISSING(10005, "调用链 ID 缺失"),
     ENCRYPTION_ERROR(10006, "加密失败"),
     DECRYPTION_ERROR(10007, "解密失败"),
-    FILE_UPLOAD_FAILED(10008, "文件上传失败"),
+    FILE_UPLOAD_FAILED(10008, "文件上传失败,请稍后重试或联系客服"),
     FILE_DOWNLOAD_FAILED(10009, "文件下载失败"),
+    FILE_READ_FAILED(10010,"文件读取失败"),
+    INVALID_FILENAME(10011,"文件名为空或不规范"),
+    FILE_DELETE_FAILED(10012,"文件删除失败"),
 
     // ------------ 20xxx 用户认证与授权错误码 ------------
     USER_NOT_LOGIN(401, "未登录"),

@@ -3,8 +3,10 @@ package interview.system.tenant.model.entity;
 import com.baomidou.mybatisplus.annotation.*;
 import interview.framework.security.mybatis.AesTypeHandler;
 import interview.system.tenant.model.enums.EnterpriseStatus;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.io.Serializable;
 import java.time.OffsetDateTime;
@@ -15,8 +17,10 @@ import java.time.OffsetDateTime;
  */
 
 @Data
-@TableName(value = "enterprises",autoResultMap = true)
+@NoArgsConstructor
+@AllArgsConstructor
 @Builder
+@TableName(value = "enterprises",autoResultMap = true)
 public class Enterprise implements Serializable {
 
     @TableId(type = IdType.INPUT, value = "id")
