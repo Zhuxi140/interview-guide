@@ -24,6 +24,8 @@ import java.time.OffsetDateTime;
 
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 @TableName("resume_analyses")
 public class ResumeAnalyses implements Serializable {
 
@@ -34,11 +36,6 @@ public class ResumeAnalyses implements Serializable {
      */
     @TableId(value = "id", type = IdType.ASSIGN_ID)
     private Long id;
-
-    /**
-     * [逻辑外键]→enterprises
-     */
-    private Long enterpriseId;
 
     /**
      * [逻辑外键]→resumes

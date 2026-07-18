@@ -11,6 +11,7 @@ import lombok.*;
 
 import java.io.Serializable;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 /**
  * <p>
@@ -23,6 +24,8 @@ import java.time.LocalDateTime;
 
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 @TableName("job_applications")
 public class JobApplications implements Serializable {
 
@@ -68,7 +71,7 @@ public class JobApplications implements Serializable {
      * 投递时间
      */
     @TableField(fill = FieldFill.INSERT)
-    private LocalDateTime createdAt;
+    private OffsetDateTime createdAt;
 
     /**
      * 逻辑删除标识
@@ -92,5 +95,5 @@ public class JobApplications implements Serializable {
      * 状态更新时间
      */
     @TableField(fill = FieldFill.INSERT_UPDATE)
-    private LocalDateTime updatedAt;
+    private OffsetDateTime updatedAt;
 }

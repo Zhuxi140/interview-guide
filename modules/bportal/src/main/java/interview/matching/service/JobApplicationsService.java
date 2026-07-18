@@ -7,6 +7,7 @@ import interview.matching.model.enums.JobApplicationStatus;
 import interview.matching.model.req.JobApplicationStatusReq;
 import interview.matching.model.req.JobApplicationSubmitReq;
 import interview.matching.model.vo.JobApplicationListItemVO;
+import interview.matching.model.vo.JobApplicationSubmitVO;
 import interview.matching.model.vo.JobApplicationVO;
 import interview.matching.model.vo.MyApplicationListItemVO;
 
@@ -21,7 +22,7 @@ public interface JobApplicationsService extends IService<JobApplications> {
      * @param req   投递请求（含 resumeId）
      * @return 投递记录详情
      */
-    JobApplicationVO submitApplication(Long jobId, JobApplicationSubmitReq req);
+    JobApplicationSubmitVO submitApplication(Long jobId, JobApplicationSubmitReq req);
 
     /**
      * @param enterpriseId 企业 ID

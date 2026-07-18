@@ -40,7 +40,7 @@ COMMENT ON COLUMN sys_users.password_hash IS 'BCrypt 加密后的密码摘要';
 COMMENT ON COLUMN sys_users.nickname IS '用户昵称';
 COMMENT ON COLUMN sys_users.avatar_url IS '头像存储路径 / RustFS 存储 URL';
 COMMENT ON COLUMN sys_users.phone IS '手机号（脱敏存储）';
-COMMENT ON COLUMN sys_users.user_type IS '用户类型 (PLATFORM_ADMIN / HR / CANDIDATE)';
+COMMENT ON COLUMN sys_users.user_type IS '用户类型 (PLATFORM_ADMIN / PLATFORM_OPS / HR / CANDIDATE)';
 COMMENT ON COLUMN sys_users.risk_level IS '风控等级 (0: 无风险, 1: 低风险, 2: 中风险, 3: 高风险)';
 COMMENT ON COLUMN sys_users.status IS '账号全局状态 (1: 正常, 0: 禁用)';
 COMMENT ON COLUMN sys_users.is_deleted IS '逻辑删除标识';
@@ -296,7 +296,8 @@ DELETE FROM sys_roles WHERE id BETWEEN 1001 AND 3001;
 -- PLATFORM 域（平台运营端 Admin）
 INSERT INTO sys_roles (id, role_code, role_name, role_scope, created_at) VALUES
 (1001, 'SUPER_ADMIN',       '超级管理员',   'PLATFORM',   NOW()),
-(1002, 'FINANCE_ADMIN',     '财务管理员',   'PLATFORM',   NOW());
+(1002, 'FINANCE_ADMIN',     '财务管理员',   'PLATFORM',   NOW()),
+(1003, 'PLATFORM_OPS',      '平台运维',     'PLATFORM',   NOW());
 
 -- ENTERPRISE 域（B 端企业，通过 enterprise_team_members.role_id 分配）
 INSERT INTO sys_roles (id, role_code, role_name, role_scope, created_at) VALUES

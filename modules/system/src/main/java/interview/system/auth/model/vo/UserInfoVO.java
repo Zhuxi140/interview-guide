@@ -33,7 +33,7 @@ public record UserInfoVO (
     @Desensitize(type = DesensitizeType.PHONE)
     String phone,
 
-    @Schema(description = "用户类型：HR / CANDIDATE / PLATFORM_ADMIN")
+    @Schema(description = "用户类型：HR / CANDIDATE / PLATFORM_ADMIN / PLATFORM_OPS")
     String userType,
 
     @Schema(description = "状态：1-正常 0-禁用")

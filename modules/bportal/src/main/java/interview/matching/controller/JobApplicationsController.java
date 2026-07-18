@@ -12,6 +12,7 @@ import interview.matching.model.enums.JobApplicationStatus;
 import interview.matching.model.req.JobApplicationStatusReq;
 import interview.matching.model.req.JobApplicationSubmitReq;
 import interview.matching.model.vo.JobApplicationListItemVO;
+import interview.matching.model.vo.JobApplicationSubmitVO;
 import interview.matching.model.vo.JobApplicationVO;
 import interview.matching.model.vo.MyApplicationListItemVO;
 import interview.matching.service.JobApplicationsService;
@@ -36,9 +37,9 @@ public class JobApplicationsController {
     @MaxRiskLevel(RiskLevel.NO_RISK)
     @Operation(summary = "候选人投递简历")
     @PostMapping("/candidate/jobs/{jobId}/apply")
-    public Result<JobApplicationVO> submitApplication(@PathVariable("jobId") Long jobId,
-                                                      @RequestBody @Valid JobApplicationSubmitReq req) {
-        JobApplicationVO vo = jobApplicationsService.submitApplication(jobId, req);
+    public Result<JobApplicationSubmitVO> submitApplication(@PathVariable("jobId") Long jobId,
+                                                             @RequestBody @Valid JobApplicationSubmitReq req) {
+        JobApplicationSubmitVO vo = jobApplicationsService.submitApplication(jobId, req);
         return Result.success(vo);
     }
 

@@ -5,8 +5,7 @@ import interview.common.enums.UserType;
 import interview.framework.security.mybatis.AesTypeHandler;
 import interview.common.enums.RiskLevel;
 import interview.system.auth.model.enums.UserStatus;
-import lombok.Builder;
-import lombok.Data;
+import lombok.*;
 
 import java.io.Serializable;
 import java.time.OffsetDateTime;
@@ -19,6 +18,8 @@ import java.time.OffsetDateTime;
 @Data
 @TableName(value = "sys_users",autoResultMap = true)
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class User implements Serializable {
 
     @TableId(type = IdType.ASSIGN_ID)

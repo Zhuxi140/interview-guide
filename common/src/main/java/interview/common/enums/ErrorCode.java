@@ -103,6 +103,10 @@ public enum ErrorCode {
     RESUME_ANALYSIS_NOT_FOUND(40012, "简历分析结果不存在"),
     CANDIDATE_PROFILE_NOT_FOUND(40013, "候选人画像不存在"),
     APPLICATION_NOT_FOUND(40014, "投递记录不存在"),
+    FILE_SIZE_TOO_LARGE_OR_EMPTY(40015,"上传文件为空或者过大(>10MB)"),
+    FILE_IS_EXISTS(40016,"文件已存在"),
+    RESUME_IS_NOT_YOUR(40017,"请投递自己的简历"),
+    NOT_AGAIN_APPLY(40018,"请勿重复投递"),
 
     // ------------ 50xxx 文本/面试流程错误码 ------------
     INTERVIEW_SCHEDULE_NOT_FOUND(50001, "面试排期不存在"),

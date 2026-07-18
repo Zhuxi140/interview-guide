@@ -8,7 +8,6 @@ import interview.common.enums.ErrorCode;
 import interview.common.enums.RoleScope;
 import interview.common.enums.SelectOrder;
 import interview.common.exception.BusinessException;
-import interview.framework.config.CustomIdGenerator;
 import interview.framework.context.AuthContext;
 import interview.system.rbac.model.entity.Role;
 import interview.system.rbac.service.RolesService;
@@ -44,7 +43,6 @@ public class EnterpriseTeamMembersServiceImpl extends ServiceImpl<EnterpriseTeam
     private final EnterprisesService enterprisesService;
     private final EnterpriseTeamMembersMapper enterpriseTeamMembersMapper;
     private final RolesService rolesService;
-    private final CustomIdGenerator idGenerator;
 
     @Override
     public IPage<TeamMemberItemVO> listTeamMembers(Long enterpriseId, Integer page, Integer size,String order) {
@@ -138,9 +136,7 @@ public class EnterpriseTeamMembersServiceImpl extends ServiceImpl<EnterpriseTeam
             throw new BusinessException(ErrorCode.MEMBER_ALREADY_EXISTS);
         }
         //       INSERT enterprise_team_members
-        Long number = (Long)idGenerator.nextId(EnterpriseTeamMember.class);
         EnterpriseTeamMember build = EnterpriseTeamMember.builder()
-                .id(number)
                 .enterpriseId(enterpriseId)
                 .userId(userId)
                 .roleId(roleId)
@@ -153,7 +149,7 @@ public class EnterpriseTeamMembersServiceImpl extends ServiceImpl<EnterpriseTeam
         }
 
         //       返回 TeamMemberCreateVO
-        return new TeamMemberCreateVO(number);
+        return new TeamMemberCreateVO(build.getId());
     }
 
     @Override

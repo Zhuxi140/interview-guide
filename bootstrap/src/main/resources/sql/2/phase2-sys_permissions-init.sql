@@ -2,7 +2,7 @@
 -- Phase 2: sys_permissions + sys_role_permissions 初始化
 -- =============================================
 -- 注意：sys_role_permissions 无 id 字段，主键为 (role_id, permission_id)
--- Permission ID 起始：401（接 Phase 1 的 306）
+-- Permission ID 范围：401-425（401-406: 简历, 411-415: 投递, 421-425: 本地消息运维）
 
 -- ===== sys_permissions =====
 
@@ -61,3 +61,22 @@ INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
 -- CANDIDATE (3001) — 投递简历 + 查看我的投递
 INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
 (3001, 411, NOW()), (3001, 415, NOW());
+
+-- =============================================
+-- 2.5 本地消息管理 ops:local-message:* 权限
+-- =============================================
+
+INSERT INTO sys_permissions (id, perm_code, perm_type, api_path, status) VALUES
+(421, 'ops:local-message:page',        'API', '/api/v1/admin/local-messages/page', 1),
+(422, 'ops:local-message:detail',      'API', '/api/v1/admin/local-messages/*', 1),
+(423, 'ops:local-message:retry',       'API', '/api/v1/admin/local-messages/*/retry', 1),
+(424, 'ops:local-message:batch-retry', 'API', '/api/v1/admin/local-messages/batch-retry', 1),
+(425, 'ops:local-message:status',      'API', '/api/v1/admin/local-messages/*/status', 1);
+
+-- SUPER_ADMIN (1001) — 追加 5 条 ops:* 权限
+INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
+(1001, 421, NOW()), (1001, 422, NOW()), (1001, 423, NOW()), (1001, 424, NOW()), (1001, 425, NOW());
+
+-- PLATFORM_OPS (1003) — 仅 5 条 ops:* 权限
+INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
+(1003, 421, NOW()), (1003, 422, NOW()), (1003, 423, NOW()), (1003, 424, NOW()), (1003, 425, NOW());

@@ -6,7 +6,6 @@ import com.baomidou.mybatisplus.extension.conditions.update.LambdaUpdateChainWra
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import interview.common.enums.ErrorCode;
 import interview.common.exception.BusinessException;
-import interview.framework.config.CustomIdGenerator;
 import interview.framework.context.AuthContext;
 import interview.system.rbac.model.entity.Role;
 import interview.system.rbac.service.RolesService;
@@ -43,7 +42,6 @@ class EnterpriseTeamMembersServiceImplTest {
     @Mock private EnterprisesService enterprisesService;
     @Mock private EnterpriseTeamMembersMapper enterpriseTeamMembersMapper;
     @Mock private RolesService rolesService;
-    @Mock private CustomIdGenerator idGenerator;
 
     private EnterpriseTeamMembersServiceImpl teamMembersService;
     private LambdaQueryChainWrapper<EnterpriseTeamMember> memberQueryWrapper;
@@ -59,7 +57,7 @@ class EnterpriseTeamMembersServiceImplTest {
     @BeforeEach
     void setUp() {
         teamMembersService = spy(new EnterpriseTeamMembersServiceImpl(
-            enterprisesService, enterpriseTeamMembersMapper, rolesService, idGenerator
+            enterprisesService, enterpriseTeamMembersMapper, rolesService
         ));
         memberQueryWrapper = mockQueryWrapper();
         memberUpdateWrapper = mockUpdateWrapper();
@@ -182,8 +180,11 @@ class EnterpriseTeamMembersServiceImplTest {
 
             doReturn(memberQueryWrapper).when(teamMembersService).lambdaQuery();
             when(memberQueryWrapper.exists()).thenReturn(false);
-            when(idGenerator.nextId(any())).thenReturn(memberId);
-            doReturn(true).when(teamMembersService).save(any(EnterpriseTeamMember.class));
+            doAnswer(invocation -> {
+                EnterpriseTeamMember m = invocation.getArgument(0);
+                m.setId(memberId);
+                return true;
+            }).when(teamMembersService).save(any(EnterpriseTeamMember.class));
 
             TeamMemberCreateVO result = teamMembersService.inviteMember(enterpriseId, req);
 
@@ -232,7 +233,6 @@ class EnterpriseTeamMembersServiceImplTest {
 
             doReturn(memberQueryWrapper).when(teamMembersService).lambdaQuery();
             when(memberQueryWrapper.exists()).thenReturn(false);
-            when(idGenerator.nextId(any())).thenReturn(memberId);
             doThrow(DataIntegrityViolationException.class).when(teamMembersService).save(any(EnterpriseTeamMember.class));
 
             BusinessException ex = assertThrows(BusinessException.class,

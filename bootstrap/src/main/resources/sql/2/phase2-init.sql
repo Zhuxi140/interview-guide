@@ -10,7 +10,6 @@
 -- ==================== 1. resumes ====================
 CREATE TABLE IF NOT EXISTS resumes (
     id              BIGINT          NOT NULL,
-    enterprise_id   BIGINT          NOT NULL,
     user_id         BIGINT          NOT NULL,
     file_name       VARCHAR(256),
     file_size       BIGINT,
@@ -29,7 +28,6 @@ CREATE TABLE IF NOT EXISTS resumes (
 
 COMMENT ON TABLE resumes IS '简历底座表';
 COMMENT ON COLUMN resumes.id IS '主键';
-COMMENT ON COLUMN resumes.enterprise_id IS '[逻辑外键]→enterprises';
 COMMENT ON COLUMN resumes.user_id IS '[逻辑外键]→sys_users, 候选人用户 ID';
 COMMENT ON COLUMN resumes.file_name IS '原始文件名';
 COMMENT ON COLUMN resumes.file_size IS '文件大小（字节）';
@@ -44,14 +42,13 @@ COMMENT ON COLUMN resumes.updated_by IS '[逻辑外键]→sys_users';
 COMMENT ON COLUMN resumes.trace_id IS '触发解析的调用链 ID';
 COMMENT ON COLUMN resumes.updated_at IS '最后更新时间';
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_resumes_file_hash ON resumes (enterprise_id, file_hash);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_resumes_file_hash ON resumes (user_id, file_hash);
 CREATE INDEX IF NOT EXISTS idx_resumes_user_id ON resumes (user_id);
 
 
 -- ==================== 2. resume_analyses ====================
 CREATE TABLE IF NOT EXISTS resume_analyses (
     id              BIGINT          NOT NULL,
-    enterprise_id   BIGINT          NOT NULL,
     resume_id       BIGINT          NOT NULL,
     overall_score   INT,
     strengths_json  JSONB,
@@ -65,7 +62,6 @@ CREATE TABLE IF NOT EXISTS resume_analyses (
 
 COMMENT ON TABLE resume_analyses IS '简历 AI 分析结果表';
 COMMENT ON COLUMN resume_analyses.id IS '主键';
-COMMENT ON COLUMN resume_analyses.enterprise_id IS '[逻辑外键]→enterprises';
 COMMENT ON COLUMN resume_analyses.resume_id IS '[逻辑外键]→resumes';
 COMMENT ON COLUMN resume_analyses.overall_score IS 'AI 综合评分 (0-100)';
 COMMENT ON COLUMN resume_analyses.strengths_json IS '优点列表 (JSON)';
@@ -162,3 +158,77 @@ COMMENT ON COLUMN job_applications.updated_at IS '状态更新时间';
 CREATE INDEX IF NOT EXISTS idx_applications_job_id ON job_applications (job_id);
 CREATE INDEX IF NOT EXISTS idx_applications_candidate_id ON job_applications (candidate_id);
 CREATE INDEX IF NOT EXISTS idx_applications_status ON job_applications (enterprise_id, status);
+
+
+-- ==================== 6. local_message ====================
+CREATE TABLE IF NOT EXISTS local_message (
+    id              BIGINT          NOT NULL,
+    topic           VARCHAR(64)     NOT NULL,
+    payload         JSONB           NOT NULL,
+    status          VARCHAR(20)     DEFAULT 'PENDING',
+    retry_count     INT             DEFAULT 0,
+    max_retries     INT             DEFAULT 3,
+    next_retry_at   TIMESTAMPTZ     NOT NULL,
+    retry_history   JSONB,
+    last_error      TEXT,
+    trace_id        VARCHAR(128),
+    created_at      TIMESTAMPTZ     NOT NULL,
+    updated_at      TIMESTAMPTZ,
+    PRIMARY KEY (id)
+);
+
+COMMENT ON TABLE local_message IS '通用本地消息表（异步补偿/重试）';
+COMMENT ON COLUMN local_message.id IS '主键';
+COMMENT ON COLUMN local_message.topic IS '消息类型：FILE_DELETE / SEND_SMS 等';
+COMMENT ON COLUMN local_message.payload IS '业务数据 JSON';
+COMMENT ON COLUMN local_message.status IS 'PENDING / SUCCESS / FAILED / IGNORED';
+COMMENT ON COLUMN local_message.retry_count IS '已重试次数';
+COMMENT ON COLUMN local_message.max_retries IS '最大重试次数';
+COMMENT ON COLUMN local_message.next_retry_at IS '下次重试时间（指数退避）';
+COMMENT ON COLUMN local_message.retry_history IS '重试历史数组：[{"retry":1,"at":"...","error":"...","traceId":"..."}]';
+COMMENT ON COLUMN local_message.last_error IS '最近一次失败原因';
+COMMENT ON COLUMN local_message.trace_id IS '触发该消息的调用链 ID';
+COMMENT ON COLUMN local_message.created_at IS '创建时间';
+COMMENT ON COLUMN local_message.updated_at IS '更新时间';
+
+CREATE INDEX IF NOT EXISTS idx_lmsg_status_retry ON local_message (status, next_retry_at);
+
+
+-- ==================== 7. llm_provider_config ====================
+CREATE TABLE IF NOT EXISTS llm_provider_config (
+    id                  VARCHAR(64)     NOT NULL,
+    base_url            VARCHAR(512)    NOT NULL,
+    api_key_ciphertext  TEXT            NOT NULL,
+    model               VARCHAR(128)    NOT NULL,
+    enabled             BOOLEAN         NOT NULL,
+    created_at          TIMESTAMPTZ     NOT NULL,
+    is_deleted          BOOLEAN         DEFAULT FALSE,
+    PRIMARY KEY (id)
+);
+
+COMMENT ON TABLE llm_provider_config IS '大模型路由密钥表';
+COMMENT ON COLUMN llm_provider_config.id IS '提供商 ID (如 dashscope, openai)';
+COMMENT ON COLUMN llm_provider_config.base_url IS 'API 网关地址';
+COMMENT ON COLUMN llm_provider_config.api_key_ciphertext IS 'AES 加密存储的 API Key';
+COMMENT ON COLUMN llm_provider_config.model IS '主力对话模型名';
+COMMENT ON COLUMN llm_provider_config.enabled IS '路由开关';
+COMMENT ON COLUMN llm_provider_config.created_at IS '创建时间';
+COMMENT ON COLUMN llm_provider_config.is_deleted IS '逻辑删除';
+
+
+-- ==================== 7. llm_global_setting ====================
+CREATE TABLE IF NOT EXISTS llm_global_setting (
+    id                          BIGINT          NOT NULL,
+    default_chat_provider_id    VARCHAR(64),
+    default_embedding_provider_id VARCHAR(64),
+    created_at                  TIMESTAMPTZ     NOT NULL,
+    updated_at                  TIMESTAMPTZ,
+    PRIMARY KEY (id)
+);
+
+COMMENT ON TABLE llm_global_setting IS 'LLM 全局单例配置表';
+COMMENT ON COLUMN llm_global_setting.id IS '全局单例主键，固定为 1';
+COMMENT ON COLUMN llm_global_setting.default_chat_provider_id IS '[逻辑外键]→llm_provider_config, 默认对话模型提供商';
+COMMENT ON COLUMN llm_global_setting.default_embedding_provider_id IS '[逻辑外键]→llm_provider_config, 默认 Embedding 模型提供商';
+COMMENT ON COLUMN llm_global_setting.created_at IS '创建时间';
+COMMENT ON COLUMN llm_global_setting.updated_at IS '更新时间';

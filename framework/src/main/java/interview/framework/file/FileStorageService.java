@@ -8,6 +8,7 @@ import interview.common.exception.BusinessException;
 import interview.framework.config.properties.StorageConfigProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.tika.Tika;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.core.sync.RequestBody;
@@ -15,8 +16,10 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.*;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Set;
 
 /**
  * @author zhuxi
@@ -29,6 +32,12 @@ public class FileStorageService {
 
     private final S3Client s3Client;
     private final StorageConfigProperties properties;
+
+    Set<String> allowedTypes = Set.of(
+            "application/pdf",
+            "application/msword",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    );
 
 
     /**
@@ -119,14 +128,10 @@ public class FileStorageService {
      * 删除文件
      * @param key 文件唯一key
      */
-    private void deleteFile(String key){
+    public void deleteFile(String key){
         if (StrUtil.isBlank(key)){
-            throw new BusinessException(ErrorCode.INVALID_FILENAME);
+            return;
         }
-        if (!fileExists(key)){
-            throw new BusinessException(ErrorCode.FILE_DOWNLOAD_FAILED,"文件不存在:" + key);
-        }
-
         try {
             DeleteObjectRequest request = DeleteObjectRequest.builder()
                     .bucket(properties.getBucket())
@@ -135,11 +140,12 @@ public class FileStorageService {
 
             s3Client.deleteObject(request);
             log.info("文件删除成功: {}", key);
+        }catch (NoSuchKeyException e){
+            log.warn("文件不存在, 跳过删除: {}", key);
         }catch (S3Exception e){
             checkStatusCode(e);
-            throw new BusinessException(ErrorCode.FILE_DELETE_FAILED);
+            log.error("文件删除失败: {}", key, e);
         }
-
     }
 
 
@@ -209,5 +215,29 @@ public class FileStorageService {
         }
 
         return String.format("%s/%s/%s_%s", prefix,datePath, uuid, safeName);
+    }
+
+    /**
+     * 效验文件格式(仅支持pdf/docs(doc)/jpg(jpeg),大小10MB)
+     */
+    public String verifyFileType(long size, String originName, InputStream fileInputStream) throws IOException {
+        if (size > 10 * 1024 * 1024 || size == 0){
+            throw new BusinessException(ErrorCode.FILE_SIZE_TOO_LARGE_OR_EMPTY);
+        }
+
+        Tika tika = new Tika();
+        String realType = tika.detect(fileInputStream);
+        if (!allowedTypes.contains(realType)) {
+            throw new BusinessException(ErrorCode.KNOWLEDGE_BASE_FILE_TYPE_NOT_SUPPORTED);
+        }
+
+        if (originName != null){
+            String ext = originName.substring(originName.lastIndexOf(".") + 1).toLowerCase();
+            if (!Set.of("pdf","doc","docx").contains(ext)){
+                throw new BusinessException(ErrorCode.KNOWLEDGE_BASE_FILE_TYPE_NOT_SUPPORTED);
+            }
+        }
+
+        return realType;
     }
 }

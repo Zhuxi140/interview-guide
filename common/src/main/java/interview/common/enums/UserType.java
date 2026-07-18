@@ -8,7 +8,8 @@ package interview.common.enums;
 public enum UserType {
     HR,
     CANDIDATE,
-    PLATFORM_ADMIN;
+    PLATFORM_ADMIN,
+    PLATFORM_OPS;
 
     /**
      * 根据名称获取枚举类

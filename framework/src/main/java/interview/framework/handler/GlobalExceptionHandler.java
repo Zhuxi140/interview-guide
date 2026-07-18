@@ -1,5 +1,6 @@
 package interview.framework.handler;
 
+import cn.hutool.core.exceptions.UtilException;
 import interview.common.enums.ErrorCode;
 import interview.common.constant.Result;
 import interview.common.exception.*;
@@ -61,6 +62,12 @@ public class GlobalExceptionHandler {
     public Result<String> handleException(Exception e){
         log.error("系统发生未知异常:",e);
         return Result.error(ErrorCode.SYSTEM_ERROR.getCode(),ErrorCode.SYSTEM_ERROR.getMessage());
+    }
+
+    @ExceptionHandler(UtilException.class)
+    public Result<Void> handlerException(UtilException e){
+        log.error("计算文件哈希异常",e);
+        return Result.error(ErrorCode.FILE_UPLOAD_FAILED.getCode(),ErrorCode.FILE_UPLOAD_FAILED.getMessage());
     }
 
 }

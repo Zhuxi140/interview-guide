@@ -22,6 +22,8 @@ import java.time.LocalDateTime;
 
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 @TableName("candidate_profile")
 public class CandidateProfile implements Serializable {
 

@@ -5,7 +5,6 @@ import cn.hutool.core.lang.id.NanoId;
 import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.crypto.digest.DigestUtil;
-import com.baomidou.mybatisplus.core.incrementer.IdentifierGenerator;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import interview.common.enums.*;
 import interview.common.exception.BusinessException;
@@ -70,7 +69,6 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
     private final EnterpriseTeamMembersService enterpriseTeamMembersService;
     private final StringRedisTemplate stringRedisTemplate;
     private final JwttUtil jwttUtil;
-    private final IdentifierGenerator customIdGenerator;
     private final JwtProperties jwtProperties;
 
     @Override
@@ -84,9 +82,9 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
         checkUnique( register);
 
         // 构建用户
-        Long number = (Long)customIdGenerator.nextId(User.class);
-        User user = buildUser(register, number);
+        User user = buildUser(register);
         usersService.save(user);
+        Long number = user.getId();
 
         // FK检查
         Integer code = interview.common.enums.Role.CANDIDATE.getCode();
@@ -484,9 +482,8 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
         }
     }
 
-    private User buildUser(RegisterReq register, Long number){
+    private User buildUser(RegisterReq register){
         return User.builder()
-                .id(number)
                 .username(register.getUsername())
                 .email(register.getEmail())
                 .phone(register.getPhone())

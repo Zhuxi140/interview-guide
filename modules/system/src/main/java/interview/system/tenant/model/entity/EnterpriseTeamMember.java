@@ -1,8 +1,7 @@
 package interview.system.tenant.model.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
-import lombok.Builder;
-import lombok.Data;
+import lombok.*;
 
 import java.io.Serializable;
 import java.time.OffsetDateTime;
@@ -15,6 +14,8 @@ import java.time.OffsetDateTime;
 @TableName("enterprise_team_members")
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class EnterpriseTeamMember implements Serializable {
 
     @TableId(type = IdType.ASSIGN_ID)

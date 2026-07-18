@@ -2,8 +2,7 @@ package interview.system.auth.model.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
 import io.swagger.v3.oas.annotations.media.Schema;
-import lombok.Builder;
-import lombok.Data;
+import lombok.*;
 
 import java.io.Serializable;
 import java.time.OffsetDateTime;
@@ -15,6 +14,8 @@ import java.time.OffsetDateTime;
 @TableName("user_tokens")
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 @Schema(description = "Refresh Token 实体")
 public class UserToken implements Serializable {
 

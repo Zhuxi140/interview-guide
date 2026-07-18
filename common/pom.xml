@@ -52,12 +52,6 @@
             <artifactId>slf4j-api</artifactId>
         </dependency>
 
-        <!-- Tika -->
-        <dependency>
-            <groupId>org.apache.tika</groupId>
-            <artifactId>tika-core</artifactId>
-        </dependency>
-
         <!-- MyBatis-Plus Annotations (lightweight, shared by all modules) -->
         <dependency>
             <groupId>com.baomidou</groupId>

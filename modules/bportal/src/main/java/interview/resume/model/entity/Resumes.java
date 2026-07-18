@@ -21,6 +21,8 @@ import java.time.OffsetDateTime;
 
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class Resumes implements Serializable {
 
     private static final long serialVersionUID = 1L;
@@ -30,11 +32,6 @@ public class Resumes implements Serializable {
      */
     @TableId(value = "id", type = IdType.ASSIGN_ID)
     private Long id;
-
-    /**
-     * [逻辑外键]→enterprises
-     */
-    private Long enterpriseId;
 
     /**
      * [逻辑外键]→sys_users, 候选人用户 ID
@@ -76,7 +73,7 @@ public class Resumes implements Serializable {
     /**
      * 上传时间
      */
-    @TableField(fill = FieldFill.INSERT_UPDATE)
+    @TableField(fill = FieldFill.INSERT)
     private OffsetDateTime createdAt;
 
     /**

@@ -1,6 +1,5 @@
 package interview.system.auth;
 
-import com.baomidou.mybatisplus.core.incrementer.IdentifierGenerator;
 import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
 import com.baomidou.mybatisplus.extension.conditions.update.LambdaUpdateChainWrapper;
 import interview.common.enums.*;
@@ -62,7 +61,6 @@ class AuthServiceImplTest {
     @Mock private EnterpriseTeamMembersService enterpriseTeamMembersService;
     @Mock private StringRedisTemplate stringRedisTemplate;
     @Mock private JwttUtil jwttUtil;
-    @Mock private IdentifierGenerator customIdGenerator;
     @Mock private JwtProperties jwtProperties;
     @Mock private ValueOperations<String, String> valueOps;
 
@@ -85,7 +83,7 @@ class AuthServiceImplTest {
         authService = spy(new AuthServiceImpl(
             smsService, usersService, enterprisesService, userRolesService,
             rolesService, permissionsMapper, enterpriseTeamMembersService,
-            stringRedisTemplate, jwttUtil, customIdGenerator, jwtProperties
+            stringRedisTemplate, jwttUtil, jwtProperties
         ));
         tokenQueryWrapper = mockQueryWrapper();
         tokenUpdateWrapper = mockUpdateWrapper();
@@ -123,7 +121,11 @@ class AuthServiceImplTest {
             LambdaQueryChainWrapper<User> q = mockQueryWrapper();
             when(q.exists()).thenReturn(false);
             when(usersService.lambdaQuery()).thenReturn(q);
-            when(customIdGenerator.nextId(any())).thenReturn(userId);
+            doAnswer(invocation -> {
+                User u = invocation.getArgument(0);
+                u.setId(userId);
+                return true;
+            }).when(usersService).save(any(User.class));
             when(jwttUtil.generatorToken(anyMap(), any())).thenReturn(accessToken);
 
             LambdaQueryChainWrapper<Role> roleCheckQ = mockQueryWrapper();

@@ -54,4 +54,12 @@ public interface Perm {
         String DETAIL = "application:detail";
         String UPDATE = "application:update";
     }
+
+    interface Ops {
+        String LOCAL_MESSAGE_PAGE = "ops:local-message:page";
+        String LOCAL_MESSAGE_DETAIL = "ops:local-message:detail";
+        String LOCAL_MESSAGE_RETRY = "ops:local-message:retry";
+        String LOCAL_MESSAGE_BATCH_RETRY = "ops:local-message:batch-retry";
+        String LOCAL_MESSAGE_STATUS = "ops:local-message:status";
+    }
 }

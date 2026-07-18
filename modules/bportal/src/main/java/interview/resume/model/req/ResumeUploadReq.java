@@ -9,6 +9,5 @@ import lombok.Data;
  */
 @Data
 public class ResumeUploadReq {
-
     private String fileName;
 }

@@ -15,6 +15,7 @@ public enum Role {
 
     SUPER_ADMIN(1001,"超级管理员",RoleScope.PLATFORM,PermissionScope.PLATFORM),
     FINANCE_ADMIN(1002,"财务管理员",RoleScope.PLATFORM,PermissionScope.PLATFORM),
+    PLATFORM_OPS(1003,"平台运维",RoleScope.PLATFORM,PermissionScope.PLATFORM),
     ENTERPRISE_OWNER(2001,"企业所有者",RoleScope.ENTERPRISE,PermissionScope.ENTERPRISE),
     ENTERPRISE_ADMIN(2002,"企业管理员",RoleScope.ENTERPRISE,PermissionScope.ENTERPRISE),
     HR_MANAGER(2003,"HR经理",RoleScope.ENTERPRISE,PermissionScope.ENTERPRISE),

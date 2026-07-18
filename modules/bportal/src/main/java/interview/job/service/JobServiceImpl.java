@@ -9,7 +9,6 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import interview.api.system.EnterpriseValidationApi;
 import interview.common.enums.ErrorCode;
 import interview.common.exception.BusinessException;
-import interview.framework.config.CustomIdGenerator;
 import interview.framework.context.AuthContext;
 import interview.job.mapper.JobMapper;
 import interview.job.model.entity.Job;
@@ -34,7 +33,6 @@ import java.util.List;
 public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements JobService {
 
     private final EnterpriseValidationApi enterpriseValidationApi;
-    private final CustomIdGenerator customIdGenerator;
 
     @Override
     @Transactional(rollbackFor = BusinessException.class)
@@ -48,11 +46,9 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements JobSe
         // 校验 enterpriseId 对应企业存在且当前用户为企业成员
         enterpriseValidationApi.validateEnterpriseBelong(enterpriseId,userId);
         // JobCreateReq -> Job 实体
-        Long id = (Long)customIdGenerator.nextId(Job.class);
         OffsetDateTime now = OffsetDateTime.now();
         JobStatus status = req.getStatus();
         Job job = Job.builder()
-                .id(id)
                 .enterpriseId(enterpriseId)
                 .userId(userId)
                 .title(req.getTitle())
@@ -72,7 +68,7 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements JobSe
         baseMapper.insert(job);
         // TODO: Job -> JobCreateVO（id / title / status.getCode() / createdAt）
         return JobCreateVO.builder()
-                .id(id)
+                .id(job.getId())
                 .title(req.getTitle())
                 .status(status != null ? status : JobStatus.OPEN)
                 .createdAt(now)
