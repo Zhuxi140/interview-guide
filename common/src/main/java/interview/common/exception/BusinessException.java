@@ -2,6 +2,7 @@ package interview.common.exception;
 
 import interview.common.enums.ErrorCode;
 import lombok.Getter;
+import lombok.Setter;
 
 /**
  * @author zhuxi
@@ -13,6 +14,8 @@ public class BusinessException extends RuntimeException {
 
     private final Integer code;
     private final String message;
+    @Setter
+    private String rawExceptionMsg;
 
     public BusinessException(ErrorCode code) {
         this.code = code.getCode();
@@ -23,4 +26,5 @@ public class BusinessException extends RuntimeException {
         this.code = code.getCode();
         this.message = message;
     }
+
 }

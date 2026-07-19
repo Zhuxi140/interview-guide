@@ -1,9 +1,9 @@
 package com.interview.bootstrap;
 
 import interview.common.enums.FileSort;
-import interview.framework.config.S3Config;
-import interview.framework.config.properties.StorageConfigProperties;
-import interview.framework.file.FileStorageService;
+import interview.infra.config.S3Config;
+import interview.infra.config.properties.StorageConfigProperties;
+import interview.infra.file.FileStorageService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

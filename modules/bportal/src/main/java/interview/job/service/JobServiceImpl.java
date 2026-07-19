@@ -171,6 +171,8 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements JobSe
                 .set(req.getEducationReq() != null, Job::getEducationReq, req.getEducationReq())
                 .set(StrUtil.isNotBlank(req.getSkillsJson()), Job::getSkillsJson, req.getSkillsJson())
                 .set(Job::getUpdatedBy, userId)
+                .set(Job::getTraceId, null)
+                // TODO: traceId完善后，要传入
                 .set(Job::getUpdatedAt, OffsetDateTime.now()));
         if (affected == 0) {
             throw new BusinessException(ErrorCode.JOB_NOT_FOUND);
@@ -186,6 +188,8 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements JobSe
                 .eq(Job::getEnterpriseId, enterpriseId)
                 .set(Job::getStatus, req.getStatus())
                 .set(Job::getUpdatedBy, userId)
+                .set(Job::getTraceId, null)
+                // TODO: traceId完善后，要传入
                 .set(Job::getUpdatedAt, OffsetDateTime.now()));
         if (affected == 0) {
             throw new BusinessException(ErrorCode.JOB_NOT_FOUND);
@@ -201,6 +205,8 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements JobSe
                 .eq(Job::getEnterpriseId, enterpriseId)
                 .set(Job::getIsDeleted, true)
                 .set(Job::getUpdatedBy, userId)
+                .set(Job::getTraceId, null)
+                // TODO: traceId完善后，要传入
                 .set(Job::getUpdatedAt, OffsetDateTime.now()));
         if (affected == 0) {
             throw new BusinessException(ErrorCode.JOB_NOT_FOUND);

@@ -4,7 +4,7 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import interview.common.constant.ApiVersion;
 import interview.common.constant.Result;
 import interview.common.enums.RiskLevel;
-import interview.framework.annonate.MaxRiskLevel;
+import interview.common.annonate.MaxRiskLevel;
 import interview.resume.model.enums.AnalyzeStatus;
 import interview.resume.model.req.ResumeUploadReq;
 import interview.resume.model.vo.ResumeAnalysisVO;

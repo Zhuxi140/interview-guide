@@ -202,6 +202,12 @@ public enum ErrorCode {
     SPARK_TASK_NOT_FOUND(130001, "Spark 任务不存在"),
     SPARK_TASK_STATUS_INVALID(130002, "Spark 任务状态不合法"),
     SPARK_TASK_EXECUTION_FAILED(130003, "Spark 任务执行失败"),
+
+    // ------------ 14xxx 本地消息管理错误码 ------------
+    LOCAL_MESSAGE_NOT_FOUND(140001, "本地消息不存在"),
+    LOCAL_MESSAGE_STATUS_INVALID(140002, "本地消息状态不合法，仅允许重试 PENDING 或 FAILED 状态的消息"),
+    LOCAL_MESSAGE_RETRY_FAILED(140003, "本地消息重试执行失败"),
+    LOCAL_MESSAGE_RETRY_LIMIT_EXCEEDED(140004, "本地消息重试次数已达上限"),
     ;
 
     private final Integer code;

@@ -5,7 +5,7 @@ import interview.common.enums.Logic;
 import interview.common.enums.PermissionScope;
 import interview.common.enums.Role;
 import interview.common.exception.AccessDeniedException;
-import interview.framework.annonate.RequirePermission;
+import interview.common.annonate.RequirePermission;
 import interview.framework.context.AuthContext;
 import interview.system.rbac.mapper.PermissionsMapper;
 import lombok.RequiredArgsConstructor;

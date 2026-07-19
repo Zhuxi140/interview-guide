@@ -3,7 +3,7 @@ package interview.system.auth;
 import interview.common.constant.ApiVersion;
 import interview.common.constant.Result;
 import interview.common.enums.RiskLevel;
-import interview.framework.annonate.MaxRiskLevel;
+import interview.common.annonate.MaxRiskLevel;
 import interview.system.auth.model.bo.LoginBO;
 import interview.system.auth.model.bo.RegisterBo;
 import interview.system.auth.model.bo.UserInfoBO;

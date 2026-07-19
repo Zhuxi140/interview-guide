@@ -3,7 +3,7 @@ package interview.framework.security.interceptor;
 import interview.common.enums.ErrorCode;
 import interview.common.enums.RiskLevel;
 import interview.common.exception.BusinessException;
-import interview.framework.annonate.MaxRiskLevel;
+import interview.common.annonate.MaxRiskLevel;
 import interview.framework.context.AuthContext;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;

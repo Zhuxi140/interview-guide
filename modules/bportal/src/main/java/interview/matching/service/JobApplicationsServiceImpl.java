@@ -212,6 +212,8 @@ public class JobApplicationsServiceImpl extends ServiceImpl<JobApplicationsMappe
                 .eq(JobApplications::getId, applicationId)
                 .set(JobApplications::getStatus, req.getStatus())
                 .set(JobApplications::getUpdatedBy,userId)
+                .set(JobApplications::getTraceId, null)
+                // TODO: traceId完善后，要传入
                 .set(JobApplications::getUpdatedAt, OffsetDateTime.now())
                 .update();
     }

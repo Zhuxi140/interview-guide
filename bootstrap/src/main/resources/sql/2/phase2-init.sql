@@ -165,7 +165,7 @@ CREATE TABLE IF NOT EXISTS local_message (
     id              BIGINT          NOT NULL,
     topic           VARCHAR(64)     NOT NULL,
     payload         JSONB           NOT NULL,
-    status          VARCHAR(20)     DEFAULT 'PENDING',
+    priority        VARCHAR(16)     DEFAULT 'MEDIUM',
     retry_count     INT             DEFAULT 0,
     max_retries     INT             DEFAULT 3,
     next_retry_at   TIMESTAMPTZ     NOT NULL,
@@ -181,6 +181,7 @@ COMMENT ON TABLE local_message IS '通用本地消息表（异步补偿/重试�
 COMMENT ON COLUMN local_message.id IS '主键';
 COMMENT ON COLUMN local_message.topic IS '消息类型：FILE_DELETE / SEND_SMS 等';
 COMMENT ON COLUMN local_message.payload IS '业务数据 JSON';
+COMMENT ON COLUMN local_message.priority IS '优先级：HIGH(5s/5次) / MEDIUM(60s/3次) / LOW(30min/1次)';
 COMMENT ON COLUMN local_message.status IS 'PENDING / SUCCESS / FAILED / IGNORED';
 COMMENT ON COLUMN local_message.retry_count IS '已重试次数';
 COMMENT ON COLUMN local_message.max_retries IS '最大重试次数';
@@ -192,6 +193,7 @@ COMMENT ON COLUMN local_message.created_at IS '创建时间';
 COMMENT ON COLUMN local_message.updated_at IS '更新时间';
 
 CREATE INDEX IF NOT EXISTS idx_lmsg_status_retry ON local_message (status, next_retry_at);
+CREATE INDEX IF NOT EXISTS idx_lmsg_priority ON local_message (priority, status);
 
 
 -- ==================== 7. llm_provider_config ====================

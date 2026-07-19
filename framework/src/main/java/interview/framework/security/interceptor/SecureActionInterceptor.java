@@ -7,7 +7,7 @@ import interview.common.constant.SecureActionContext;
 import interview.common.enums.ErrorCode;
 import interview.common.enums.SmsType;
 import interview.common.exception.BusinessException;
-import interview.framework.annonate.RequireSecure;
+import interview.common.annonate.RequireSecure;
 import interview.framework.context.AuthContext;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;

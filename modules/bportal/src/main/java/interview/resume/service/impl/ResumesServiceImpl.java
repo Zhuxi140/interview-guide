@@ -5,13 +5,14 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import interview.common.enums.ErrorCode;
-import interview.common.enums.FileSort;
+import interview.api.infra.FileHashApi;
+import interview.api.infra.FileParseApi;
+import interview.api.infra.FileStorageApi;
+import interview.api.infra.LocalMessageApi;
+import interview.api.infra.dto.MessageDTO;
+import interview.common.enums.*;
 import interview.common.exception.BusinessException;
 import interview.framework.context.AuthContext;
-import interview.framework.file.FileHashService;
-import interview.framework.file.FileParseService;
-import interview.framework.file.FileStorageService;
 import interview.resume.mapper.ResumesMapper;
 import interview.resume.model.entity.CandidateProfile;
 import interview.resume.model.entity.CandidateSkillScores;
@@ -30,8 +31,7 @@ import interview.resume.service.ResumesService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.time.OffsetDateTime;
@@ -47,13 +47,15 @@ public class ResumesServiceImpl extends ServiceImpl<ResumesMapper, Resumes> impl
     private final ResumeAnalysesService resumeAnalysesService;
     private final CandidateSkillScoresService candidateSkillScoresService;
     private final CandidateProfileService candidateProfileService;
-    private final FileStorageService fileStorageService;
-    private final FileHashService fileHashService;
-    private final FileParseService fileParseService;
+    private final FileStorageApi fileStorageService;
+    private final FileHashApi fileHashService;
+    private final FileParseApi fileParseService;
+    private final LocalMessageApi localMessageApi;
+    private final TransactionTemplate transactionTemplate;
+    private final ResumesMapper resumeMapper;
 
 
     @Override
-    @Transactional(rollbackFor = BusinessException.class)
     public ResumeUploadVO uploadResume(MultipartFile file, ResumeUploadReq metadata) {
         // ① 获取当前用户
         Long userId = AuthContext.getRequiredUserId();
@@ -75,28 +77,28 @@ public class ResumesServiceImpl extends ServiceImpl<ResumesMapper, Resumes> impl
             throw new BusinessException(ErrorCode.FILE_IS_EXISTS);
         }
 
+        // 对逻辑删除的记录进行查询  并筛选是否哈希重复
+        String url = resumeMapper.selectDeletedByHash(hash, userId);
+
+        // 若重复 直接复用url。 若不重复则进行上传操作
         // ③ 先上传新文件到 RustFS（S3 操作先于 DB，事务回滚时需补偿）
-        // TODO[2.5]: 上传成功后插入 local_message(FILE_DELETE, storageUrl)，事务提交后异步删除，失败自动重试
-        String storageUrl = fileStorageService.uploadFile(file, FileSort.RESUME);
+        final String storageUrl = StrUtil.isNotBlank(url) ? url : fileStorageService.uploadFile(file, FileSort.RESUME);
 
-        // ④ 旧 S3 key 留待事务提交后删除
-        Resumes oldResume = lambdaQuery()
-                .select(Resumes::getStorageUrl)
-                .eq(Resumes::getUserId, userId)
-                .one();
-        String oldStorageUrl = oldResume != null ? oldResume.getStorageUrl() : null;
-
-        try {
-            String name;
-            if (StrUtil.isNotBlank(metadata.getFileName())) {
-                name = metadata.getFileName();
-            }else{
-                name = originalFilename;
-            }
+        return transactionTemplate.execute(status -> {
             // ⑤ Tika 提取文本内容
-            String resumeText = fileParseService.parseText(file);
+            String resumeText;
+            try {
+                resumeText = fileParseService.parseText(file);
 
-            // ⑥ 构造简历实体并入库
+            String name = StrUtil.isNotBlank(metadata.getFileName()) ?
+                    metadata.getFileName() : originalFilename;
+
+            Resumes oldResume = lambdaQuery()
+                    .select(Resumes::getStorageUrl)
+                    .eq(Resumes::getUserId, userId)
+                    .one();
+            String oldStorageUrl = oldResume != null ? oldResume.getStorageUrl() : null;
+
             OffsetDateTime now = OffsetDateTime.now();
             Resumes resumes = Resumes.builder()
                     .fileHash(hash)
@@ -111,36 +113,54 @@ public class ResumesServiceImpl extends ServiceImpl<ResumesMapper, Resumes> impl
                     .build();
             save(resumes);
 
-            // ⑦ 事务提交后删除旧 S3 文件
-            // TODO[2.5]: 改为插入 local_message(FILE_DELETE, oldStorageUrl)，由调度器异步删除，失败自动重试
+
             if (oldStorageUrl != null) {
-                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                    @Override
-                    public void afterCommit() {
-                        fileStorageService.deleteFile(oldStorageUrl);
-                    }
-                });
+                MessageDTO msg = MessageDTO.builder()
+                        .topic(MsgTopic.FILE_DELETE)
+                        .status(MsgStatus.PENDING)
+                        .payload(oldStorageUrl)
+                        .lastError("冗余旧文件，需删除:" + oldStorageUrl)
+                        .priority(MsgPriority.LOW)
+                        .maxRetries(2)
+                        .build();
+                localMessageApi.saveMsg(msg);
             }
 
-            // ⑧ 返回上传结果
             return ResumeUploadVO.builder()
                     .id(resumes.getId())
-                    .fileSize(size)
-                    .fileType(type)
-                    .fileName(name)
-                    .analyzeStatus(AnalyzeStatus.PENDING)
-                    .createdAt(now)
+                    .fileName(resumes.getFileName())
+                    .fileType(resumes.getFileType())
+                    .fileSize(resumes.getFileSize())
+                    .createdAt(resumes.getCreatedAt())
+                    .analyzeStatus(resumes.getAnalyzeStatus())
                     .build();
-        } catch (BusinessException e) {
-            // TODO[2.5]: 同步删除改为 local_message 异步删除，避免 deleteFile 失败吞掉异常
-            fileStorageService.deleteFile(storageUrl);
-            throw e;
-        }catch (RuntimeException e){
-            // TODO[2.5]: 同上，改为 local_message 异步补偿
-            fileStorageService.deleteFile(storageUrl);
-            log.error("上传文件触发RuntimeException异常",e);
-            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED);
-        }
+
+            }catch (BusinessException e){
+                MessageDTO msg = MessageDTO.builder()
+                        .topic(MsgTopic.FILE_DELETE)
+                        .status(MsgStatus.PENDING)
+                        .payload(storageUrl)
+                        .lastError(e.getRawExceptionMsg())
+                        .priority(MsgPriority.LOW)
+                        .maxRetries(2)
+                        .build();
+                localMessageApi.saveMsgNewTransaction(msg);
+                status.setRollbackOnly();
+                throw e;
+            }catch (RuntimeException e){
+                MessageDTO msg = MessageDTO.builder()
+                        .topic(MsgTopic.FILE_DELETE)
+                        .status(MsgStatus.PENDING)
+                        .lastError(e.getMessage())
+                        .payload(storageUrl)
+                        .priority(MsgPriority.LOW)
+                        .maxRetries(2)
+                        .build();
+                localMessageApi.saveMsgNewTransaction(msg);
+                status.setRollbackOnly();
+                throw e;
+            }
+        });
     }
 
     @Override

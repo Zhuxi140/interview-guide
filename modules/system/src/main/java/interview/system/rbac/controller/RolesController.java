@@ -3,7 +3,7 @@ package interview.system.rbac.controller;
 import interview.common.constant.ApiVersion;
 import interview.common.constant.Result;
 import interview.common.enums.RiskLevel;
-import interview.framework.annonate.MaxRiskLevel;
+import interview.common.annonate.MaxRiskLevel;
 import interview.system.rbac.model.vo.RoleDetailVO;
 import interview.system.rbac.model.vo.RoleListItemVO;
 import interview.system.rbac.service.RolesService;

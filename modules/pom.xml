@@ -19,6 +19,7 @@
         <module>admin</module>
         <module>engine</module>
         <module>Spark</module>
+        <module>infra</module>
         <module>system</module>
     </modules>
 
