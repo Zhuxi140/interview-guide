@@ -36,12 +36,12 @@ public class FileStorageService implements FileStorageApi {
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     );
 
-    public String uploadFile(MultipartFile file, FileSort prefix){
+    public String uploadFile(MultipartFile file, FileSort prefix,String existingUrl){
         String originalFilename = file.getOriginalFilename();
         if (StrUtil.isBlank(originalFilename)) {
             throw new BusinessException(ErrorCode.INVALID_FILENAME);
         }
-        String key = generateFileKey(originalFilename, prefix);
+        String key = StrUtil.isNotBlank(existingUrl) ? existingUrl : generateFileKey(originalFilename, prefix);
 
         try {
             PutObjectRequest putRequest = PutObjectRequest.builder()
@@ -157,7 +157,7 @@ public class FileStorageService implements FileStorageApi {
         }
     }
 
-    private String generateFileKey(String originalFilename,FileSort prefix){
+    public String generateFileKey(String originalFilename,FileSort prefix){
 
         LocalDateTime now = LocalDateTime.now();
         String datePath = now.format(DateTimeFormatter.ofPattern("yyyy/MM/dd"));

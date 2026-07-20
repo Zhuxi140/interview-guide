@@ -8,7 +8,7 @@ import java.io.InputStream;
 
 public interface FileStorageApi {
 
-    String uploadFile(MultipartFile file, FileSort prefix);
+    String uploadFile(MultipartFile file, FileSort prefix,String existingUrl);
 
     boolean fileExists(String key);
 
@@ -17,4 +17,6 @@ public interface FileStorageApi {
     void deleteFile(String key);
 
     String verifyFileType(long size, String originName, InputStream fileInputStream) throws IOException;
+
+    String generateFileKey(String originalFilename,FileSort prefix);
 }

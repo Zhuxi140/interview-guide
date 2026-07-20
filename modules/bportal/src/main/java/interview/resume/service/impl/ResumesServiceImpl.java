@@ -29,6 +29,7 @@ import interview.resume.service.CandidateSkillScoresService;
 import interview.resume.service.ResumeAnalysesService;
 import interview.resume.service.ResumesService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -40,8 +41,9 @@ import java.util.List;
 /**
  * @author zhuxi
  */
-@RequiredArgsConstructor
 @Service
+@Slf4j
+@RequiredArgsConstructor
 public class ResumesServiceImpl extends ServiceImpl<ResumesMapper, Resumes> implements ResumesService {
 
     private final ResumeAnalysesService resumeAnalysesService;
@@ -80,9 +82,28 @@ public class ResumesServiceImpl extends ServiceImpl<ResumesMapper, Resumes> impl
         // 对逻辑删除的记录进行查询  并筛选是否哈希重复
         String url = resumeMapper.selectDeletedByHash(hash, userId);
 
+
         // 若重复 直接复用url。 若不重复则进行上传操作
-        // ③ 先上传新文件到 RustFS（S3 操作先于 DB，事务回滚时需补偿）
-        final String storageUrl = StrUtil.isNotBlank(url) ? url : fileStorageService.uploadFile(file, FileSort.RESUME);
+        // ③ 先插入消息表，提前兜底补偿。如果无异常无回滚，再上传文件
+        String newUrl = fileStorageService.generateFileKey(originalFilename, FileSort.RESUME);
+        Long id;
+        try {
+            MessageDTO msg = MessageDTO.builder()
+                    .topic(MsgTopic.FILE_DELETE)
+                    .status(MsgStatus.PENDING)
+                    .payload(newUrl)
+                    .lastError("上传简历，提前兜底补偿")
+                    .priority(MsgPriority.LOW)
+                    .maxRetries(2)
+                    .build();
+            id = localMessageApi.saveMsgNewTransaction(msg);
+        }catch (Exception e){
+            log.error("上传简历 - 提前写入消息表兜底补偿失败，直接拦截。 error：{}",e.getMessage());
+            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED);
+        }
+
+        final String storageUrl = StrUtil.isNotBlank(url) ? url : newUrl;
+        fileStorageService.uploadFile(file, FileSort.RESUME,newUrl);
 
         return transactionTemplate.execute(status -> {
             // ⑤ Tika 提取文本内容
@@ -113,9 +134,8 @@ public class ResumesServiceImpl extends ServiceImpl<ResumesMapper, Resumes> impl
                     .build();
             save(resumes);
 
-
             if (oldStorageUrl != null) {
-                MessageDTO msg = MessageDTO.builder()
+                MessageDTO msg1 = MessageDTO.builder()
                         .topic(MsgTopic.FILE_DELETE)
                         .status(MsgStatus.PENDING)
                         .payload(oldStorageUrl)
@@ -123,8 +143,11 @@ public class ResumesServiceImpl extends ServiceImpl<ResumesMapper, Resumes> impl
                         .priority(MsgPriority.LOW)
                         .maxRetries(2)
                         .build();
-                localMessageApi.saveMsg(msg);
+                localMessageApi.saveMsg(msg1);
             }
+
+            // 更新提前兜底补偿的消息记录  更新状态为IGNORED
+            localMessageApi.updateStatus(id,MsgStatus.IGNORED);
 
             return ResumeUploadVO.builder()
                     .id(resumes.getId())
@@ -135,30 +158,10 @@ public class ResumesServiceImpl extends ServiceImpl<ResumesMapper, Resumes> impl
                     .analyzeStatus(resumes.getAnalyzeStatus())
                     .build();
 
-            }catch (BusinessException e){
-                MessageDTO msg = MessageDTO.builder()
-                        .topic(MsgTopic.FILE_DELETE)
-                        .status(MsgStatus.PENDING)
-                        .payload(storageUrl)
-                        .lastError(e.getRawExceptionMsg())
-                        .priority(MsgPriority.LOW)
-                        .maxRetries(2)
-                        .build();
-                localMessageApi.saveMsgNewTransaction(msg);
+            }catch (Exception e){
                 status.setRollbackOnly();
-                throw e;
-            }catch (RuntimeException e){
-                MessageDTO msg = MessageDTO.builder()
-                        .topic(MsgTopic.FILE_DELETE)
-                        .status(MsgStatus.PENDING)
-                        .lastError(e.getMessage())
-                        .payload(storageUrl)
-                        .priority(MsgPriority.LOW)
-                        .maxRetries(2)
-                        .build();
-                localMessageApi.saveMsgNewTransaction(msg);
-                status.setRollbackOnly();
-                throw e;
+                log.error("上传简历 - 主事务内出现异常。 msg:{}",e.getMessage());
+                throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED);
             }
         });
     }
