@@ -2,27 +2,47 @@ package interview.framework.security.interceptor;
 
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
+import interview.common.annonate.RequireSecure;
 import interview.common.constant.AuthKeyConstant;
 import interview.common.constant.SecureActionContext;
 import interview.common.enums.ErrorCode;
-import interview.common.enums.SmsType;
 import interview.common.exception.BusinessException;
-import interview.common.annonate.RequireSecure;
 import interview.framework.context.AuthContext;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.stereotype.Component;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
 
+import java.util.Collections;
+import java.util.Objects;
+
 
 /**
+ * 校验并原子消费一次性安全操作令牌。
+ *
  * @author zhuxi
  */
 @RequiredArgsConstructor
 public class SecureActionInterceptor implements HandlerInterceptor {
+
+    private static final DefaultRedisScript<Long> CONSUME_TOKEN_SCRIPT;
+
+    // 比较令牌内容后再删除，保证校验与消费原子完成。
+    static {
+        CONSUME_TOKEN_SCRIPT = new DefaultRedisScript<>();
+        CONSUME_TOKEN_SCRIPT.setScriptText("""
+                local value = redis.call('get', KEYS[1])
+                if not value or value ~= ARGV[1] then
+                    return 0
+                end
+                redis.call('del', KEYS[1])
+                return 1
+                """);
+        CONSUME_TOKEN_SCRIPT.setResultType(Long.class);
+    }
 
     private final StringRedisTemplate stringRedisTemplate;
 
@@ -33,43 +53,47 @@ public class SecureActionInterceptor implements HandlerInterceptor {
             return true;
         }
 
-        // 验证是否使用了@RequireSecure注解
+        // 仅拦截声明了 @RequireSecure 的敏感操作接口
         RequireSecure annotation = handlerMethod.getMethodAnnotation(RequireSecure.class);
         if (annotation == null) {
-            // 没有使用注解，直接放行
             return true;
         }
 
+        // 从请求头读取一次性安全操作令牌
         String token = request.getHeader("X-Secure-Action-Token");
         if (StrUtil.isBlank(token)) {
             throw new BusinessException(ErrorCode.NO_VERIFY_TOKEN);
         }
 
-        String smsSensitiveActionTokenKey = AuthKeyConstant.getSmsSensitiveActionTokenKey(token);
-        String json = stringRedisTemplate.opsForValue().get(smsSensitiveActionTokenKey);
+        // 从 Redis 读取令牌携带的安全操作上下文
+        String secureActionTokenKey = AuthKeyConstant.getSecureActionTokenKey(token);
+        String json = stringRedisTemplate.opsForValue().get(secureActionTokenKey);
         if (StrUtil.isBlank(json)) {
             throw new BusinessException(ErrorCode.VERIFY_TOKEN_EXPIRE);
         }
 
+        // 安全令牌必须属于当前登录用户
         SecureActionContext context = JSONUtil.toBean(json, SecureActionContext.class);
-        if (!context.getUserId().equals(AuthContext.getRequiredUserId())){
+        if (!Objects.equals(context.getUserId(), AuthContext.getRequiredUserId())) {
             throw new BusinessException(ErrorCode.PERMISSION_DENIED);
         }
 
-        boolean match = false;
-        for (SmsType smsType : annotation.allowList()) {
-            if (smsType == context.getActionType()){
-                match = true;
-                break;
-            }
-        }
-        if (!match) {
-            throw new BusinessException(ErrorCode.PERMISSION_DENIED);
+        // 令牌业务动作必须与接口声明的唯一动作精确一致
+        if (annotation.value() != context.getActionType()) {
+            throw new BusinessException(ErrorCode.SECURE_ACTION_NOT_MATCH);
         }
 
-        stringRedisTemplate.delete(smsSensitiveActionTokenKey);
+        // 原子比较并删除令牌，保证令牌只能被一个请求消费一次
+        Long consumed = stringRedisTemplate.execute(
+                CONSUME_TOKEN_SCRIPT,
+                Collections.singletonList(secureActionTokenKey),
+                json);
+        if (consumed == null || consumed != 1L) {
+            throw new BusinessException(ErrorCode.VERIFY_TOKEN_EXPIRE);
+        }
 
-        request.setAttribute("SECURE_ACTION_CONTEXT", context);
+        // 将已验证上下文传给 Controller 和后续业务服务
+        request.setAttribute(SecureActionContext.REQUEST_ATTRIBUTE, context);
         return true;
     }
 }

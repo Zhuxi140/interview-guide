@@ -17,9 +17,9 @@ public enum SmsType {
     RESET_PWD("RESET_PWD", "忘记密码"),
     BIND_PHONE("BIND_PHONE", "绑定手机"),
     RISK_VERIFY("RISK_VERIFY", "风控验证"),
-    SENSITIVE_OPERATION("SENSITIVE_OPERATION", "敏感操作"),
-    DOUBLE_VERIFY_OLD("DOUBLE_VERIFY_OLD","双重手机验证第一重"),
-    DOUBLE_VERIFY_NEW("DOUBLE_VERIFY_NEW","双重手机验证第二重");
+    SECURE_CHALLENGE("SECURE_CHALLENGE", "安全操作验证"),
+    ENTERPRISE_VERIFY_OLD("ENTERPRISE_VERIFY_OLD","双重手机验证第一重"),
+    ENTERPRISE_VERIFY_NEW("ENTERPRISE_VERIFY_NEW","双重手机验证第二重");
 
 
     private final String code;

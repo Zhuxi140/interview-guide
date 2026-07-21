@@ -35,7 +35,7 @@ COMMENT ON COLUMN resumes.file_type IS 'pdf / doc / docx';
 COMMENT ON COLUMN resumes.file_hash IS 'SHA-256 文件哈希';
 COMMENT ON COLUMN resumes.storage_url IS 'RustFS / OSS 存储 URL';
 COMMENT ON COLUMN resumes.resume_text IS '解析后的简历纯文本';
-COMMENT ON COLUMN resumes.analyze_status IS 'PENDING / PROCESSING / COMPLETED / FAILED';
+COMMENT ON COLUMN resumes.analyze_status IS 'UPLOADING / PENDING / PROCESSING / COMPLETED / FAILED / UPLOAD_FAILED';
 COMMENT ON COLUMN resumes.created_at IS '上传时间';
 COMMENT ON COLUMN resumes.is_deleted IS '逻辑删除';
 COMMENT ON COLUMN resumes.updated_by IS '[逻辑外键]→sys_users';
@@ -158,6 +158,9 @@ COMMENT ON COLUMN job_applications.updated_at IS '状态更新时间';
 CREATE INDEX IF NOT EXISTS idx_applications_job_id ON job_applications (job_id);
 CREATE INDEX IF NOT EXISTS idx_applications_candidate_id ON job_applications (candidate_id);
 CREATE INDEX IF NOT EXISTS idx_applications_status ON job_applications (enterprise_id, status);
+-- 唯一索引：同一候选人 + 同一岗位仅允许一条未删除投递记录，防御并发重复提交
+CREATE UNIQUE INDEX IF NOT EXISTS uk_applications_job_candidate_active
+    ON job_applications (job_id, candidate_id) WHERE is_deleted = false;
 
 
 -- ==================== 6. local_message ====================
@@ -168,7 +171,7 @@ CREATE TABLE IF NOT EXISTS local_message (
     priority        VARCHAR(16)     DEFAULT 'MEDIUM',
     retry_count     INT             DEFAULT 0,
     max_retries     INT             DEFAULT 3,
-    next_retry_at   TIMESTAMPTZ     NOT NULL,
+    next_retry_at   TIMESTAMPTZ,
     retry_history   JSONB,
     last_error      TEXT,
     trace_id        VARCHAR(128),

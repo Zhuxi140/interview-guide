@@ -65,7 +65,8 @@ class UserRolesServiceImplTest {
             when(usersService.lambdaQuery()).thenReturn(userCheckQ);
 
             LambdaQueryChainWrapper<Role> roleCheckQ = mockQueryWrapper();
-            when(roleCheckQ.exists()).thenReturn(true);
+            when(roleCheckQ.count()).thenAnswer(invocation ->
+                    req.getRoleIds().stream().distinct().count());
             when(rolesService.lambdaQuery()).thenReturn(roleCheckQ);
         }
 

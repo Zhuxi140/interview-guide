@@ -24,10 +24,7 @@ import interview.resume.model.vo.ResumeAnalysisVO;
 import interview.resume.model.vo.ResumeListItemVO;
 import interview.resume.model.vo.ResumeUploadVO;
 import interview.resume.model.vo.ResumeVO;
-import interview.resume.service.CandidateProfileService;
-import interview.resume.service.CandidateSkillScoresService;
-import interview.resume.service.ResumeAnalysesService;
-import interview.resume.service.ResumesService;
+import interview.resume.service.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -55,11 +52,14 @@ public class ResumesServiceImpl extends ServiceImpl<ResumesMapper, Resumes> impl
     private final LocalMessageApi localMessageApi;
     private final TransactionTemplate transactionTemplate;
     private final ResumesMapper resumeMapper;
+    private final ResumeTxService  resumeTxService;
+    private static final long RESUME_MUTATION_LOCK_NAMESPACE = 0x52534D4555504C44L;
 
 
     @Override
     public ResumeUploadVO uploadResume(MultipartFile file, ResumeUploadReq metadata) {
-        // ① 获取当前用户
+
+        // ① 获取当前用户 并效验文件
         Long userId = AuthContext.getRequiredUserId();
         long size = file.getSize();
         String originalFilename = file.getOriginalFilename();
@@ -78,92 +78,142 @@ public class ResumesServiceImpl extends ServiceImpl<ResumesMapper, Resumes> impl
         if (exists) {
             throw new BusinessException(ErrorCode.FILE_IS_EXISTS);
         }
-
         // 对逻辑删除的记录进行查询  并筛选是否哈希重复
-        String url = resumeMapper.selectDeletedByHash(hash, userId);
+        String oldUrl = resumeMapper.selectDeletedByHash(hash, userId);
+        String url =StrUtil.isNotBlank(oldUrl) && fileStorageService.fileExists(oldUrl) ? oldUrl : null;
 
-
-        // 若重复 直接复用url。 若不重复则进行上传操作
-        // ③ 先插入消息表，提前兜底补偿。如果无异常无回滚，再上传文件
         String newUrl = fileStorageService.generateFileKey(originalFilename, FileSort.RESUME);
-        Long id;
-        try {
-            MessageDTO msg = MessageDTO.builder()
-                    .topic(MsgTopic.FILE_DELETE)
-                    .status(MsgStatus.PENDING)
-                    .payload(newUrl)
-                    .lastError("上传简历，提前兜底补偿")
-                    .priority(MsgPriority.LOW)
-                    .maxRetries(2)
-                    .build();
-            id = localMessageApi.saveMsgNewTransaction(msg);
-        }catch (Exception e){
-            log.error("上传简历 - 提前写入消息表兜底补偿失败，直接拦截。 error：{}",e.getMessage());
-            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED);
-        }
+        final String storageUrl = url != null ? url : newUrl;
+        String name = StrUtil.isNotBlank(metadata.getFileName()) ?
+                metadata.getFileName() : originalFilename;
 
-        final String storageUrl = StrUtil.isNotBlank(url) ? url : newUrl;
-        fileStorageService.uploadFile(file, FileSort.RESUME,newUrl);
-
-        return transactionTemplate.execute(status -> {
-            // ⑤ Tika 提取文本内容
-            String resumeText;
+        OffsetDateTime now = OffsetDateTime.now();
+        Resumes resumes = Resumes.builder()
+                .fileHash(hash)
+                .userId(userId)
+                .fileName(name)
+                .fileSize(file.getSize())
+                .fileType(type)
+                .storageUrl(storageUrl)
+                .analyzeStatus(AnalyzeStatus.UPLOADING)
+                .createdAt(now)
+                .build();
+        // 预占
+        Long cleanupMessageId = transactionTemplate.execute(status -> {
             try {
-                resumeText = fileParseService.parseText(file);
+                lockCheckAndPreAllocation(userId, resumes, hash);
+                Long msgId = null;
+                // 若重复 直接复用url。 若不重复则进行上传操作
+                // ③ 先插入消息表，提前兜底补偿。如果无异常无回滚，再上传文件
+                if (url == null) {
+                    MessageDTO msg = MessageDTO.builder()
+                            .topic(MsgTopic.FILE_DELETE)
+                            .status(MsgStatus.PENDING)
+                            .payload(newUrl)
+                            .lastError("上传简历，提前兜底补偿")
+                            .priority(MsgPriority.LOW)
+                            .maxRetries(2)
+                            .nextRetryAt(now.plusMinutes(30))
+                            .build();
+                    msgId = localMessageApi.saveMsg(msg);
+                }
+                return msgId;
+            } catch (BusinessException e) {
+                status.setRollbackOnly();
+                throw e;
+            } catch (Exception e) {
+                log.error("上传简历 - 预占或提前写入消息表兜底补偿失败，直接拦截。 error：{}", e.getMessage());
+                status.setRollbackOnly();
+                throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED);
+            }
+        });
 
-            String name = StrUtil.isNotBlank(metadata.getFileName()) ?
-                    metadata.getFileName() : originalFilename;
-
-            Resumes oldResume = lambdaQuery()
-                    .select(Resumes::getStorageUrl)
-                    .eq(Resumes::getUserId, userId)
-                    .one();
-            String oldStorageUrl = oldResume != null ? oldResume.getStorageUrl() : null;
-
-            OffsetDateTime now = OffsetDateTime.now();
-            Resumes resumes = Resumes.builder()
-                    .fileHash(hash)
-                    .userId(userId)
-                    .fileName(name)
-                    .fileSize(file.getSize())
-                    .fileType(type)
-                    .storageUrl(storageUrl)
-                    .resumeText(resumeText)
-                    .analyzeStatus(AnalyzeStatus.PENDING)
-                    .createdAt(now)
-                    .build();
-            save(resumes);
-
-            if (oldStorageUrl != null) {
-                MessageDTO msg1 = MessageDTO.builder()
-                        .topic(MsgTopic.FILE_DELETE)
-                        .status(MsgStatus.PENDING)
-                        .payload(oldStorageUrl)
-                        .lastError("冗余旧文件，需删除:" + oldStorageUrl)
-                        .priority(MsgPriority.LOW)
-                        .maxRetries(2)
-                        .build();
-                localMessageApi.saveMsg(msg1);
+        Long resumesId = resumes.getId();
+        try {
+            if (url == null) {
+                fileStorageService.uploadFile(file, FileSort.RESUME, newUrl);
             }
 
-            // 更新提前兜底补偿的消息记录  更新状态为IGNORED
-            localMessageApi.updateStatus(id,MsgStatus.IGNORED);
+            // Tika 提取文本内容
+            String resumeText = fileParseService.parseText(file);
+            if (StrUtil.isBlank(resumeText)) {
+                throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED);
+            }
 
-            return ResumeUploadVO.builder()
-                    .id(resumes.getId())
-                    .fileName(resumes.getFileName())
-                    .fileType(resumes.getFileType())
-                    .fileSize(resumes.getFileSize())
-                    .createdAt(resumes.getCreatedAt())
-                    .analyzeStatus(resumes.getAnalyzeStatus())
-                    .build();
+            saveResume(resumesId, resumeText, cleanupMessageId);
+        } catch (Exception e) {
+            safeMarkUploadFailed(resumesId);
+            log.error("上传简历 - 上传、解析或保存失败。resumeId：{}", resumesId, e);
+            if (e instanceof BusinessException) {
+                throw (BusinessException) e;
+            }
+            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED);
+        }
+        return ResumeUploadVO.builder()
+                .id(resumesId)
+                .fileName(resumes.getFileName())
+                .fileType(resumes.getFileType())
+                .fileSize(resumes.getFileSize())
+                .createdAt(resumes.getCreatedAt())
+                .analyzeStatus(AnalyzeStatus.PENDING)
+                .build();
+    }
 
+    private void saveResume(Long resumesId, String resumeText, Long msgId) {
+        transactionTemplate.execute(status -> {
+            try {
+                boolean updated = lambdaUpdate()
+                        .eq(Resumes::getId, resumesId)
+                        .eq(Resumes::getAnalyzeStatus, AnalyzeStatus.UPLOADING)
+                        .set(Resumes::getResumeText, resumeText)
+                        .set(Resumes::getAnalyzeStatus, AnalyzeStatus.PENDING)
+                        .update();
+                if (!updated) {
+                    throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED);
+                }
+                // 更新提前兜底补偿的消息记录  更新状态为IGNORED
+                if (msgId != null) {
+                    localMessageApi.updateStatus(msgId, MsgStatus.IGNORED);
+                }
+                return null;
             }catch (Exception e){
                 status.setRollbackOnly();
                 log.error("上传简历 - 主事务内出现异常。 msg:{}",e.getMessage());
                 throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED);
             }
         });
+    }
+
+    private void safeMarkUploadFailed(Long resumeId) {
+        if (resumeId == null) {
+            return;
+        }
+        try {
+            resumeTxService.markUploadFailed(resumeId, AnalyzeStatus.UPLOAD_FAILED);
+        } catch (Exception e) {
+            log.error("标记简历上传失败异常，等待定时任务处理。resumeId：{}", resumeId, e);
+        }
+    }
+
+    private void lockCheckAndPreAllocation(Long userId,Resumes resumes,String hash){
+        // PostgreSQL advisory lock
+        resumeMapper.lockResumes(userId ^ RESUME_MUTATION_LOCK_NAMESPACE);
+
+        boolean exists = lambdaQuery()
+                .eq(Resumes::getFileHash, hash)
+                .eq(Resumes::getUserId, userId)
+                .exists();
+        if (exists) {
+            throw new BusinessException(ErrorCode.FILE_IS_EXISTS);
+        }
+
+        Long count = lambdaQuery()
+                .eq(Resumes::getUserId, userId)
+                .count();
+        if (count >= 5) {
+            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED);
+        }
+        save(resumes);
     }
 
     @Override
@@ -206,6 +256,8 @@ public class ResumesServiceImpl extends ServiceImpl<ResumesMapper, Resumes> impl
     @Override
     public ResumeVO getResumeDetail(Long resumeId) {
         // ① 查简历
+
+        Long userId = AuthContext.getRequiredUserId();
         Resumes resumes = lambdaQuery()
                 .select(
                         Resumes::getUserId,Resumes::getFileName,Resumes::getFileSize,
@@ -214,6 +266,7 @@ public class ResumesServiceImpl extends ServiceImpl<ResumesMapper, Resumes> impl
                         Resumes::getUpdatedAt
                 )
                 .eq(Resumes::getId, resumeId)
+                .eq(Resumes::getUserId, userId)
                 .one();
         if (resumes == null) {
             throw new BusinessException(ErrorCode.RESUME_NOT_FOUND);
@@ -242,6 +295,7 @@ public class ResumesServiceImpl extends ServiceImpl<ResumesMapper, Resumes> impl
         Long userId = AuthContext.getRequiredUserId();
         boolean exists = lambdaQuery()
                 .eq(Resumes::getId, resumeId)
+                .eq(Resumes::getUserId, userId)
                 .exists();
         if (!exists){
             throw new BusinessException(ErrorCode.RESUME_NOT_FOUND);
@@ -249,6 +303,7 @@ public class ResumesServiceImpl extends ServiceImpl<ResumesMapper, Resumes> impl
         // ② 逻辑删除 + 审计字段
         lambdaUpdate()
                 .eq(Resumes::getId, resumeId)
+                .eq(Resumes::getUserId, userId)
                 .set(Resumes::getIsDeleted,true)
                 .set(Resumes::getUpdatedAt, OffsetDateTime.now())
                 // TODO: traceId完善后，要传入
@@ -260,15 +315,16 @@ public class ResumesServiceImpl extends ServiceImpl<ResumesMapper, Resumes> impl
     @Override
     @Transactional(rollbackFor = BusinessException.class)
     public ResumeVO analyzeResume(Long resumeId) {
-        //TODO ① 校验简历存在
+        // 校验简历存在
+        Long userId = AuthContext.getRequiredUserId();
         boolean exists = lambdaQuery()
                 .eq(Resumes::getId, resumeId)
+                .eq(Resumes::getUserId, userId)
                 .exists();
         if (!exists){
             throw new BusinessException(ErrorCode.RESUME_NOT_FOUND);
         }
         //TODO ③ 更新 resumes.analyzeStatus = AnalyzeStatus.PROCESSING
-
         //TODO ④ 异步/同步调用大模型解析 resumeText（从 resumes 表读取）
         //TODO ⑤ 解析结果写入 resume_analyses 表（overallScore, strengthsJson, suggestionsJson）
         //TODO ⑥ 写入 candidate_skill_scores 表（每个维度一条记录）
@@ -281,8 +337,10 @@ public class ResumesServiceImpl extends ServiceImpl<ResumesMapper, Resumes> impl
     @Override
     public ResumeAnalysisVO getAnalysis(Long resumeId) {
         // ① 校验简历存在
+        Long userId = AuthContext.getRequiredUserId();
         Resumes resume = lambdaQuery()
                 .select(Resumes::getUserId)
+                .eq(Resumes::getUserId, userId)
                 .eq(Resumes::getId, resumeId)
                 .one();
         if (resume == null) {

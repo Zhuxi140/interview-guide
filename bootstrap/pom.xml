@@ -70,5 +70,11 @@
             <artifactId>system</artifactId>
             <version>${project.version}</version>
         </dependency>
+
+        <dependency>
+            <groupId>interview.guide</groupId>
+            <artifactId>infra</artifactId>
+            <version>${project.version}</version>
+        </dependency>
     </dependencies>
 </project>

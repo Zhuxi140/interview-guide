@@ -9,6 +9,7 @@ import interview.common.enums.RoleScope;
 import interview.common.enums.SelectOrder;
 import interview.common.exception.BusinessException;
 import interview.framework.context.AuthContext;
+import interview.system.tenant.model.enums.EnterpriseStatus;
 import interview.system.rbac.model.entity.Role;
 import interview.system.rbac.service.RolesService;
 import interview.system.tenant.mapper.EnterpriseTeamMembersMapper;
@@ -242,6 +243,7 @@ public class EnterpriseTeamMembersServiceImpl extends ServiceImpl<EnterpriseTeam
     public void verifyEnterpriseId(Long enterpriseId) {
         boolean exists = enterprisesService.lambdaQuery()
                 .eq(Enterprise::getId, enterpriseId)
+                .eq(Enterprise::getStatus, EnterpriseStatus.NORMAL)
                 .exists();
         if (!exists) {
             throw new BusinessException(ErrorCode.ENTERPRISE_NOT_FOUND);

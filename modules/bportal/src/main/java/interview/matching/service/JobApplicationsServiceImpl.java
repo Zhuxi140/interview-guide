@@ -6,9 +6,11 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import interview.api.system.EnterpriseValidationApi;
 import interview.api.system.UserApi;
 import interview.common.enums.ErrorCode;
+import interview.common.enums.UserType;
 import interview.common.exception.BusinessException;
 import interview.framework.context.AuthContext;
 import interview.job.model.entity.Job;
+import interview.job.model.enums.JobStatus;
 import interview.job.service.JobService;
 import interview.matching.mapper.JobApplicationsMapper;
 import interview.matching.model.bo.JobApplicationBO;
@@ -25,6 +27,8 @@ import interview.matching.model.vo.MyApplicationListItemVO;
 import interview.resume.model.entity.Resumes;
 import interview.resume.service.ResumesService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,6 +39,7 @@ import java.util.Map;
 /**
  * @author zhuxi
  */
+@Slf4j
 @RequiredArgsConstructor
 @Service
 public class JobApplicationsServiceImpl extends ServiceImpl<JobApplicationsMapper, JobApplications> implements JobApplicationsService {
@@ -48,40 +53,39 @@ public class JobApplicationsServiceImpl extends ServiceImpl<JobApplicationsMappe
     @Override
     @Transactional(rollbackFor = BusinessException.class)
     public JobApplicationSubmitVO submitApplication(Long jobId, JobApplicationSubmitReq req) {
-        //TODO 【提交投递】
-        // ① 校验岗位：查 jobs 表 id=jobId，不存在抛 40001，status!=OPEN 抛 40002'
+        Long userId = AuthContext.getRequiredUserId();
+
+        // ① 校验当前用户 userType = CANDIDATE
+        if (AuthContext.getUserType() != UserType.CANDIDATE) {
+            throw new BusinessException(ErrorCode.PERMISSION_DENIED);
+        }
+
+        // ② 校验岗位：存在且处于 OPEN 状态
         Job job = jobService.lambdaQuery()
-                .select(Job::getEnterpriseId)
+                .select(Job::getEnterpriseId, Job::getStatus)
                 .eq(Job::getId, jobId)
                 .one();
+
         if (job == null) {
             throw new BusinessException(ErrorCode.JOB_NOT_FOUND);
         }
-        // ② 校验简历：查 resumes 表 id=req.resumeId，不存在抛 40004
-        Resumes one = resumesService.lambdaQuery()
+        if (job.getStatus() != JobStatus.OPEN) {
+            throw new BusinessException(ErrorCode.JOB_ALREADY_CLOSED);
+        }
+
+        // ③ 校验简历：存在且属于当前用户
+        Resumes resume = resumesService.lambdaQuery()
                 .select(Resumes::getUserId)
                 .eq(Resumes::getId, req.getResumeId())
                 .one();
-        if (one == null) {
+        if (resume == null) {
             throw new BusinessException(ErrorCode.RESUME_NOT_FOUND);
         }
-        // ③ 校验简历归属：resumes.userId 必须等于当前登录用户（不可投递他人简历）
-        Long userId = AuthContext.getRequiredUserId();
-        if (!one.getUserId().equals(userId)) {
+        if (!resume.getUserId().equals(userId)) {
             throw new BusinessException(ErrorCode.RESUME_IS_NOT_YOUR);
         }
-        // ④ 防重复投递：同一 candidateId + jobId + isDeleted=false → 抛 40010
-        boolean exists = lambdaQuery()
-                        .eq(JobApplications::getJobId, jobId)
-                        .eq(JobApplications::getCandidateId, userId)
-                        .exists();
-        if (exists) {
-            throw new BusinessException(ErrorCode.NOT_AGAIN_APPLY);
-        }
-        // ⑤ 校验当前用户 userType = CANDIDATE，否则抛权限异常
-        // ⑥ Phase 8 预留：校验 sys_user_kyc.auth_status = PASSED
-        // ⑦ Phase 4 预留：校验钱包余额充足
-        // ⑧ 构造 JobApplications（id=雪花id, enterpriseId从job获取, candidateId取当前用户, status=APPLIED）
+
+        // ④ 构造投递记录，由数据库唯一索引兜底防重复
         JobApplications jobApplications = JobApplications.builder()
                 .enterpriseId(job.getEnterpriseId())
                 .jobId(jobId)
@@ -89,10 +93,14 @@ public class JobApplicationsServiceImpl extends ServiceImpl<JobApplicationsMappe
                 .resumeId(req.getResumeId())
                 .status(JobApplicationStatus.APPLIED)
                 .build();
-        save(jobApplications);
 
-        // ⑩ 异步 AI 人岗匹配：读取 resumeText + jdContent → AiRouter.chat → 更新 aiMatchScore
-        // ⑪ Phase 4 预留：写入 token_consume_logs
+        try {
+            save(jobApplications);
+        } catch (DataIntegrityViolationException e) {
+            log.error("重复投递: jobId={}, candidateId={}, resumeId={}", jobId, userId, req.getResumeId(), e);
+            throw new BusinessException(ErrorCode.NOT_AGAIN_APPLY);
+        }
+
         return JobApplicationSubmitVO.builder()
                 .id(jobApplications.getId())
                 .enterpriseId(job.getEnterpriseId())
@@ -113,6 +121,7 @@ public class JobApplicationsServiceImpl extends ServiceImpl<JobApplicationsMappe
         boolean exists = jobService.lambdaQuery()
                 .eq(Job::getEnterpriseId, enterpriseId)
                 .eq(Job::getId, jobId)
+                .eq(Job::getStatus, JobStatus.OPEN)
                 .exists();
         if (!exists){
             throw new BusinessException(ErrorCode.JOB_NOT_FOUND);

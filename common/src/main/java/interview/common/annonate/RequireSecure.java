@@ -1,6 +1,6 @@
 package interview.common.annonate;
 
-import interview.common.enums.SmsType;
+import interview.common.enums.SecureActionType;
 
 import java.lang.annotation.*;
 
@@ -8,5 +8,10 @@ import java.lang.annotation.*;
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
 public @interface RequireSecure {
-    SmsType[] allowList();
+
+    /**
+     * 接口要求的一次性安全授权动作。
+     * @return 安全操作类型
+     */
+    SecureActionType value();
 }

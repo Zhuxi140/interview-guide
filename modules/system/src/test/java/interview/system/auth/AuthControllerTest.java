@@ -1,6 +1,7 @@
 package interview.system.auth;
 
 import interview.common.constant.Result;
+import interview.common.constant.SecureActionContext;
 import interview.common.enums.SmsType;
 import interview.system.auth.model.bo.LoginBO;
 import interview.system.auth.model.bo.RegisterBo;
@@ -9,6 +10,7 @@ import interview.system.auth.model.enums.UserStatus;
 import interview.system.auth.model.req.*;
 import interview.system.auth.model.vo.*;
 import interview.system.auth.service.AuthService;
+import interview.system.auth.service.SecureChallengeService;
 import interview.system.auth.service.SmsService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,6 +31,8 @@ class AuthControllerTest {
     @Mock
     private SmsService smsService;
     @Mock
+    private SecureChallengeService secureChallengeService;
+    @Mock
     private AuthService authService;
     @Mock
     private AuthConverter authConverter;
@@ -39,7 +43,8 @@ class AuthControllerTest {
 
     @BeforeEach
     void setUp() {
-        authController = new AuthController(smsService, authService, authConverter, request);
+        authController = new AuthController(
+                smsService, secureChallengeService, authService, authConverter, request);
     }
 
     @Nested
@@ -60,20 +65,20 @@ class AuthControllerTest {
     }
 
     @Nested
-    class VerifyCode {
+    class VerifyChallenge {
 
         @Test
-        void verifyCode_success() {
-            VerifyReq req = new VerifyReq();
-            req.setPhone("13800138000");
+        void verifyChallenge_success() {
+            SecureChallengeVerifyReq req = new SecureChallengeVerifyReq();
             req.setCode("123456");
-            req.setSmsType(SmsType.LOGIN);
-            when(smsService.verifyForSensitiveAction(req)).thenReturn("token-xxx");
+            SecureActionTokenVO vo = new SecureActionTokenVO("token-xxx", 300);
+            when(secureChallengeService.verify("challenge-1", req)).thenReturn(vo);
 
-            Result<String> result = authController.verifyCode(req);
+            Result<SecureActionTokenVO> result = authController.verifySecureChallenge(
+                    "challenge-1", req);
 
-            assertEquals("token-xxx", result.getData());
-            verify(smsService).verifyForSensitiveAction(req);
+            assertEquals("token-xxx", result.getData().secureActionToken());
+            verify(secureChallengeService).verify("challenge-1", req);
         }
     }
 
@@ -198,13 +203,27 @@ class AuthControllerTest {
     class Revoke {
 
         @Test
-        void revoke_success() {
-            RevokeDeviceReq req = new RevokeDeviceReq("123456");
+        void startRevokeChallenge_success() {
+            SecureChallengeStartVO vo = new SecureChallengeStartVO(
+                    "challenge-1", "138****8000", 300);
+            when(authService.startRevokeChallenge(1L)).thenReturn(vo);
 
-            Result<Void> result = authController.revoke(1L, req);
+            Result<SecureChallengeStartVO> result =
+                    authController.startRevokeChallenge(1L);
+
+            assertEquals("challenge-1", result.getData().challengeId());
+            verify(authService).startRevokeChallenge(1L);
+        }
+
+        @Test
+        void revoke_success() {
+            SecureActionContext context = SecureActionContext.builder().build();
+            when(request.getAttribute(SecureActionContext.REQUEST_ATTRIBUTE)).thenReturn(context);
+
+            Result<Void> result = authController.revoke(1L);
 
             assertNotNull(result);
-            verify(authService).revoke(1L, req);
+            verify(authService).revoke(1L, context);
         }
     }
 

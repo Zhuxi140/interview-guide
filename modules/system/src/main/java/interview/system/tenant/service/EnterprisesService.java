@@ -6,11 +6,13 @@ import interview.system.tenant.model.bo.EnterpriseCreateBO;
 import interview.system.tenant.model.bo.ListUserEnterprisesBO;
 import interview.system.tenant.model.entity.Enterprise;
 import interview.system.tenant.model.req.EnterpriseBasicUpdateReq;
-import interview.system.tenant.model.req.EnterpriseContactUpdateReq;
+import interview.system.tenant.model.req.EnterpriseContactEmailUpdateReq;
 import interview.system.tenant.model.req.EnterpriseCreateReq;
+import interview.system.tenant.model.vo.EnterpriseContactEmailUpdateVO;
+import interview.system.tenant.model.vo.EnterpriseContactPhoneUpdateVO;
 import interview.system.tenant.model.vo.EnterpriseDetailVO;
-import interview.system.tenant.model.vo.EnterpriseContactUpdateVO;
 import interview.system.tenant.model.vo.EnterpriseUpdateVO;
+import interview.system.auth.model.vo.SecureChallengeStartVO;
 
 import java.util.List;
 
@@ -57,18 +59,44 @@ public interface EnterprisesService extends IService<Enterprise> {
     EnterpriseUpdateVO updateEnterpriseBasic(Long enterpriseId, EnterpriseBasicUpdateReq req);
 
     /**
-     * 更新企业联系方式（邮箱、手机）
-     *
+     * 创建企业联系邮箱更新 Challenge
      * @param enterpriseId 企业 ID
-     * @param req          更新请求
-     * @return 更新结果
+     * @return Challenge 启动信息
      */
-    EnterpriseContactUpdateVO updateEnterpriseContact(Long enterpriseId, SecureActionContext secureActionContext, EnterpriseContactUpdateReq req);
+    SecureChallengeStartVO startContactEmailChallenge(Long enterpriseId);
+
+    /**
+     * 创建企业注销 Challenge
+     * @param enterpriseId 企业 ID
+     * @return Challenge 启动信息
+     */
+    SecureChallengeStartVO startDeletionChallenge(Long enterpriseId);
+
+    /**
+     * 更新企业联系邮箱
+     * @param enterpriseId 企业 ID
+     * @param secureActionContext 安全操作上下文
+     * @param req 邮箱更新请求
+     * @return 邮箱更新结果
+     */
+    EnterpriseContactEmailUpdateVO updateEnterpriseContactEmail(
+            Long enterpriseId, SecureActionContext secureActionContext,
+            EnterpriseContactEmailUpdateReq req);
+
+    /**
+     * 使用企业联系电话验证上下文更新联系电话
+     * @param enterpriseId 企业 ID
+     * @param secureActionContext 安全操作上下文
+     * @return 联系电话更新结果
+     */
+    EnterpriseContactPhoneUpdateVO updateEnterpriseContactPhone(
+            Long enterpriseId, SecureActionContext secureActionContext);
 
     /**
      * 注销企业（仅 OWNER）
      *
      * @param enterpriseId 企业 ID
+     * @param secureActionContext 安全操作上下文
      */
-    void deleteEnterprise(Long enterpriseId);
+    void deleteEnterprise(Long enterpriseId, SecureActionContext secureActionContext);
 }

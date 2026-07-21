@@ -6,6 +6,8 @@ import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.crypto.digest.DigestUtil;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import interview.api.system.dto.SecureChallengeStartDTO;
+import interview.common.constant.SecureActionContext;
 import interview.common.enums.*;
 import interview.common.exception.BusinessException;
 import interview.common.util.CryptoUtil;
@@ -15,16 +17,17 @@ import interview.framework.context.AuthContext;
 import interview.common.constant.AuthKeyConstant;
 import interview.system.auth.model.bo.LoginBO;
 import interview.system.auth.model.bo.UserInfoBO;
-import interview.common.enums.SmsType;
 import interview.system.auth.mapper.AuthMapper;
 import interview.system.auth.model.bo.RegisterBo;
 import interview.system.auth.model.entity.UserToken;
 import interview.system.auth.model.req.*;
 import interview.system.auth.model.vo.RefreshTokenVO;
+import interview.system.auth.model.vo.SecureChallengeStartVO;
 import interview.system.auth.model.vo.SwitchEnterpriseVO;
 import interview.system.auth.model.vo.TokenInfoVO;
 import interview.system.auth.model.vo.UserEnterpriseVO;
 import interview.system.auth.service.AuthService;
+import interview.system.auth.service.SecureChallengeService;
 import interview.system.auth.service.SmsService;
 import interview.system.auth.service.UsersService;
 import interview.system.rbac.mapper.PermissionsMapper;
@@ -70,9 +73,10 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
     private final StringRedisTemplate stringRedisTemplate;
     private final JwttUtil jwttUtil;
     private final JwtProperties jwtProperties;
+    private final SecureChallengeService secureChallengeService;
 
     @Override
-    @Transactional(rollbackFor = BusinessException.class)
+    @Transactional
     public RegisterBo register(RegisterReq register) {
 
         // 验证code 并 删除code
@@ -159,7 +163,7 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
     }
 
     @Override
-    @Transactional(rollbackFor = BusinessException.class)
+    @Transactional
     public RefreshTokenVO refreshToken(RefreshTokenReq refresh) {
         String refreshToken   = refresh.getRefreshToken();
         // 验证refreshToken是否存在
@@ -183,11 +187,22 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
         String ipAddress = token.getIpAddress();
 
         //FK检查
-        if (!usersService.lambdaQuery()
-                .eq(User::getId,userId)
-                .exists()) {
+        User user = usersService.lambdaQuery()
+                .select(
+                        User::getStatus,
+                        User::getUsername,
+                        User::getUserType,
+                        User::getRiskLevel
+                )
+                .eq(User::getId, userId)
+                .one();
+        if (user == null) {
             log.error("外键拦截: 外键UserId：[{}]在User表已不存在",userId);
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR);
+            throw new BusinessException(ErrorCode.ACCOUNT_DATA_ANOMALY);
+        }
+
+        if (user.getStatus() == UserStatus.DISABLED){
+            throw new BusinessException(ErrorCode.USER_ALREADY_FREEZE);
         }
 
         // 触发重放检测
@@ -234,14 +249,6 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
         }
 
         // 加载企业信息、用户信息 和 角色权限信息
-        User user = usersService.lambdaQuery()
-                .select(
-                        User::getUsername,
-                        User::getUserType,
-                        User::getRiskLevel
-                )
-                .eq(User::getId, userId)
-                .one();
         EnterpriseContext enterpriseContext = loadEnterpriseContext(userId);
         RbacContext rbacContext = loadRbacContext(userId, enterpriseContext.enterpriseId);
 
@@ -382,22 +389,42 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
     }
 
     @Override
-    @Transactional(rollbackFor = BusinessException.class)
-    public void revoke(Long tokenId, RevokeDeviceReq code) {
-
+    public SecureChallengeStartVO startRevokeChallenge(Long tokenId) {
         Long userId = AuthContext.getRequiredUserId();
 
-        User user = usersService.lambdaQuery()
-                .select(User::getPhone)
-                .eq(User::getId, userId)
-                .one();
-        if (user == null){
-            log.error("｛revoke｝——token有效，但数据库无此实体，userId：[{}]", userId);
+        // 仅允许为当前用户仍然有效的设备 Token 创建下线 Challenge
+        boolean exists = lambdaQuery()
+                .eq(UserToken::getId, tokenId)
+                .eq(UserToken::getUserId, userId)
+                .eq(UserToken::getIsRevoked, false)
+                .exists();
+        if (!exists) {
             throw new BusinessException(ErrorCode.ACCOUNT_DATA_ANOMALY);
         }
 
-        smsService.verifyCode(user.getPhone(), code.getCode(), SmsType.SENSITIVE_OPERATION);
+        SecureChallengeStartDTO challenge = secureChallengeService.create(
+                userId, SecureActionType.REVOKE_DEVICE, tokenId);
+        return new SecureChallengeStartVO(
+                challenge.challengeId(),
+                challenge.maskedPhone(),
+                challenge.expiresInSeconds());
+    }
 
+    @Override
+    @Transactional(rollbackFor = BusinessException.class)
+    public void revoke(Long tokenId, SecureActionContext secureActionContext) {
+        Long userId = AuthContext.getRequiredUserId();
+
+        // 一次性令牌必须精确授权下线当前路径指定的设备 Token
+        if (secureActionContext == null
+                || secureActionContext.getActionType() != SecureActionType.REVOKE_DEVICE) {
+            throw new BusinessException(ErrorCode.SECURE_ACTION_NOT_MATCH);
+        }
+        if (!tokenId.equals(secureActionContext.getResourceId())) {
+            throw new BusinessException(ErrorCode.PERMISSION_DENIED);
+        }
+
+        // 更新设备 Token 状态并限制记录必须属于当前用户
         boolean update = lambdaUpdate()
                 .eq(UserToken::getId, tokenId)
                 .eq(UserToken::getUserId, userId)

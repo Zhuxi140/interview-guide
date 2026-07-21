@@ -52,7 +52,7 @@ public interface Perm {
     interface Application {
         String LIST = "application:list";
         String DETAIL = "application:detail";
-        String UPDATE = "application:update";
+        String UPDATE = "application:update-status";
     }
 
     interface Ops {

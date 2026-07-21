@@ -1,6 +1,7 @@
 package interview.system.auth.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
+import interview.common.constant.SecureActionContext;
 import interview.system.auth.model.bo.LoginBO;
 import interview.system.auth.model.bo.RegisterBo;
 import interview.system.auth.model.bo.UserInfoBO;
@@ -9,6 +10,7 @@ import interview.system.auth.model.req.*;
 import interview.system.auth.model.vo.RefreshTokenVO;
 import interview.system.auth.model.vo.TokenInfoVO;
 import interview.system.auth.model.vo.SwitchEnterpriseVO;
+import interview.system.auth.model.vo.SecureChallengeStartVO;
 
 import java.util.List;
 
@@ -52,10 +54,18 @@ public interface AuthService extends IService<UserToken> {
     List<TokenInfoVO> getUserToken();
 
     /**
-     * 踢下指定设备(Token)
-     * @param tokenId tokenId
+     * 创建下线指定设备的安全验证 Challenge
+     * @param tokenId 设备 Token ID
+     * @return Challenge 启动信息
      */
-    void revoke(Long tokenId, RevokeDeviceReq code);
+    SecureChallengeStartVO startRevokeChallenge(Long tokenId);
+
+    /**
+     * 踢下指定设备 Token
+     * @param tokenId 设备 Token ID
+     * @param secureActionContext 安全操作上下文
+     */
+    void revoke(Long tokenId, SecureActionContext secureActionContext);
 
 
     /**

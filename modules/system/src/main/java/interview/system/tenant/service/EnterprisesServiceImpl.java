@@ -1,15 +1,22 @@
 package interview.system.tenant.service;
 
+import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import interview.api.bportal.JobValidationApi;
+import interview.api.system.SecureChallengeApi;
+import interview.api.system.dto.SecureChallengeStartDTO;
 import interview.common.constant.SecureActionContext;
 import interview.common.enums.ErrorCode;
+import interview.common.enums.SecureActionType;
 import interview.common.exception.BusinessException;
+import interview.common.util.TraceUtil;
 import interview.framework.config.CustomIdGenerator;
 import interview.framework.context.AuthContext;
 import interview.system.rbac.model.entity.Role;
 import interview.system.rbac.service.RolesService;
 import interview.system.rbac.service.UserRolesService;
+import interview.system.auth.model.vo.SecureChallengeStartVO;
 import interview.system.tenant.mapper.EnterprisesMapper;
 import interview.system.tenant.model.bo.EnterpriseCreateBO;
 import interview.system.tenant.model.bo.ListUserEnterprisesBO;
@@ -18,9 +25,10 @@ import interview.system.tenant.model.entity.Enterprise;
 import interview.system.tenant.model.entity.EnterpriseTeamMember;
 import interview.system.tenant.model.enums.EnterpriseStatus;
 import interview.system.tenant.model.req.EnterpriseBasicUpdateReq;
-import interview.system.tenant.model.req.EnterpriseContactUpdateReq;
+import interview.system.tenant.model.req.EnterpriseContactEmailUpdateReq;
 import interview.system.tenant.model.req.EnterpriseCreateReq;
-import interview.system.tenant.model.vo.EnterpriseContactUpdateVO;
+import interview.system.tenant.model.vo.EnterpriseContactEmailUpdateVO;
+import interview.system.tenant.model.vo.EnterpriseContactPhoneUpdateVO;
 import interview.system.tenant.model.vo.EnterpriseDetailVO;
 import interview.system.tenant.model.vo.EnterpriseUpdateVO;
 import lombok.RequiredArgsConstructor;
@@ -47,11 +55,15 @@ import java.util.stream.Collectors;
 @Slf4j
 public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enterprise> implements EnterprisesService {
 
+    private static final long ENTERPRISE_CONTACT_LOCK_NAMESPACE = 0x454E54434F4E5443L;
+
     private final CustomIdGenerator customIdGenerator;
     private final UserRolesService userRolesService;
     private final EnterpriseTeamMembersService enterpriseTeamMembersService;
     private final EnterprisesMapper enterprisesMapper;
     private final RolesService rolesService;
+    private final SecureChallengeApi secureChallengeApi;
+    private final JobValidationApi jobValidationApi;
 
     @Override
     @Transactional(rollbackFor = BusinessException.class)
@@ -231,58 +243,117 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
     }
 
     @Override
-    @Transactional(rollbackFor = BusinessException.class)
-    public EnterpriseContactUpdateVO updateEnterpriseContact(Long enterpriseId,SecureActionContext secureActionContext, EnterpriseContactUpdateReq req) {
+    public SecureChallengeStartVO startContactEmailChallenge(Long enterpriseId) {
+        // 确认当前用户属于目标企业后，创建邮箱更新专用 Challenge
         validateEnterpriseBelong(enterpriseId);
+        SecureChallengeStartDTO challenge = secureChallengeApi.create(
+                AuthContext.getRequiredUserId(),
+                SecureActionType.UPDATE_ENTERPRISE_EMAIL,
+                enterpriseId);
+        return toSecureChallengeStartVO(challenge);
+    }
+
+    @Override
+    public SecureChallengeStartVO startDeletionChallenge(Long enterpriseId) {
+        // 确认当前用户属于目标企业后，创建企业注销专用 Challenge
+        validateEnterpriseBelong(enterpriseId);
+        SecureChallengeStartDTO challenge = secureChallengeApi.create(
+                AuthContext.getRequiredUserId(),
+                SecureActionType.DELETE_ENTERPRISE,
+                enterpriseId);
+        return toSecureChallengeStartVO(challenge);
+    }
+
+    @Override
+    public EnterpriseContactEmailUpdateVO updateEnterpriseContactEmail(
+            Long enterpriseId, SecureActionContext secureActionContext,
+            EnterpriseContactEmailUpdateReq req) {
+        // 校验企业归属以及令牌动作和企业绑定关系
+        validateEnterpriseBelong(enterpriseId);
+        validateSecureActionContext(
+                secureActionContext,
+                SecureActionType.UPDATE_ENTERPRISE_EMAIL,
+                enterpriseId);
         String contactEmail = req.getContactEmail();
-        String contactPhone = req.getContactPhone();
-        if (contactEmail == null && contactPhone == null) {
-            throw new BusinessException(ErrorCode.LACK_PHONE_OR_EMAIL);
-        }
 
-        String targetPhone = secureActionContext.getTargetPhone();
-        if (contactPhone != null && !contactPhone.equals(targetPhone)){
-            throw new BusinessException(ErrorCode.PHONE_MISMATCH);
-        }
-
-        Enterprise entity = new Enterprise();
-        entity.setId(enterpriseId);
-        if (contactPhone != null) entity.setContactPhone(contactPhone);
-        if (contactEmail != null) entity.setContactEmail(req.getContactEmail());
-        // MetaObjectHandler auto-fills updatedAt, traceId
-
-        if (baseMapper.updateById(entity) == 0) {
+        // 邮箱为单字段更新，使用 LambdaUpdate 并手动维护审计字段
+        boolean updated = lambdaUpdate()
+                .eq(Enterprise::getId, enterpriseId)
+                .set(Enterprise::getContactEmail, contactEmail)
+                .set(Enterprise::getUpdatedAt, OffsetDateTime.now())
+                .set(Enterprise::getTraceId, TraceUtil.getTraceId())
+                .update();
+        if (!updated) {
             log.error("更新企业联系方式未影响任何记录: enterpriseId [{}]", enterpriseId);
             throw new BusinessException(ErrorCode.ENTERPRISE_DATA_ANOMALY);
         }
 
-        return new EnterpriseContactUpdateVO(enterpriseId, contactEmail, contactPhone);
-    }
-
-    /**
-     * 校验 enterpriseId 合法且当前用户为企业成员
-     * @param enterpriseId 企业 ID
-     */
-    private void validateEnterpriseBelong(Long enterpriseId) {
-        verifyEnterpriseId(enterpriseId);
-
-        Long userId = AuthContext.getRequiredUserId();
-        boolean member = enterpriseTeamMembersService.lambdaQuery()
-                .eq(EnterpriseTeamMember::getEnterpriseId, enterpriseId)
-                .eq(EnterpriseTeamMember::getUserId, userId)
-                .exists();
-        if (!member) {
-            throw new BusinessException(ErrorCode.ENTERPRISE_NOT_BELONG);
-        }
+        return new EnterpriseContactEmailUpdateVO(enterpriseId, contactEmail);
     }
 
     @Override
-    public void deleteEnterprise(Long enterpriseId) {
-        //校验 enterpriseId 合法性
-        verifyEnterpriseId(enterpriseId);
+    @Transactional(rollbackFor = BusinessException.class)
+    public EnterpriseContactPhoneUpdateVO updateEnterpriseContactPhone(
+            Long enterpriseId, SecureActionContext secureActionContext) {
+        // 校验企业归属以及令牌动作和企业绑定关系
+        validateEnterpriseBelong(enterpriseId);
+        validateSecureActionContext(
+                secureActionContext,
+                SecureActionType.UPDATE_ENTERPRISE_PHONE,
+                enterpriseId);
 
-        // TODO: 需Job模块 对外开放API后完善
-        //  校验企业下无活跃岗位（jobs.status = 1）
+        // 新联系电话以安全令牌上下文为准，不接受客户端重复提交
+        String contactPhone = secureActionContext.getTargetPhone();
+        if (StrUtil.isBlank(contactPhone)) {
+            throw new BusinessException(ErrorCode.CONTACT_VERIFY_FLOW_INVALID);
+        }
+
+        // 串行化同一企业的联系电话变更，并检查原联系电话快照未变化
+        enterprisesMapper.lockEnterpriseContact(
+                enterpriseId ^ ENTERPRISE_CONTACT_LOCK_NAMESPACE);
+        Enterprise current = lambdaQuery()
+                .select(Enterprise::getId, Enterprise::getContactPhone)
+                .eq(Enterprise::getId, enterpriseId)
+                .one();
+        if (current == null) {
+            throw new BusinessException(ErrorCode.ENTERPRISE_NOT_FOUND);
+        }
+        if (!StrUtil.nullToEmpty(current.getContactPhone()).equals(
+                StrUtil.nullToEmpty(secureActionContext.getSourcePhone()))) {
+            throw new BusinessException(ErrorCode.ENTERPRISE_CONTACT_CHANGED);
+        }
+
+        // 联系电话为单字段更新，使用 LambdaUpdate 并手动维护审计字段
+        boolean updated = lambdaUpdate()
+                .eq(Enterprise::getId, enterpriseId)
+                .set(Enterprise::getContactPhone, contactPhone)
+                .set(Enterprise::getUpdatedAt, OffsetDateTime.now())
+                .set(Enterprise::getTraceId, TraceUtil.getTraceId())
+                .update();
+        if (!updated) {
+            log.error("更新企业联系电话未影响任何记录: enterpriseId [{}]", enterpriseId);
+            throw new BusinessException(ErrorCode.ENTERPRISE_DATA_ANOMALY);
+        }
+
+        return new EnterpriseContactPhoneUpdateVO(enterpriseId, contactPhone);
+    }
+
+
+    @Override
+    @Transactional
+    public void deleteEnterprise(
+            Long enterpriseId, SecureActionContext secureActionContext) {
+        // 校验企业归属以及令牌动作和企业绑定关系
+        validateEnterpriseBelong(enterpriseId);
+        validateSecureActionContext(
+                secureActionContext,
+                SecureActionType.DELETE_ENTERPRISE,
+                enterpriseId);
+
+        // 校验企业下无活跃岗位
+        if (jobValidationApi.hasActiveJobs(enterpriseId)) {
+            throw new BusinessException(ErrorCode.ENTERPRISE_DATA_ANOMALY);
+        }
 
 
         //逻辑删除 enterprises（is_deleted = true）
@@ -312,6 +383,30 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
         // TODO: Phase 8 扩展：需校验 sys_enterprise_cert 已通过认证
     }
 
+    private SecureChallengeStartVO toSecureChallengeStartVO(
+            SecureChallengeStartDTO challenge) {
+        // 将内部 API DTO 转换为对外 Swagger VO
+        return new SecureChallengeStartVO(
+                challenge.challengeId(),
+                challenge.maskedPhone(),
+                challenge.expiresInSeconds());
+    }
+
+    private void validateSecureActionContext(
+            SecureActionContext context,
+            SecureActionType expectedAction,
+            Long enterpriseId) {
+        // 令牌必须精确匹配业务动作，并绑定当前路径中的企业
+        if (context == null || context.getActionType() != expectedAction) {
+            throw new BusinessException(ErrorCode.SECURE_ACTION_NOT_MATCH);
+        }
+        if (!enterpriseId.equals(context.getEnterpriseId())
+                || (context.getResourceId() != null
+                && !enterpriseId.equals(context.getResourceId()))) {
+            throw new BusinessException(ErrorCode.PERMISSION_DENIED);
+        }
+    }
+
     /**
      * 校验企业存在且未被逻辑删除
      * @param enterpriseId 企业 ID
@@ -319,9 +414,28 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
     public void verifyEnterpriseId(Long enterpriseId) {
         boolean exists = lambdaQuery()
                 .eq(Enterprise::getId, enterpriseId)
+                .eq(Enterprise::getStatus, EnterpriseStatus.NORMAL)
                 .exists();
         if (!exists) {
             throw new BusinessException(ErrorCode.ENTERPRISE_NOT_FOUND);
+        }
+    }
+
+
+    /**
+     * 校验 enterpriseId 合法且当前用户为企业成员
+     * @param enterpriseId 企业 ID
+     */
+    private void validateEnterpriseBelong(Long enterpriseId) {
+        verifyEnterpriseId(enterpriseId);
+
+        Long userId = AuthContext.getRequiredUserId();
+        boolean member = enterpriseTeamMembersService.lambdaQuery()
+                .eq(EnterpriseTeamMember::getEnterpriseId, enterpriseId)
+                .eq(EnterpriseTeamMember::getUserId, userId)
+                .exists();
+        if (!member) {
+            throw new BusinessException(ErrorCode.ENTERPRISE_NOT_BELONG);
         }
     }
 }

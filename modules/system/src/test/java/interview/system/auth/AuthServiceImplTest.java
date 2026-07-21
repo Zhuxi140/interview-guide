@@ -2,6 +2,8 @@ package interview.system.auth;
 
 import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
 import com.baomidou.mybatisplus.extension.conditions.update.LambdaUpdateChainWrapper;
+import interview.api.system.dto.SecureChallengeStartDTO;
+import interview.common.constant.SecureActionContext;
 import interview.common.enums.*;
 import interview.common.exception.BusinessException;
 import interview.common.util.CryptoUtil;
@@ -18,6 +20,7 @@ import interview.system.auth.model.vo.RefreshTokenVO;
 import interview.system.auth.model.vo.SwitchEnterpriseVO;
 import interview.system.auth.model.vo.TokenInfoVO;
 import interview.system.auth.service.impl.AuthServiceImpl;
+import interview.system.auth.service.SecureChallengeService;
 import interview.system.auth.service.SmsService;
 import interview.system.auth.service.UsersService;
 import interview.system.rbac.mapper.PermissionsMapper;
@@ -62,6 +65,7 @@ class AuthServiceImplTest {
     @Mock private StringRedisTemplate stringRedisTemplate;
     @Mock private JwttUtil jwttUtil;
     @Mock private JwtProperties jwtProperties;
+    @Mock private SecureChallengeService secureChallengeService;
     @Mock private ValueOperations<String, String> valueOps;
 
     private AuthServiceImpl authService;
@@ -83,7 +87,7 @@ class AuthServiceImplTest {
         authService = spy(new AuthServiceImpl(
             smsService, usersService, enterprisesService, userRolesService,
             rolesService, permissionsMapper, enterpriseTeamMembersService,
-            stringRedisTemplate, jwttUtil, jwtProperties
+            stringRedisTemplate, jwttUtil, jwtProperties, secureChallengeService
         ));
         tokenQueryWrapper = mockQueryWrapper();
         tokenUpdateWrapper = mockUpdateWrapper();
@@ -498,42 +502,46 @@ class AuthServiceImplTest {
     @Nested
     class Revoke {
 
-        private RevokeDeviceReq req;
+        private SecureActionContext secureActionContext;
 
         @BeforeEach
         void setUp() {
             AuthContext.setAuthContext(AuthContext.AuthUser.builder()
                 .userId(userId).userType(UserType.HR).build());
-            req = new RevokeDeviceReq("1234");
-            doReturn(tokenUpdateWrapper).when(authService).lambdaUpdate();
+            secureActionContext = SecureActionContext.builder()
+                    .actionType(SecureActionType.REVOKE_DEVICE)
+                    .resourceId(1L)
+                    .build();
+        }
+
+        @Test
+        void startRevokeChallenge_success() {
+            doReturn(tokenQueryWrapper).when(authService).lambdaQuery();
+            when(tokenQueryWrapper.exists()).thenReturn(true);
+            when(secureChallengeService.create(
+                    userId, SecureActionType.REVOKE_DEVICE, 1L))
+                    .thenReturn(new SecureChallengeStartDTO(
+                            "challenge-1", "138****5678", 300));
+
+            assertEquals("challenge-1",
+                    authService.startRevokeChallenge(1L).challengeId());
         }
 
         @Test
         void revoke_success() {
-            User user = User.builder().phone(phone).build();
-
-            LambdaQueryChainWrapper<User> q = mockQueryWrapper();
-            when(q.one()).thenReturn(user);
-            when(usersService.lambdaQuery()).thenReturn(q);
-
-            doNothing().when(smsService).verifyCode(phone, "1234", SmsType.SENSITIVE_OPERATION);
+            doReturn(tokenUpdateWrapper).when(authService).lambdaUpdate();
             when(tokenUpdateWrapper.update()).thenReturn(true);
 
-            assertDoesNotThrow(() -> authService.revoke(1L, req));
+            assertDoesNotThrow(() -> authService.revoke(1L, secureActionContext));
         }
 
         @Test
         void revoke_fail_tokenNotFound() {
-            User user = User.builder().phone(phone).build();
-
-            LambdaQueryChainWrapper<User> q = mockQueryWrapper();
-            when(q.one()).thenReturn(user);
-            when(usersService.lambdaQuery()).thenReturn(q);
-
-            doNothing().when(smsService).verifyCode(phone, "1234", SmsType.SENSITIVE_OPERATION);
+            doReturn(tokenUpdateWrapper).when(authService).lambdaUpdate();
             when(tokenUpdateWrapper.update()).thenReturn(false);
 
-            BusinessException ex = assertThrows(BusinessException.class, () -> authService.revoke(1L, req));
+            BusinessException ex = assertThrows(BusinessException.class,
+                    () -> authService.revoke(1L, secureActionContext));
             assertEquals(ErrorCode.ACCOUNT_DATA_ANOMALY.getCode(), ex.getCode());
         }
     }

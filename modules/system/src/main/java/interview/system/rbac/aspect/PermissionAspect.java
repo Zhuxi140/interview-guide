@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
+import org.aspectj.lang.reflect.MethodSignature;
 import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.List;
@@ -34,6 +35,18 @@ public class PermissionAspect {
         PermissionScope scope = requirePermission.scope();
         List<Integer> roleIds;
 
+        // 从方法参数提取 enterpriseId，用于和 JWT 上下文当前活跃企业比对
+        MethodSignature signature = (MethodSignature) joinPoint.getSignature();
+        String[] paramNames = signature.getParameterNames();
+        Object[] args = joinPoint.getArgs();
+        Long pathEnterpriseId = null;
+        for (int i = 0; i < paramNames.length; i++) {
+            if ("enterpriseId".equals(paramNames[i]) && args[i] instanceof Long) {
+                pathEnterpriseId = (Long) args[i];
+                break;
+            }
+        }
+
         if (scope == PermissionScope.PLATFORM) {
             List<Role> platformRoles = AuthContext.getAuthContext().platformRoleCodes();
 
@@ -45,6 +58,9 @@ public class PermissionAspect {
                     .map(Role::getCode)
                     .toList();
         } else if (scope == PermissionScope.ENTERPRISE) {
+            if (pathEnterpriseId != null && !pathEnterpriseId.equals(AuthContext.getEnterpriseId())) {
+                throw new AccessDeniedException();
+            }
             Long enterpriseId = AuthContext.getEnterpriseId();
             List<Role> enterpriseRoles = AuthContext.getAuthContext().entRoleMap().get(enterpriseId);
             if (!CollectionUtils.isEmpty(enterpriseRoles) && enterpriseRoles.contains(Role.ENTERPRISE_OWNER)){
@@ -52,6 +68,10 @@ public class PermissionAspect {
             }
             roleIds = enterpriseRoles.stream().map(Role::getCode).toList();
         } else if (scope == PermissionScope.BOTH) {
+            if (pathEnterpriseId != null && !pathEnterpriseId.equals(AuthContext.getEnterpriseId())) {
+                throw new AccessDeniedException();
+            }
+
             List<Role> platformRoles = AuthContext.getAuthContext().platformRoleCodes();
             if (!CollectionUtils.isEmpty(platformRoles) && platformRoles.contains(Role.SUPER_ADMIN)){
                 return joinPoint.proceed();

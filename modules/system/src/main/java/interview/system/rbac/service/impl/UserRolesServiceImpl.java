@@ -5,6 +5,7 @@ import interview.common.enums.ErrorCode;
 import interview.common.exception.BusinessException;
 import interview.system.auth.service.UsersService;
 import interview.system.rbac.service.RolesService;
+import interview.common.enums.RoleScope;
 import org.springframework.dao.DataIntegrityViolationException;
 import interview.system.auth.model.entity.User;
 import interview.system.rbac.mapper.UserRolesMapper;
@@ -101,9 +102,11 @@ public class UserRolesServiceImpl extends ServiceImpl<UserRolesMapper, UserRole>
                         .exists()) {
             throw new BusinessException(ErrorCode.ACCOUNT_DATA_ANOMALY);
         }
-        if (!rolesService.lambdaQuery()
+        long validCount = rolesService.lambdaQuery()
                     .in(Role::getId, roleId)
-                    .exists()) {
+                    .eq(Role::getRoleScope, RoleScope.PLATFORM)
+                    .count();
+        if (validCount != roleId.size()) {
             throw new BusinessException(ErrorCode.ACCOUNT_DATA_ANOMALY);
         }
     }

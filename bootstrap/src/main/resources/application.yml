@@ -28,9 +28,19 @@ spring:
       #data-locations:
 
   ai:
+    vectorstore:
+      pgvector:
+        initialize-schema: true
     openai:
       api-key: xx
       base-url: ddd
+app:
+  storage:
+    endpoint: http://localhost:9000    # RustFS 服务地址
+    access-key: tJ4NevbNcFckxi4af8Uq   # 访问密钥（建议使用环境变量）
+    secret-key: mvFgYqFJTvwH7FP5DZ8U96VPZYsYWImfhDugsaQM   # 私密密钥
+    bucket: interview-guide            # 存储桶名称
+    region: us-east-1                  # 区域（S3协议需要，可任意设置）
 
 server:
   port: 8080

@@ -64,6 +64,8 @@ class SmsServiceImplTest {
 
         @Test
         void sendSms_fail_rateLimited() {
+            LambdaQueryChainWrapper<User> q = mockQueryWrapper();
+            when(usersService.lambdaQuery()).thenReturn(q);
             when(stringRedisTemplate.hasKey(anyString())).thenReturn(true);
 
             BusinessException ex = assertThrows(BusinessException.class, () -> smsService.sendSms(req));
@@ -75,7 +77,6 @@ class SmsServiceImplTest {
             LambdaQueryChainWrapper<User> q = mockQueryWrapper();
             when(q.one()).thenReturn(User.builder().build());
 
-            when(stringRedisTemplate.hasKey(anyString())).thenReturn(false);
             when(usersService.lambdaQuery()).thenReturn(q);
 
             BusinessException ex = assertThrows(BusinessException.class, () -> smsService.sendSms(req));
@@ -109,6 +110,23 @@ class SmsServiceImplTest {
             BusinessException ex = assertThrows(BusinessException.class,
                     () -> smsService.verifyCode(phone, "1234", SmsType.REGISTER));
             assertEquals(ErrorCode.CODE_ERROR.getCode(), ex.getCode());
+        }
+    }
+
+    @Nested
+    class RestrictedSmsType {
+
+        @Test
+        void sendSms_rejectsSensitiveTypeOnPublicEndpoint() {
+            req.setSmsType(SmsType.SECURE_CHALLENGE);
+            LambdaQueryChainWrapper<User> q = mockQueryWrapper();
+            when(usersService.lambdaQuery()).thenReturn(q);
+
+            BusinessException exception = assertThrows(
+                    BusinessException.class,
+                    () -> smsService.sendSms(req));
+
+            assertEquals(ErrorCode.SMS_TYPE_NOT_ALLOWED.getCode(), exception.getCode());
         }
     }
 }

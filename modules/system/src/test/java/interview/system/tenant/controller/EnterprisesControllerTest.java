@@ -2,14 +2,16 @@ package interview.system.tenant.controller;
 
 import interview.common.constant.Result;
 import interview.common.constant.SecureActionContext;
+import interview.system.auth.model.vo.SecureChallengeStartVO;
 import interview.system.tenant.EnterpriseConverter;
 import interview.system.tenant.model.bo.EnterpriseCreateBO;
 import interview.system.tenant.model.bo.ListUserEnterprisesBO;
 import interview.system.tenant.model.enums.EnterpriseStatus;
 import interview.system.tenant.model.req.EnterpriseBasicUpdateReq;
-import interview.system.tenant.model.req.EnterpriseContactUpdateReq;
+import interview.system.tenant.model.req.EnterpriseContactEmailUpdateReq;
 import interview.system.tenant.model.req.EnterpriseCreateReq;
 import interview.system.tenant.model.vo.*;
+import interview.system.tenant.service.EnterpriseContactVerificationService;
 import interview.system.tenant.service.EnterprisesService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,6 +32,8 @@ class EnterprisesControllerTest {
     @Mock
     private EnterprisesService enterprisesService;
     @Mock
+    private EnterpriseContactVerificationService contactVerificationService;
+    @Mock
     private EnterpriseConverter convert;
     @Mock
     private HttpServletRequest request;
@@ -38,7 +42,8 @@ class EnterprisesControllerTest {
 
     @BeforeEach
     void setUp() {
-        controller = new EnterprisesController(enterprisesService, convert, request);
+        controller = new EnterprisesController(
+                enterprisesService, contactVerificationService, convert, request);
     }
 
     @Nested
@@ -142,19 +147,64 @@ class EnterprisesControllerTest {
     class UpdateEnterpriseContact {
 
         @Test
-        void updateEnterpriseContact_success() {
-            EnterpriseContactUpdateReq req = new EnterpriseContactUpdateReq();
+        void updateEnterpriseContactEmail_success() {
+            EnterpriseContactEmailUpdateReq req = new EnterpriseContactEmailUpdateReq();
             req.setContactEmail("new@test.com");
-            req.setContactPhone("13900139000");
             SecureActionContext ctx = SecureActionContext.builder().build();
-            when(request.getAttribute("SECURE_ACTION_CONTEXT")).thenReturn(ctx);
-            EnterpriseContactUpdateVO vo = new EnterpriseContactUpdateVO(1L, "new@test.com", "13900139000");
-            when(enterprisesService.updateEnterpriseContact(eq(1L), eq(ctx), eq(req))).thenReturn(vo);
+            when(request.getAttribute(SecureActionContext.REQUEST_ATTRIBUTE)).thenReturn(ctx);
+            EnterpriseContactEmailUpdateVO vo = new EnterpriseContactEmailUpdateVO(1L, "new@test.com");
+            when(enterprisesService.updateEnterpriseContactEmail(1L, ctx, req)).thenReturn(vo);
 
-            Result<EnterpriseContactUpdateVO> result = controller.updateEnterpriseContact(1L, req);
+            Result<EnterpriseContactEmailUpdateVO> result =
+                    controller.updateEnterpriseContactEmail(1L, req);
 
             assertEquals("new@test.com", result.getData().contactEmail());
-            verify(enterprisesService).updateEnterpriseContact(eq(1L), any(SecureActionContext.class), eq(req));
+            verify(enterprisesService).updateEnterpriseContactEmail(1L, ctx, req);
+            verifyNoInteractions(contactVerificationService);
+        }
+
+        @Test
+        void updateEnterpriseContactPhone_success() {
+            SecureActionContext ctx = SecureActionContext.builder()
+                    .challengeId("flow-1")
+                    .build();
+            when(request.getAttribute(SecureActionContext.REQUEST_ATTRIBUTE)).thenReturn(ctx);
+            EnterpriseContactPhoneUpdateVO vo =
+                    new EnterpriseContactPhoneUpdateVO(1L, "13900139000");
+            when(enterprisesService.updateEnterpriseContactPhone(1L, ctx)).thenReturn(vo);
+
+            Result<EnterpriseContactPhoneUpdateVO> result =
+                    controller.updateEnterpriseContactPhone(1L);
+
+            assertEquals("13900139000", result.getData().contactPhone());
+            verify(enterprisesService).updateEnterpriseContactPhone(1L, ctx);
+            verify(contactVerificationService).complete("flow-1");
+        }
+
+        @Test
+        void startContactEmailChallenge_success() {
+            SecureChallengeStartVO vo = new SecureChallengeStartVO(
+                    "challenge-1", "138****8000", 300);
+            when(enterprisesService.startContactEmailChallenge(1L)).thenReturn(vo);
+
+            Result<SecureChallengeStartVO> result =
+                    controller.startContactEmailChallenge(1L);
+
+            assertEquals("challenge-1", result.getData().challengeId());
+            verify(enterprisesService).startContactEmailChallenge(1L);
+        }
+
+        @Test
+        void startDeletionChallenge_success() {
+            SecureChallengeStartVO vo = new SecureChallengeStartVO(
+                    "challenge-2", "138****8000", 300);
+            when(enterprisesService.startDeletionChallenge(1L)).thenReturn(vo);
+
+            Result<SecureChallengeStartVO> result =
+                    controller.startDeletionChallenge(1L);
+
+            assertEquals("challenge-2", result.getData().challengeId());
+            verify(enterprisesService).startDeletionChallenge(1L);
         }
     }
 }

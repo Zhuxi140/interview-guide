@@ -1,6 +1,8 @@
 package interview.system.rbac.controller;
 
+import interview.common.annonate.RequirePermission;
 import interview.common.constant.ApiVersion;
+import interview.common.constant.Perm;
 import interview.common.constant.Result;
 import interview.common.enums.RiskLevel;
 import interview.common.annonate.MaxRiskLevel;
@@ -29,6 +31,7 @@ public class RolesController {
 
     private final RolesService rolesService;
 
+    @RequirePermission(permissions = Perm.AdminRoles.LIST)
     @MaxRiskLevel(RiskLevel.HIGH_RISK)
     @Operation(summary = "角色列表")
     @GetMapping
@@ -36,6 +39,7 @@ public class RolesController {
         return Result.success(rolesService.listRoles());
     }
 
+    @RequirePermission(permissions = Perm.AdminRoles.DETAIL)
     @MaxRiskLevel(RiskLevel.HIGH_RISK)
     @Operation(summary = "角色详情（含绑定的权限）")
     @GetMapping("/{roleId}")

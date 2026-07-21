@@ -3,8 +3,10 @@ package interview.system.tenant;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
 import com.baomidou.mybatisplus.extension.conditions.update.LambdaUpdateChainWrapper;
+import interview.api.system.SecureChallengeApi;
 import interview.common.constant.SecureActionContext;
 import interview.common.enums.ErrorCode;
+import interview.common.enums.SecureActionType;
 import interview.common.exception.BusinessException;
 import interview.framework.config.CustomIdGenerator;
 import interview.framework.context.AuthContext;
@@ -19,9 +21,10 @@ import interview.system.tenant.model.entity.Enterprise;
 import interview.system.tenant.model.entity.EnterpriseTeamMember;
 import interview.system.tenant.model.enums.EnterpriseStatus;
 import interview.system.tenant.model.req.EnterpriseBasicUpdateReq;
-import interview.system.tenant.model.req.EnterpriseContactUpdateReq;
+import interview.system.tenant.model.req.EnterpriseContactEmailUpdateReq;
 import interview.system.tenant.model.req.EnterpriseCreateReq;
-import interview.system.tenant.model.vo.EnterpriseContactUpdateVO;
+import interview.system.tenant.model.vo.EnterpriseContactEmailUpdateVO;
+import interview.system.tenant.model.vo.EnterpriseContactPhoneUpdateVO;
 import interview.system.tenant.model.vo.EnterpriseDetailVO;
 import interview.system.tenant.model.vo.EnterpriseUpdateVO;
 import interview.system.tenant.service.EnterpriseTeamMembersService;
@@ -53,6 +56,7 @@ class EnterprisesServiceImplTest {
     @Mock private EnterpriseTeamMembersService enterpriseTeamMembersService;
     @Mock private EnterprisesMapper enterprisesMapper;
     @Mock private RolesService rolesService;
+    @Mock private SecureChallengeApi secureChallengeApi;
 
     private EnterprisesServiceImpl enterprisesService;
     private LambdaQueryChainWrapper<Enterprise> enterpriseQueryWrapper;
@@ -70,7 +74,7 @@ class EnterprisesServiceImplTest {
     void setUp() {
         enterprisesService = spy(new EnterprisesServiceImpl(
             customIdGenerator, userRolesService, enterpriseTeamMembersService,
-            enterprisesMapper, rolesService
+            enterprisesMapper, rolesService, secureChallengeApi
         ));
         ReflectionTestUtils.setField(enterprisesService, "baseMapper", enterprisesMapper);
         enterpriseQueryWrapper = mockQueryWrapper();
@@ -280,6 +284,7 @@ class EnterprisesServiceImplTest {
             Enterprise updated = Enterprise.builder()
                 .id(enterpriseId).name("新企业名").shortName("新简称")
                 .industry(industry).build();
+            when(enterprisesMapper.updateById(any(Enterprise.class))).thenReturn(1);
             when(enterprisesMapper.selectById(enterpriseId)).thenReturn(updated);
 
             EnterpriseUpdateVO result = enterprisesService.updateEnterpriseBasic(enterpriseId, req);
@@ -308,6 +313,7 @@ class EnterprisesServiceImplTest {
             Enterprise updated = Enterprise.builder()
                 .id(enterpriseId).name("新企业名").shortName("新简称")
                 .industry("金融").build();
+            when(enterprisesMapper.updateById(any(Enterprise.class))).thenReturn(1);
             when(enterprisesMapper.selectById(enterpriseId)).thenReturn(updated);
 
             EnterpriseUpdateVO result = enterprisesService.updateEnterpriseBasic(enterpriseId, req);
@@ -317,71 +323,158 @@ class EnterprisesServiceImplTest {
         }
     }
 
-    // ============================== updateEnterpriseContact ==============================
+    // ============================== updateEnterpriseContactEmail ==============================
 
     @Nested
-    class UpdateEnterpriseContact {
+    class UpdateEnterpriseContactEmail {
 
-        private EnterpriseContactUpdateReq req;
-        private SecureActionContext secureActionContext;
+        private EnterpriseContactEmailUpdateReq req;
 
         @BeforeEach
         void setUp() {
             AuthContext.setAuthContext(AuthContext.AuthUser.builder()
                 .userId(userId).build());
-            req = new EnterpriseContactUpdateReq();
-            secureActionContext = SecureActionContext.builder()
-                .targetPhone(contactPhone).build();
+            req = new EnterpriseContactEmailUpdateReq();
         }
 
         @Test
-        void updateEnterpriseContact_success() {
-            doReturn(enterpriseQueryWrapper).when(enterprisesService).lambdaQuery();
-            when(enterpriseQueryWrapper.exists()).thenReturn(true);
-            LambdaQueryChainWrapper<EnterpriseTeamMember> memberQueryWrapper = mockQueryWrapper();
-            when(memberQueryWrapper.exists()).thenReturn(true);
-            when(enterpriseTeamMembersService.lambdaQuery()).thenReturn(memberQueryWrapper);
-
+        void updateEnterpriseContactEmail_success() {
+            mockEnterpriseBelong();
             doReturn(enterpriseUpdateWrapper).when(enterprisesService).lambdaUpdate();
             when(enterpriseUpdateWrapper.update()).thenReturn(true);
 
             req.setContactEmail("new@test.com");
-            req.setContactPhone(contactPhone);
+            SecureActionContext context = SecureActionContext.builder()
+                    .actionType(SecureActionType.UPDATE_ENTERPRISE_EMAIL)
+                    .resourceId(enterpriseId)
+                    .enterpriseId(enterpriseId)
+                    .build();
 
-            EnterpriseContactUpdateVO result = enterprisesService.updateEnterpriseContact(enterpriseId, secureActionContext, req);
+            EnterpriseContactEmailUpdateVO result =
+                    enterprisesService.updateEnterpriseContactEmail(
+                            enterpriseId, context, req);
 
             assertNotNull(result);
             assertEquals(enterpriseId, result.id());
             assertEquals("new@test.com", result.contactEmail());
-            assertEquals(contactPhone, result.contactPhone());
         }
 
         @Test
-        void updateEnterpriseContact_fail_lackPhoneAndEmail() {
+        void updateEnterpriseContactEmail_fail_deleteTokenCannotCrossUse() {
+            mockEnterpriseBelong();
+            SecureActionContext context = SecureActionContext.builder()
+                    .actionType(SecureActionType.DELETE_ENTERPRISE)
+                    .resourceId(enterpriseId)
+                    .enterpriseId(enterpriseId)
+                    .build();
+
+            BusinessException exception = assertThrows(
+                    BusinessException.class,
+                    () -> enterprisesService.updateEnterpriseContactEmail(
+                            enterpriseId, context, req));
+
+            assertEquals(ErrorCode.SECURE_ACTION_NOT_MATCH.getCode(), exception.getCode());
+        }
+
+        @Test
+        void updateEnterpriseContactEmail_fail_tokenBoundToAnotherEnterprise() {
+            mockEnterpriseBelong();
+            SecureActionContext context = SecureActionContext.builder()
+                    .actionType(SecureActionType.UPDATE_ENTERPRISE_EMAIL)
+                    .resourceId(999L)
+                    .enterpriseId(999L)
+                    .build();
+
+            BusinessException exception = assertThrows(
+                    BusinessException.class,
+                    () -> enterprisesService.updateEnterpriseContactEmail(
+                            enterpriseId, context, req));
+
+            assertEquals(ErrorCode.PERMISSION_DENIED.getCode(), exception.getCode());
+        }
+
+        private void mockEnterpriseBelong() {
             doReturn(enterpriseQueryWrapper).when(enterprisesService).lambdaQuery();
             when(enterpriseQueryWrapper.exists()).thenReturn(true);
             LambdaQueryChainWrapper<EnterpriseTeamMember> memberQueryWrapper = mockQueryWrapper();
             when(memberQueryWrapper.exists()).thenReturn(true);
             when(enterpriseTeamMembersService.lambdaQuery()).thenReturn(memberQueryWrapper);
+        }
+    }
 
-            BusinessException ex = assertThrows(BusinessException.class,
-                () -> enterprisesService.updateEnterpriseContact(enterpriseId, secureActionContext, req));
-            assertEquals(ErrorCode.LACK_PHONE_OR_EMAIL.getCode(), ex.getCode());
+    // ============================== updateEnterpriseContactPhone ==============================
+
+    @Nested
+    class UpdateEnterpriseContactPhone {
+
+        private SecureActionContext secureActionContext;
+
+        @BeforeEach
+        void setUp() {
+            AuthContext.setAuthContext(AuthContext.AuthUser.builder()
+                    .userId(userId).build());
+            secureActionContext = SecureActionContext.builder()
+                    .actionType(SecureActionType.UPDATE_ENTERPRISE_PHONE)
+                    .resourceId(enterpriseId)
+                    .enterpriseId(enterpriseId)
+                    .sourcePhone(contactPhone)
+                    .targetPhone("13900139000")
+                    .build();
         }
 
         @Test
-        void updateEnterpriseContact_fail_phoneMismatch() {
+        void updateEnterpriseContactPhone_success() {
+            mockEnterpriseBelong();
+            when(enterpriseQueryWrapper.one()).thenReturn(
+                    Enterprise.builder().id(enterpriseId).contactPhone(contactPhone).build());
+            doReturn(enterpriseUpdateWrapper).when(enterprisesService).lambdaUpdate();
+            when(enterpriseUpdateWrapper.update()).thenReturn(true);
+
+            EnterpriseContactPhoneUpdateVO result =
+                    enterprisesService.updateEnterpriseContactPhone(
+                            enterpriseId, secureActionContext);
+
+            assertNotNull(result);
+            assertEquals(enterpriseId, result.id());
+            assertEquals("13900139000", result.contactPhone());
+        }
+
+        @Test
+        void updateEnterpriseContactPhone_fail_actionTypeMismatch() {
+            mockEnterpriseBelong();
+            secureActionContext.setActionType(SecureActionType.UPDATE_ENTERPRISE_EMAIL);
+
+            BusinessException ex = assertThrows(BusinessException.class,
+                    () -> enterprisesService.updateEnterpriseContactPhone(
+                            enterpriseId, secureActionContext));
+
+            assertEquals(ErrorCode.SECURE_ACTION_NOT_MATCH.getCode(), ex.getCode());
+        }
+
+        @Test
+        void updateEnterpriseContactPhone_fail_oldPhoneChangedAfterVerification() {
+            mockEnterpriseBelong();
+            when(enterpriseQueryWrapper.one()).thenReturn(
+                    Enterprise.builder()
+                            .id(enterpriseId)
+                            .contactPhone("13700000000")
+                            .build());
+
+            BusinessException ex = assertThrows(
+                    BusinessException.class,
+                    () -> enterprisesService.updateEnterpriseContactPhone(
+                            enterpriseId, secureActionContext));
+
+            assertEquals(ErrorCode.ENTERPRISE_CONTACT_CHANGED.getCode(), ex.getCode());
+            verify(enterpriseUpdateWrapper, never()).update();
+        }
+
+        private void mockEnterpriseBelong() {
             doReturn(enterpriseQueryWrapper).when(enterprisesService).lambdaQuery();
             when(enterpriseQueryWrapper.exists()).thenReturn(true);
             LambdaQueryChainWrapper<EnterpriseTeamMember> memberQueryWrapper = mockQueryWrapper();
             when(memberQueryWrapper.exists()).thenReturn(true);
             when(enterpriseTeamMembersService.lambdaQuery()).thenReturn(memberQueryWrapper);
-
-            req.setContactPhone("13999999999");
-
-            BusinessException ex = assertThrows(BusinessException.class,
-                () -> enterprisesService.updateEnterpriseContact(enterpriseId, secureActionContext, req));
-            assertEquals(ErrorCode.PHONE_MISMATCH.getCode(), ex.getCode());
         }
     }
 
@@ -400,6 +493,9 @@ class EnterprisesServiceImplTest {
         void deleteEnterprise_success() {
             doReturn(enterpriseQueryWrapper).when(enterprisesService).lambdaQuery();
             when(enterpriseQueryWrapper.exists()).thenReturn(true);
+            LambdaQueryChainWrapper<EnterpriseTeamMember> memberQueryWrapper = mockQueryWrapper();
+            when(memberQueryWrapper.exists()).thenReturn(true);
+            when(enterpriseTeamMembersService.lambdaQuery()).thenReturn(memberQueryWrapper);
 
             doReturn(enterpriseUpdateWrapper).when(enterprisesService).lambdaUpdate();
             when(enterpriseUpdateWrapper.update()).thenReturn(true);
@@ -408,7 +504,14 @@ class EnterprisesServiceImplTest {
             when(memberUpdateWrapper.update()).thenReturn(true);
             when(enterpriseTeamMembersService.lambdaUpdate()).thenReturn(memberUpdateWrapper);
 
-            assertDoesNotThrow(() -> enterprisesService.deleteEnterprise(enterpriseId));
+            SecureActionContext context = SecureActionContext.builder()
+                    .actionType(SecureActionType.DELETE_ENTERPRISE)
+                    .resourceId(enterpriseId)
+                    .enterpriseId(enterpriseId)
+                    .build();
+
+            assertDoesNotThrow(() -> enterprisesService.deleteEnterprise(
+                    enterpriseId, context));
             verify(enterprisesService).lambdaUpdate();
             verify(enterpriseUpdateWrapper).eq(any(), eq(enterpriseId));
             verify(enterpriseUpdateWrapper).set(any(), eq(true));

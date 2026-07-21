@@ -1,17 +1,21 @@
 package interview.system.auth;
 
+import cn.hutool.core.util.StrUtil;
+import interview.common.annonate.MaxRiskLevel;
+import interview.common.annonate.RequireSecure;
 import interview.common.constant.ApiVersion;
 import interview.common.constant.Result;
+import interview.common.constant.SecureActionContext;
 import interview.common.enums.RiskLevel;
-import interview.common.annonate.MaxRiskLevel;
+import interview.common.enums.SecureActionType;
 import interview.system.auth.model.bo.LoginBO;
 import interview.system.auth.model.bo.RegisterBo;
 import interview.system.auth.model.bo.UserInfoBO;
 import interview.system.auth.model.req.*;
 import interview.system.auth.model.vo.*;
 import interview.system.auth.service.AuthService;
+import interview.system.auth.service.SecureChallengeService;
 import interview.system.auth.service.SmsService;
-import cn.hutool.core.util.StrUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -33,6 +37,7 @@ import java.util.List;
 public class AuthController {
 
     private final SmsService smsService;
+    private final SecureChallengeService secureChallengeService;
     private final AuthService authService;
     private final AuthConverter authConverter;
     private final HttpServletRequest request;
@@ -45,11 +50,13 @@ public class AuthController {
     }
 
     @MaxRiskLevel(RiskLevel.HIGH_RISK)
-    @Operation(summary = "敏感操作授权令牌")
-    @PostMapping("/verify-sms")
-    public Result<String> verifyCode(@RequestBody @Valid VerifyReq verifyReq) {
-        String token = smsService.verifyForSensitiveAction(verifyReq);
-        return Result.success(token);
+    @Operation(summary = "核销安全验证 Challenge 并签发一次性令牌")
+    @PostMapping("/secure-challenges/{challengeId}/verify")
+    public Result<SecureActionTokenVO> verifySecureChallenge(
+            @PathVariable("challengeId") String challengeId,
+            @RequestBody @Valid SecureChallengeVerifyReq req) {
+        // Challenge 决定验证手机号、业务动作和资源，客户端只提交验证码
+        return Result.success(secureChallengeService.verify(challengeId, req));
     }
 
 
@@ -93,10 +100,23 @@ public class AuthController {
     }
 
     @MaxRiskLevel(RiskLevel.MID_RISK)
-    @Operation(summary = "注销当前用户的某个设备")
+    @Operation(summary = "创建下线设备 Challenge")
+    @PostMapping("/tokens/{tokenId}/revoke/challenge")
+    public Result<SecureChallengeStartVO> startRevokeChallenge(
+            @PathVariable("tokenId") Long tokenId) {
+        // 绑定当前用户和目标设备 Token，向用户绑定手机号发送验证码
+        return Result.success(authService.startRevokeChallenge(tokenId));
+    }
+
+    @MaxRiskLevel(RiskLevel.NO_RISK)
+    @RequireSecure(SecureActionType.REVOKE_DEVICE)
+    @Operation(summary = "注销当前用户的某个设备，需携带设备下线令牌")
     @PostMapping("/revoke/{tokenId}")
-    public Result<Void> revoke(@PathVariable Long tokenId, @RequestBody @Valid RevokeDeviceReq code ) {
-        authService.revoke(tokenId, code);
+    public Result<Void> revoke(@PathVariable Long tokenId) {
+        // 读取拦截器已校验并消费的设备下线安全上下文
+        SecureActionContext context = (SecureActionContext) request.getAttribute(
+                SecureActionContext.REQUEST_ATTRIBUTE);
+        authService.revoke(tokenId, context);
         return Result.success();
     }
 

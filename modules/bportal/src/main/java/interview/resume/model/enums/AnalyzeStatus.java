@@ -10,10 +10,12 @@ import lombok.Getter;
 @Getter
 @AllArgsConstructor
 public enum AnalyzeStatus {
-    PENDING("待解析"),
-    PROCESSING("解析中"),
-    COMPLETED("解析成功"),
-    FAILED("解析失败");
+    UPLOADING("文件上传中"),
+    PENDING("待AI解析"),
+    PROCESSING("AI解析中"),
+    COMPLETED("AI解析成功"),
+    FAILED("AI解析失败"),
+    UPLOAD_FAILED("上传失败");
 
     private final String msg;
 }

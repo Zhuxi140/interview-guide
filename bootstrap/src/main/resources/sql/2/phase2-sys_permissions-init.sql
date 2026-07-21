@@ -8,12 +8,12 @@
 
 INSERT INTO sys_permissions (id, perm_code, perm_type, api_path, status) VALUES
 -- 2.1 简历管理
-(401, 'resume:upload',         'API', '/api/v1/enterprises/*/resumes', 1),
-(402, 'resume:list',           'API', '/api/v1/enterprises/*/resumes', 1),
-(403, 'resume:detail',         'API', '/api/v1/enterprises/*/resumes/*', 1),
-(404, 'resume:delete',         'API', '/api/v1/enterprises/*/resumes/*', 1),
-(405, 'resume:analyze',        'API', '/api/v1/enterprises/*/resumes/*/analyze', 1),
-(406, 'resume:analysis-result','API', '/api/v1/enterprises/*/resumes/*/analysis', 1),
+(401, 'resume:upload',         'API', '/api/v1/resumes', 1),
+(402, 'resume:list',           'API', '/api/v1/resumes', 1),
+(403, 'resume:detail',         'API', '/api/v1/resumes/*', 1),
+(404, 'resume:delete',         'API', '/api/v1/resumes/*', 1),
+(405, 'resume:analyze',        'API', '/api/v1/resumes/*/analyze', 1),
+(406, 'resume:analysis-result','API', '/api/v1/resumes/*/analysis', 1),
 
 -- 2.2 投递与初筛
 (411, 'application:apply',           'API', '/api/v1/jobs/*/apply', 1),

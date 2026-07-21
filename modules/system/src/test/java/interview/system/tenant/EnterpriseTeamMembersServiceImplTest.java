@@ -250,6 +250,9 @@ class EnterpriseTeamMembersServiceImplTest {
 
         @BeforeEach
         void setUp() {
+            AuthContext.setAuthContext(AuthContext.AuthUser.builder()
+                    .userId(userId)
+                    .build());
             req = new TeamMemberUpdateReq();
             req.setRoleId(hrManagerRoleId);
         }

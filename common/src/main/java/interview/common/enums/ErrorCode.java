@@ -32,6 +32,7 @@ public enum ErrorCode {
     INVALID_FILENAME(10011,"文件名为空或不规范"),
     FILE_DELETE_FAILED(10012,"文件删除失败"),
 
+
     // ------------ 20xxx 用户认证与授权错误码 ------------
     USER_NOT_LOGIN(401, "未登录"),
     TOKEN_EXPIRED(401, "Token 已过期"),
@@ -57,15 +58,15 @@ public enum ErrorCode {
     ACCOUNT_DATA_ANOMALY(20015, "账号数据状态异常，请稍后重试或联系客服"),
     ROLE_ALREADY_ASSIGNED(20016, "角色已分配给该用户"),
     NOT_YOUR_PHONE(20017, "请使用绑定的手机号！"),
-    VERIFY_NO_PRE_TOKEN(20018,"缺失前置身份凭证，请先完成第一次手机验证"),
-    VERIFY_PRE_TOKEN_VALID_OR_EXPIRED(20019,"前置身份凭证无效或已过期，请重新完成第一次手机验证"),
     NO_VERIFY_TOKEN(20020,"缺少安全操作授权,请完成手机号验证获取授权"),
     VERIFY_TOKEN_EXPIRE(20021,"安全身份凭证已过期，请重新进行手机验证"),
-    LACK_PHONE_OR_EMAIL(20022,"请填写需要修改的手机号或者邮箱"),
-    SMS_TYPE_NOT_MATCH(20023,"该操作需进行二重手机验证，请先进行验证"),
-    PHONE_MISMATCH(20024,"手机号匹配错误，请填写刚才进行验证的手机号"),
+    SECURE_ACTION_NOT_MATCH(20023,"安全操作令牌不适用于当前操作"),
     ROLE_NOT_EXIST(20025,"该角色不存在"),
     NO_ALLOW_ROLE(20026,"只能分配对应域的角色"),
+    SMS_TYPE_NOT_ALLOWED(20031,"当前接口不支持该短信类型"),
+    SECURE_CHALLENGE_INVALID(20032,"安全验证任务无效或已过期"),
+    SECURE_CHALLENGE_STATE_INVALID(20033,"安全验证任务状态不允许当前操作"),
+    SECURE_CHALLENGE_ATTEMPTS_EXCEEDED(20034,"验证码错误次数过多，请重新发起安全验证"),
 
     // ------------ 30xxx 企业/多租户错误码 ------------
     ENTERPRISE_NOT_FOUND(30001, "企业不存在"),
@@ -82,6 +83,10 @@ public enum ErrorCode {
     ENTERPRISE_NOT_BELONG(30012,"用户不属于该企业"),
     SECURE_TOKEN_INVALID(30013, "安全操作令牌无效或已过期"),
     SECURE_TOKEN_USER_MISMATCH(30014, "安全操作令牌与当前用户不匹配"),
+    CONTACT_VERIFY_FLOW_INVALID(30015, "企业联系电话验证流程无效或已过期"),
+    CONTACT_VERIFY_STATE_INVALID(30016, "企业联系电话验证流程状态不允许当前操作"),
+    ENTERPRISE_CONTACT_CHANGED(30017, "企业联系电话已发生变化，请重新验证"),
+    PHONE_SAME_AS_OLD(30018, "新联系电话不能与原联系电话相同"),
     MEMBER_ALREADY_EXISTS(20027,"用户已在企业中"),
     NO_OPERATE_ENTERPRISE_OWNER(20028,"不能操作企业所有人"),
     NO_DELETE_OWNER(20029,"不能移除自己"),
@@ -107,6 +112,7 @@ public enum ErrorCode {
     FILE_IS_EXISTS(40016,"文件已存在"),
     RESUME_IS_NOT_YOUR(40017,"请投递自己的简历"),
     NOT_AGAIN_APPLY(40018,"请勿重复投递"),
+    RESUME_MOST_IS_FIVE(40019,"简历最多只能有5份,请先删除一份，再上传简历"),
 
     // ------------ 50xxx 文本/面试流程错误码 ------------
     INTERVIEW_SCHEDULE_NOT_FOUND(50001, "面试排期不存在"),
