@@ -22,12 +22,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
 
-/**
- * @author zhuxi
- */
 @RequiredArgsConstructor
 @Service
 public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements JobService {
@@ -41,11 +39,8 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements JobSe
                 && req.getMinSalary().compareTo(req.getMaxSalary()) > 0) {
             throw new BusinessException(ErrorCode.PARAM_VALID_ERROR, "最高薪资不能低于最低薪资");
         }
-        // 从 AuthContext 获取当前 userId
         Long userId = AuthContext.getRequiredUserId();
-        // 校验 enterpriseId 对应企业存在且当前用户为企业成员
-        enterpriseValidationApi.validateEnterpriseBelong(enterpriseId,userId);
-        // JobCreateReq -> Job 实体
+        enterpriseValidationApi.validateEnterpriseBelong(enterpriseId, userId);
         OffsetDateTime now = OffsetDateTime.now();
         JobStatus status = req.getStatus();
         Job job = Job.builder()
@@ -64,9 +59,7 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements JobSe
                 .createdAt(now)
                 .build();
 
-        // TODO: baseMapper.insert(job)
         baseMapper.insert(job);
-        // TODO: Job -> JobCreateVO（id / title / status.getCode() / createdAt）
         return JobCreateVO.builder()
                 .id(job.getId())
                 .title(req.getTitle())
@@ -77,29 +70,22 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements JobSe
 
     @Override
     public IPage<JobListItemVO> pageJobs(Long enterpriseId, JobListQuery query) {
-        // TODO: 构建 LambdaQueryWrapper<Job>
-        //   - eq Job::getEnterpriseId, enterpriseId
-        //   - eq Job::getStatus, JobStatus.getJobStatus(query.getStatus())（query.status 不为空时）
-        //   - keyword 不为空时拼接 or 模糊查询：title / department / location
-        //   - orderByDesc Job::getCreatedAt
         JobStatus status = query.getStatus();
         LambdaQueryWrapper<Job> wrapper = new LambdaQueryWrapper<Job>()
                 .select(Job::getId, Job::getTitle,
-                        Job::getDepartment,Job::getLocation,
-                        Job::getStatus,Job::getCreatedAt)
-                .eq(Job::getEnterpriseId,enterpriseId)
-                .eq(status!=null,Job::getStatus,status)
+                        Job::getDepartment, Job::getLocation,
+                        Job::getStatus, Job::getCreatedAt)
+                .eq(Job::getEnterpriseId, enterpriseId)
+                .eq(status != null, Job::getStatus, status)
                 .and(StrUtil.isNotBlank(query.getKeyword()),
-                    w -> w.like(Job::getTitle,query.getKeyword())
-                            .or()
-                            .like(Job::getDepartment,query.getKeyword())
-                            .or()
-                            .like(Job::getLocation,query.getKeyword())
-                        )
+                        w -> w.like(Job::getTitle, query.getKeyword())
+                                .or()
+                                .like(Job::getDepartment, query.getKeyword())
+                                .or()
+                                .like(Job::getLocation, query.getKeyword())
+                )
                 .orderByDesc(Job::getCreatedAt);
-        // TODO: baseMapper.selectPage(new Page<>(query.getPage(), query.getSize()), wrapper)
         Page<Job> jobPage = baseMapper.selectPage(new Page<>(query.getPage(), query.getSize()), wrapper);
-        // TODO: IPage<Job> -> IPage<JobListItemVO>
         Page<JobListItemVO> voPage = new Page<>(jobPage.getCurrent(), jobPage.getSize(), jobPage.getTotal());
         List<Job> records = jobPage.getRecords();
         List<JobListItemVO> vos = records.stream()
@@ -111,7 +97,6 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements JobSe
                                 .location(raw.getLocation())
                                 .status(raw.getStatus())
                                 .createdAt(raw.getCreatedAt())
-                                //   TODO : candidateCount 暂填 0（Phase 2 接入投递数据后补充）
                                 .candidateCount(0)
                                 .build()
                 ).toList();
@@ -122,16 +107,13 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements JobSe
 
     @Override
     public JobDetailVO getJobDetail(Long enterpriseId, Long jobId) {
-        // TODO: baseMapper.selectById(jobId)
         Job job = lambdaQuery()
                 .eq(Job::getEnterpriseId, enterpriseId)
                 .eq(Job::getId, jobId)
                 .one();
-        // TODO: 判空 -> 抛异常（岗位不存在）
         if (job == null) {
-            throw  new BusinessException(ErrorCode.JOB_NOT_FOUND);
+            throw new BusinessException(ErrorCode.JOB_NOT_FOUND);
         }
-        // TODO: Job -> JobDetailVO
         return JobDetailVO.builder()
                 .id(job.getId())
                 .userId(job.getUserId())
@@ -151,29 +133,58 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements JobSe
     }
 
     @Override
-    @Transactional(rollbackFor = BusinessException.class)
+    @Transactional
     public void updateJob(Long enterpriseId, Long jobId, JobUpdateReq req) {
-        if (req.getMinSalary() != null && req.getMaxSalary() != null
-                && req.getMinSalary().compareTo(req.getMaxSalary()) > 0) {
+        Job existing = lambdaQuery()
+                .select(Job::getMinSalary, Job::getMaxSalary)
+                .eq(Job::getId, jobId)
+                .eq(Job::getEnterpriseId, enterpriseId)
+                .one();
+        if (existing == null) {
+            throw new BusinessException(ErrorCode.JOB_NOT_FOUND);
+        }
+        BigDecimal mergedMin = req.getMinSalary() != null ? req.getMinSalary() : existing.getMinSalary();
+        BigDecimal mergedMax = req.getMaxSalary() != null ? req.getMaxSalary() : existing.getMaxSalary();
+        if (mergedMin != null && mergedMax != null && mergedMin.compareTo(mergedMax) > 0) {
             throw new BusinessException(ErrorCode.PARAM_VALID_ERROR, "最高薪资不能低于最低薪资");
         }
         Long userId = AuthContext.getRequiredUserId();
-        int affected = baseMapper.update(null, Wrappers.<Job>lambdaUpdate()
+        Job update = new Job();
+        update.setId(jobId);
+        update.setEnterpriseId(enterpriseId);
+        if (StrUtil.isNotBlank(req.getTitle())) {
+            update.setTitle(req.getTitle());
+        }
+        if (StrUtil.isNotBlank(req.getJdContent())) {
+            update.setJdContent(req.getJdContent());
+        }
+        if (StrUtil.isNotBlank(req.getDepartment())) {
+            update.setDepartment(req.getDepartment());
+        }
+        if (StrUtil.isNotBlank(req.getLocation())) {
+            update.setLocation(req.getLocation());
+        }
+        if (req.getMinSalary() != null) {
+            update.setMinSalary(req.getMinSalary());
+        }
+        if (req.getMaxSalary() != null) {
+            update.setMaxSalary(req.getMaxSalary());
+        }
+        if (req.getExperienceReq() != null) {
+            update.setExperienceReq(req.getExperienceReq());
+        }
+        if (req.getEducationReq() != null) {
+            update.setEducationReq(req.getEducationReq());
+        }
+        if (StrUtil.isNotBlank(req.getSkillsJson())) {
+            update.setSkillsJson(req.getSkillsJson());
+        }
+        update.setUpdatedBy(userId);
+        update.setUpdatedAt(OffsetDateTime.now());
+
+        int affected = baseMapper.update(update, Wrappers.<Job>lambdaUpdate()
                 .eq(Job::getId, jobId)
-                .eq(Job::getEnterpriseId, enterpriseId)
-                .set(StrUtil.isNotBlank(req.getTitle()), Job::getTitle, req.getTitle())
-                .set(StrUtil.isNotBlank(req.getJdContent()), Job::getJdContent, req.getJdContent())
-                .set(StrUtil.isNotBlank(req.getDepartment()), Job::getDepartment, req.getDepartment())
-                .set(StrUtil.isNotBlank(req.getLocation()), Job::getLocation, req.getLocation())
-                .set(req.getMinSalary() != null, Job::getMinSalary, req.getMinSalary())
-                .set(req.getMaxSalary() != null, Job::getMaxSalary, req.getMaxSalary())
-                .set(req.getExperienceReq() != null, Job::getExperienceReq, req.getExperienceReq())
-                .set(req.getEducationReq() != null, Job::getEducationReq, req.getEducationReq())
-                .set(StrUtil.isNotBlank(req.getSkillsJson()), Job::getSkillsJson, req.getSkillsJson())
-                .set(Job::getUpdatedBy, userId)
-                .set(Job::getTraceId, null)
-                // TODO: traceId完善后，要传入
-                .set(Job::getUpdatedAt, OffsetDateTime.now()));
+                .eq(Job::getEnterpriseId, enterpriseId));
         if (affected == 0) {
             throw new BusinessException(ErrorCode.JOB_NOT_FOUND);
         }
@@ -189,7 +200,6 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements JobSe
                 .set(Job::getStatus, req.getStatus())
                 .set(Job::getUpdatedBy, userId)
                 .set(Job::getTraceId, null)
-                // TODO: traceId完善后，要传入
                 .set(Job::getUpdatedAt, OffsetDateTime.now()));
         if (affected == 0) {
             throw new BusinessException(ErrorCode.JOB_NOT_FOUND);
@@ -206,7 +216,6 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements JobSe
                 .set(Job::getIsDeleted, true)
                 .set(Job::getUpdatedBy, userId)
                 .set(Job::getTraceId, null)
-                // TODO: traceId完善后，要传入
                 .set(Job::getUpdatedAt, OffsetDateTime.now()));
         if (affected == 0) {
             throw new BusinessException(ErrorCode.JOB_NOT_FOUND);

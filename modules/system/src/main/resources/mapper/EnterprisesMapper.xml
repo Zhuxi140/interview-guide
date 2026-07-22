@@ -9,10 +9,11 @@
             e.short_name,
             e.industry,
             e.status,
-            etm.role_id
+            MIN(etm.role_id) AS role_id
         FROM enterprises e
         JOIN enterprise_team_members etm ON e.id = etm.enterprise_id
         WHERE etm.user_id = #{userId} AND etm.is_deleted = false AND e.is_deleted = false
+        GROUP BY e.id, e.name, e.short_name, e.industry, e.status
     </select>
     <select id="getEnterpriseDetail" resultType="interview.system.tenant.model.entity.Enterprise">
         SELECT

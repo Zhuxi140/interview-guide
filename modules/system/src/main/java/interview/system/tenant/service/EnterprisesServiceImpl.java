@@ -149,7 +149,7 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
 
         List<Map<String, Object>> countList = enterpriseTeamMembersService.listMaps(
                 new QueryWrapper<EnterpriseTeamMember>()
-                        .select("enterprise_id AS enterpriseId","COUNT(*) AS count")
+                        .select("enterprise_id", "COUNT(DISTINCT user_id) AS count")
                         .in("enterprise_id", enterpriseIds)
                         .groupBy("enterprise_id")
         );
@@ -265,6 +265,7 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
     }
 
     @Override
+    @Transactional
     public EnterpriseContactEmailUpdateVO updateEnterpriseContactEmail(
             Long enterpriseId, SecureActionContext secureActionContext,
             EnterpriseContactEmailUpdateReq req) {
@@ -292,7 +293,7 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
     }
 
     @Override
-    @Transactional(rollbackFor = BusinessException.class)
+    @Transactional
     public EnterpriseContactPhoneUpdateVO updateEnterpriseContactPhone(
             Long enterpriseId, SecureActionContext secureActionContext) {
         // 校验企业归属以及令牌动作和企业绑定关系
@@ -371,7 +372,7 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
             throw new BusinessException(ErrorCode.ENTERPRISE_DATA_ANOMALY);
         }
         //级联逻辑删除 enterprise_team_members 相关记录
-        enterpriseTeamMembersService.lambdaUpdate()
+        boolean membersUpdated = enterpriseTeamMembersService.lambdaUpdate()
                 .eq(EnterpriseTeamMember::getEnterpriseId, enterpriseId)
                 .set(EnterpriseTeamMember::getIsDeleted, true)
                 .set(EnterpriseTeamMember::getUpdatedBy, deleteUserId)
@@ -379,6 +380,10 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
                 .set(EnterpriseTeamMember::getTraceId, null)
                 // TODO: traceId完善后，要传入
                 .update();
+        if (!membersUpdated) {
+            log.error("级联删除企业成员未影响任何记录: enterpriseId [{}]", enterpriseId);
+            throw new BusinessException(ErrorCode.ENTERPRISE_DATA_ANOMALY);
+        }
 
         // TODO: Phase 8 扩展：需校验 sys_enterprise_cert 已通过认证
     }
@@ -404,6 +409,9 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
                 || (context.getResourceId() != null
                 && !enterpriseId.equals(context.getResourceId()))) {
             throw new BusinessException(ErrorCode.PERMISSION_DENIED);
+        }
+        if (!AuthContext.getRequiredUserId().equals(context.getUserId())) {
+            throw new BusinessException(ErrorCode.SECURE_TOKEN_USER_MISMATCH);
         }
     }
 

@@ -10,6 +10,7 @@ import interview.system.tenant.service.EnterprisesService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -27,7 +28,6 @@ public class EnterpriseValidationApiImpl implements EnterpriseValidationApi {
 
     @Override
     public void validateEnterpriseBelong(Long enterpriseId,Long userId) {
-
         boolean exists = enterprisesService.lambdaQuery()
                 .eq(Enterprise::getId, enterpriseId)
                 .exists();
@@ -48,9 +48,12 @@ public class EnterpriseValidationApiImpl implements EnterpriseValidationApi {
 
     @Override
     public Map<Long,String> getNameList(List<Long> enterpriseId) {
+        if (enterpriseId == null || enterpriseId.isEmpty()) {
+            return Collections.emptyMap();
+        }
         return enterprisesService.lambdaQuery()
-                .select(Enterprise::getName)
-                .eq(Enterprise::getId, enterpriseId)
+                .select(Enterprise::getId,Enterprise::getName)
+                .in(Enterprise::getId, enterpriseId)
                 .list()
                 .stream()
                 .collect(Collectors.toMap(Enterprise::getId, Enterprise::getName));

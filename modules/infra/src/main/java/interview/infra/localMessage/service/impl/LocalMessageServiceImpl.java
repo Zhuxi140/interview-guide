@@ -1,7 +1,8 @@
 package interview.infra.localMessage.service.impl;
 
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import interview.common.enums.ErrorCode;
@@ -21,74 +22,68 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * @author zhuxi
+ * 本地消息查询、租约领取与状态推进服务。
  */
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class LocalMessageServiceImpl extends ServiceImpl<LocalMessageMapper, LocalMessage> implements LocalMessageService {
+public class LocalMessageServiceImpl extends ServiceImpl<LocalMessageMapper, LocalMessage>
+        implements LocalMessageService {
 
     @Override
     public IPage<LocalMessage> pageQuery(Integer page, Integer size, String status, String topic, String priority,
                                          OffsetDateTime startTime, OffsetDateTime endTime) {
-        Page<LocalMessage> pageParam = new Page<>(page, size);
-        QueryWrapper<LocalMessage> qw = new QueryWrapper<>();
-        if (status != null) {
-            qw.eq("status", status);
-        }
-        if (topic != null) {
-            qw.eq("topic", topic);
-        }
-        if (priority != null) {
-            qw.eq("priority", priority);
-        }
-        if (startTime != null) {
-            qw.ge("created_at", startTime);
-        }
-        if (endTime != null) {
-            qw.le("created_at", endTime);
-        }
-        qw.orderByDesc("created_at");
-        return page(pageParam, qw);
+        // 使用类型安全条件构建管理端查询。
+        LambdaQueryWrapper<LocalMessage> wrapper = Wrappers.lambdaQuery(LocalMessage.class)
+                .eq(status != null, LocalMessage::getStatus, status)
+                .eq(topic != null, LocalMessage::getTopic, topic)
+                .eq(priority != null, LocalMessage::getPriority, priority)
+                .ge(startTime != null, LocalMessage::getCreatedAt, startTime)
+                .le(endTime != null, LocalMessage::getCreatedAt, endTime)
+                .orderByDesc(LocalMessage::getCreatedAt);
+        return page(new Page<>(page, size), wrapper);
     }
 
     @Override
     public LocalMessage getDetail(Long id) {
-        LocalMessage msg = getById(id);
-        if (msg == null) {
+        LocalMessage message = getById(id);
+        if (message == null) {
             throw new BusinessException(ErrorCode.LOCAL_MESSAGE_NOT_FOUND);
         }
-        return msg;
+        return message;
     }
 
     @Override
     @Transactional
     public LocalMessage manualRetry(Long id) {
-        LocalMessage msg = getById(id);
-        if (msg == null) {
-            throw new BusinessException(ErrorCode.LOCAL_MESSAGE_NOT_FOUND);
-        }
-        if (MsgStatus.SUCCESS.equals(msg.getStatus()) || MsgStatus.IGNORED.equals(msg.getStatus())) {
+        // 人工操作只能恢复已经终止的失败消息，不能抢占有效租约。
+        LocalMessage update = new LocalMessage();
+        update.setStatus(MsgStatus.PENDING);
+        update.setRetryCount(0);
+        update.setNextRetryAt(OffsetDateTime.now());
+        update.setLastError(null);
+        update.setLeaseOwner(null);
+        update.setLeaseUntil(null);
+        update.setTraceId(null);
+        update.setUpdatedAt(OffsetDateTime.now());
+
+        boolean updated = update(update, Wrappers.lambdaUpdate(LocalMessage.class)
+                .eq(LocalMessage::getId, id)
+                .eq(LocalMessage::getStatus, MsgStatus.FAILED));
+        if (!updated) {
+            LocalMessage current = getById(id);
+            if (current == null) {
+                throw new BusinessException(ErrorCode.LOCAL_MESSAGE_NOT_FOUND);
+            }
             throw new BusinessException(ErrorCode.LOCAL_MESSAGE_STATUS_INVALID);
         }
-        lambdaUpdate()
-                .eq(LocalMessage::getId, id)
-                .set(LocalMessage::getStatus, MsgStatus.PENDING.name())
-                .set(LocalMessage::getRetryCount, 0)
-                .set(LocalMessage::getNextRetryAt, OffsetDateTime.now())
-                .set(LocalMessage::getLastError, (String) null)
-                .set(LocalMessage::getTraceId, null)
-                // TODO: traceId完善后，要传入
-                .set(LocalMessage::getUpdatedAt, OffsetDateTime.now())
-                .update();
-        // TODO: 消息实际消费/投递 — 后续引入 MQ (RabbitMQ/RocketMQ) 或 Redis Stream 后，
-        //       此处应将消息投递到对应 topic 的队列中，由消费者异步处理
         return getById(id);
     }
 
     @Override
     @Transactional
     public BatchRetryResult batchRetry(List<Long> ids) {
+        // 单条失败只记录结果，不中断后续消息处理。
         List<BatchRetryResult.RetryItemResult> results = new ArrayList<>();
         int successCount = 0;
         int failCount = 0;
@@ -108,76 +103,69 @@ public class LocalMessageServiceImpl extends ServiceImpl<LocalMessageMapper, Loc
 
     @Override
     @Transactional
-    public LocalMessage updateStatus(Long id, String status) {
-        LocalMessage msg = getById(id);
-        if (msg == null) {
-            throw new BusinessException(ErrorCode.LOCAL_MESSAGE_NOT_FOUND);
-        }
-        lambdaUpdate()
-                .eq(LocalMessage::getId, id)
-                .set(LocalMessage::getStatus, status)
-                .set(LocalMessage::getTraceId, null)
-                // TODO: traceId完善后，要传入
-                .set(LocalMessage::getUpdatedAt, OffsetDateTime.now())
-                .update();
-        // TODO: 若状态改为 PENDING，且集成了 MQ/Redis Stream，应重新投递消息到队列
-        return getById(id);
-    }
-
-    @Override
-    @Transactional
-    public List<LocalMessage> fetchAndLockForDispatch(MsgPriority priority, int limit) {
+    public List<LocalMessage> claimForDispatch(MsgPriority priority, String workerId,
+                                               long leaseDurationSeconds, int limit) {
+        // 领取事务只持有 local_message 行锁，执行器在事务提交后处理业务。
         OffsetDateTime now = OffsetDateTime.now();
-        Page<LocalMessage> page = new Page<>(0, limit);
-        page.setSearchCount(false);
-        List<LocalMessage> messages = lambdaQuery()
-                .eq(LocalMessage::getPriority, priority.name())
-                .and(w -> w.and(i -> i.eq(LocalMessage::getStatus, MsgStatus.PENDING.name())
-                                .and(j -> j.isNull(LocalMessage::getNextRetryAt)
-                                        .or().le(LocalMessage::getNextRetryAt, now)))
-                        .or(i -> i.eq(LocalMessage::getStatus, MsgStatus.PROCESSING.name())
-                                .le(LocalMessage::getUpdatedAt, now.minusSeconds(30))))
-                .orderByAsc(LocalMessage::getCreatedAt)
-                .last("FOR UPDATE SKIP LOCKED")
-                .page(page)
-                .getRecords();
+        OffsetDateTime leaseUntil = now.plusSeconds(leaseDurationSeconds);
+        return baseMapper.claimForDispatch(priority.name(), workerId, now, leaseUntil, limit);
+    }
 
-        if (!messages.isEmpty()) {
-            List<Long> ids = messages.stream().map(LocalMessage::getId).toList();
-            lambdaUpdate()
-                    .in(LocalMessage::getId, ids)
-                    .set(LocalMessage::getStatus, MsgStatus.PROCESSING)
-                    .set(LocalMessage::getUpdatedAt, now)
-                    .update();
+    @Override
+    @Transactional
+    public boolean markSuccessIfOwned(LocalMessage lease) {
+        LocalMessage update = terminalUpdate(MsgStatus.SUCCESS, null);
+        return updateOwned(lease, update);
+    }
+
+    @Override
+    @Transactional
+    public boolean markIgnoredIfOwned(LocalMessage lease, String reason) {
+        LocalMessage update = terminalUpdate(MsgStatus.IGNORED, conciseError(reason));
+        return updateOwned(lease, update);
+    }
+
+    @Override
+    @Transactional
+    public boolean markRetryIfOwned(LocalMessage lease, int retryCount, MsgStatus newStatus,
+                                    OffsetDateTime nextRetry, String lastError) {
+        // 重试与永久失败都必须校验租约版本，防止旧执行者覆盖新结果。
+        LocalMessage update = new LocalMessage();
+        update.setRetryCount(retryCount);
+        update.setStatus(newStatus);
+        update.setNextRetryAt(newStatus == MsgStatus.PENDING ? nextRetry : null);
+        update.setLastError(conciseError(lastError));
+        update.setLeaseOwner(null);
+        update.setLeaseUntil(null);
+        update.setTraceId(null);
+        update.setUpdatedAt(OffsetDateTime.now());
+        return updateOwned(lease, update);
+    }
+
+    private LocalMessage terminalUpdate(MsgStatus status, String reason) {
+        LocalMessage update = new LocalMessage();
+        update.setStatus(status);
+        update.setNextRetryAt(null);
+        update.setLastError(reason);
+        update.setLeaseOwner(null);
+        update.setLeaseUntil(null);
+        update.setTraceId(null);
+        update.setUpdatedAt(OffsetDateTime.now());
+        return update;
+    }
+
+    private boolean updateOwned(LocalMessage lease, LocalMessage update) {
+        return update(update, Wrappers.lambdaUpdate(LocalMessage.class)
+                .eq(LocalMessage::getId, lease.getId())
+                .eq(LocalMessage::getStatus, MsgStatus.PROCESSING)
+                .eq(LocalMessage::getLeaseOwner, lease.getLeaseOwner())
+                .eq(LocalMessage::getLeaseVersion, lease.getLeaseVersion()));
+    }
+
+    private String conciseError(String error) {
+        if (error == null || error.length() <= 1000) {
+            return error;
         }
-        return messages;
-    }
-
-    @Override
-    @Transactional
-    public void markSuccess(Long id) {
-        lambdaUpdate()
-                .eq(LocalMessage::getId, id)
-                .set(LocalMessage::getStatus, MsgStatus.SUCCESS)
-                .set(LocalMessage::getNextRetryAt, (OffsetDateTime) null)
-                .set(LocalMessage::getTraceId, null)
-                // TODO: traceId完善后，要传入
-                .set(LocalMessage::getUpdatedAt, OffsetDateTime.now())
-                .update();
-    }
-
-    @Override
-    @Transactional
-    public void markFailed(Long id, int retryCount, MsgStatus newStatus, OffsetDateTime nextRetry, String lastError) {
-        lambdaUpdate()
-                .eq(LocalMessage::getId, id)
-                .set(LocalMessage::getRetryCount, retryCount)
-                .set(LocalMessage::getStatus, newStatus)
-                .set(LocalMessage::getNextRetryAt, nextRetry)
-                .set(LocalMessage::getLastError, lastError)
-                .set(LocalMessage::getTraceId, null)
-                // TODO: traceId完善后，要传入
-                .set(LocalMessage::getUpdatedAt, OffsetDateTime.now())
-                .update();
+        return error.substring(0, 1000);
     }
 }

@@ -27,6 +27,10 @@ public class LocalMessage implements Serializable {
 
     private MsgTopic topic;
 
+    private String bizKey;
+
+    private Integer schemaVersion;
+
     private String payload;
 
     private MsgPriority priority;
@@ -42,6 +46,12 @@ public class LocalMessage implements Serializable {
     private String retryHistory;
 
     private String lastError;
+
+    private String leaseOwner;
+
+    private OffsetDateTime leaseUntil;
+
+    private Long leaseVersion;
 
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private String traceId;

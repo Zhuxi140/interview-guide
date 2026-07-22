@@ -4,5 +4,6 @@ import lombok.Getter;
 
 @Getter
 public enum MsgTopic {
-    FILE_DELETE;
+    FILE_DELETE,
+    RESUME_UPLOAD_CLEANUP;
 }

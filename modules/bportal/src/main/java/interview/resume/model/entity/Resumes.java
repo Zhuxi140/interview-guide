@@ -71,6 +71,16 @@ public class Resumes implements Serializable {
     private AnalyzeStatus analyzeStatus;
 
     /**
+     * 上传与解析必须完成的截止时间
+     */
+    private OffsetDateTime uploadDeadlineAt;
+
+    /**
+     * local_message 的逻辑引用，不建立跨模块外键
+     */
+    private Long cleanupMessageId;
+
+    /**
      * 上传时间
      */
     @TableField(fill = FieldFill.INSERT)

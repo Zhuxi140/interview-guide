@@ -109,6 +109,7 @@ public class FileStorageService implements FileStorageApi {
             return;
         }
         try {
+            // S3 DeleteObject 天然幂等，对象不存在同样视为成功。
             DeleteObjectRequest request = DeleteObjectRequest.builder()
                     .bucket(properties.getBucket())
                     .key(key)
@@ -121,6 +122,7 @@ public class FileStorageService implements FileStorageApi {
         }catch (S3Exception e){
             checkStatusCode(e);
             log.error("文件删除失败: {}", key, e);
+            throw new BusinessException(ErrorCode.FILE_DELETE_FAILED);
         }
     }
 

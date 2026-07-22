@@ -49,7 +49,7 @@ public class LocalMessageAdminController {
         return Result.success(detail);
     }
 
-    @Operation(summary = "手动重试单条消息（允许 PENDING/FAILED，拒绝 SUCCESS/IGNORED）")
+    @Operation(summary = "手动重试失败消息（仅允许 FAILED）")
     @RequirePermission(permissions = Perm.Ops.LOCAL_MESSAGE_RETRY, scope = PermissionScope.PLATFORM)
     @PostMapping("/{id}/retry")
     public Result<LocalMessage> retry(@PathVariable Long id) {
@@ -64,14 +64,5 @@ public class LocalMessageAdminController {
         List<Long> ids = body.get("ids");
         BatchRetryResult result = localMessageService.batchRetry(ids);
         return Result.success(result);
-    }
-
-    @Operation(summary = "手动设置消息状态")
-    @RequirePermission(permissions = Perm.Ops.LOCAL_MESSAGE_STATUS, scope = PermissionScope.PLATFORM)
-    @PutMapping("/{id}/status")
-    public Result<LocalMessage> updateStatus(@PathVariable Long id, @RequestBody Map<String, String> body) {
-        String status = body.get("status");
-        LocalMessage message = localMessageService.updateStatus(id, status);
-        return Result.success(message);
     }
 }

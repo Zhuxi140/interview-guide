@@ -17,6 +17,8 @@ import java.time.OffsetDateTime;
 public class MessageDTO {
 
     private MsgTopic topic;
+    private String bizKey;
+    private Integer schemaVersion;
     private String payload;
     private MsgStatus status;
     private Integer retryCount;

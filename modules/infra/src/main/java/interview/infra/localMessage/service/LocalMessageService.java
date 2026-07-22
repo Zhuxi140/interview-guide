@@ -11,22 +11,78 @@ import java.util.List;
 
 public interface LocalMessageService extends IService<LocalMessage> {
 
+    /**
+     * 分页查询本地消息
+     * @param page 页码
+     * @param size 每页数量
+     * @param status 消息状态
+     * @param topic 消息主题
+     * @param priority 优先级
+     * @param startTime 开始时间
+     * @param endTime 结束时间
+     * @return 消息分页
+     */
     IPage<LocalMessage> pageQuery(Integer page, Integer size, String status, String topic, String priority,
                                   OffsetDateTime startTime, OffsetDateTime endTime);
 
+    /**
+     * 获取消息详情
+     * @param id 消息 ID
+     * @return 消息详情
+     */
     LocalMessage getDetail(Long id);
 
+    /**
+     * 人工重试失败消息
+     * @param id 消息 ID
+     * @return 重置后的消息
+     */
     LocalMessage manualRetry(Long id);
 
+    /**
+     * 批量重试失败消息
+     * @param ids 消息 ID 集合
+     * @return 批量重试结果
+     */
     BatchRetryResult batchRetry(List<Long> ids);
 
-    LocalMessage updateStatus(Long id, String status);
+    /**
+     * 原子领取到期消息
+     * @param priority 消息优先级
+     * @param workerId 工作节点 ID
+     * @param leaseDurationSeconds 租约秒数
+     * @param limit 批次数量
+     * @return 已领取消息
+     */
+    List<LocalMessage> claimForDispatch(MsgPriority priority, String workerId,
+                                        long leaseDurationSeconds, int limit);
 
-    List<LocalMessage> fetchAndLockForDispatch(MsgPriority priority, int limit);
+    /**
+     * 将仍由当前租约持有的消息标记成功
+     * @param lease 带租约信息的消息
+     * @return 是否更新成功
+     */
+    boolean markSuccessIfOwned(LocalMessage lease);
 
-    void markSuccess(Long id);
+    /**
+     * 将仍由当前租约持有的消息标记忽略
+     * @param lease 带租约信息的消息
+     * @param reason 忽略原因
+     * @return 是否更新成功
+     */
+    boolean markIgnoredIfOwned(LocalMessage lease, String reason);
 
-    void markFailed(Long id, int retryCount, MsgStatus newStatus, OffsetDateTime nextRetry, String lastError);
+    /**
+     * 更新仍由当前租约持有的消息重试状态
+     * @param lease 带租约信息的消息
+     * @param retryCount 重试次数
+     * @param newStatus 新状态
+     * @param nextRetry 下次重试时间
+     * @param lastError 错误原因
+     * @return 是否更新成功
+     */
+    boolean markRetryIfOwned(LocalMessage lease, int retryCount, MsgStatus newStatus,
+                             OffsetDateTime nextRetry, String lastError);
 
     record BatchRetryResult(int successCount, int failCount, List<RetryItemResult> results) {
         public record RetryItemResult(Long id, boolean success, String error) {}
