@@ -98,7 +98,7 @@ public enum ErrorCode {
     JOB_ALREADY_CLOSED(40002, "岗位已关闭"),
     JOB_NOT_BELONG_TO_ENTERPRISE(40003, "岗位不属于当前企业"),
     RESUME_NOT_FOUND(40004, "简历不存在"),
-    RESUME_ANALYSIS_FAILED(40005, "简历 AI 解析失败"),
+    RESUME_ANALYSIS_FAILED(40005, "简历 AI 解析失败,请稍后重试或联系客服"),
     RESUME_FILE_TYPE_NOT_SUPPORTED(40006, "不支持的简历文件格式"),
     RESUME_FILE_TOO_LARGE(40007, "简历文件过大"),
     RESUME_DUPLICATE_HASH(40008, "重复的简历文件"),
@@ -114,6 +114,7 @@ public enum ErrorCode {
     RESUME_MOST_IS_FIVE(40019,"简历最多只能有5份,请先删除一份，再上传简历"),
     JOB_VERSION_CONFLICT(40020,"岗位已被其他请求修改，请刷新后重试"),
     IDEMPOTENCY_KEY_CONFLICT(40021,"幂等键已用于其他投递请求"),
+    RESUME_ANALYZE_STATUS_ERROR(40022,"简历状态异常或AI解析失败，请稍后重试或联系客服"),
 
     // ------------ 50xxx 文本/面试流程错误码 ------------
     INTERVIEW_SCHEDULE_NOT_FOUND(50001, "面试排期不存在"),

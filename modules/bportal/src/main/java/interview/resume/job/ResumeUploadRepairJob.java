@@ -4,7 +4,7 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import interview.resume.mapper.ResumesMapper;
 import interview.resume.model.entity.Resumes;
 import interview.resume.model.enums.AnalyzeStatus;
-import interview.resume.service.ResumeUploadRepairTxService;
+import interview.resume.service.impl.ResumeTxService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -24,7 +24,7 @@ public class ResumeUploadRepairJob {
     private static final int BATCH_SIZE = 100;
 
     private final ResumesMapper resumesMapper;
-    private final ResumeUploadRepairTxService repairTxService;
+    private final ResumeTxService repairTxService;
 
     @Scheduled(fixedDelayString = "${app.resume.upload-repair-delay-ms:60000}")
     public void repairExpiredUploading() {

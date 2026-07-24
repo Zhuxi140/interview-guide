@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.service.IService;
 import interview.resume.model.entity.Resumes;
 import interview.resume.model.enums.AnalyzeStatus;
 import interview.resume.model.req.ResumeUploadReq;
+import interview.resume.model.vo.ResumeAnalyzeTriggerVO;
 import interview.resume.model.vo.ResumeAnalysisVO;
 import interview.resume.model.vo.ResumeListItemVO;
 import interview.resume.model.vo.ResumeUploadVO;
@@ -59,11 +60,11 @@ public interface ResumesService extends IService<Resumes> {
     void deleteResume(Long resumeId);
 
     /**
-     * 触发简历分析
+     * 触发简历 AI 解析（异步，按需付费）
      * @param resumeId 简历 ID
-     * @return 简历信息
+     * @return 任务受理信息
      */
-    ResumeVO analyzeResume(Long resumeId);
+    ResumeAnalyzeTriggerVO analyzeResume(Long resumeId);
 
     /**
      * 查询简历分析结果

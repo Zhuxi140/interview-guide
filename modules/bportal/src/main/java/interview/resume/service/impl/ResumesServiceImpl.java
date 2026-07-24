@@ -22,6 +22,7 @@ import interview.resume.model.entity.ResumeAnalyses;
 import interview.resume.model.entity.Resumes;
 import interview.resume.model.enums.AnalyzeStatus;
 import interview.resume.model.req.ResumeUploadReq;
+import interview.resume.model.vo.ResumeAnalyzeTriggerVO;
 import interview.resume.model.vo.ResumeAnalysisVO;
 import interview.resume.model.vo.ResumeListItemVO;
 import interview.resume.model.vo.ResumeUploadVO;
@@ -52,6 +53,7 @@ public class ResumesServiceImpl extends ServiceImpl<ResumesMapper, Resumes> impl
     private final ResumeAnalysesService resumeAnalysesService;
     private final CandidateSkillScoresService candidateSkillScoresService;
     private final CandidateProfileService candidateProfileService;
+    private final ResumeAnalysisTaskHandler resumeAnalysisTaskHandler;
     private final FileStorageApi fileStorageService;
     private final FileHashApi fileHashService;
     private final FileParseApi fileParseService;
@@ -327,7 +329,7 @@ public class ResumesServiceImpl extends ServiceImpl<ResumesMapper, Resumes> impl
     }
 
     @Override
-    @Transactional(rollbackFor = BusinessException.class)
+    @Transactional
     public void deleteResume(Long resumeId) {
         // ① 校验简历存在
         Long userId = AuthContext.getRequiredUserId();
@@ -354,25 +356,59 @@ public class ResumesServiceImpl extends ServiceImpl<ResumesMapper, Resumes> impl
     }
 
     @Override
-    @Transactional(rollbackFor = BusinessException.class)
-    public ResumeVO analyzeResume(Long resumeId) {
+    @Transactional
+    public ResumeAnalyzeTriggerVO analyzeResume(Long resumeId) {
         // 校验简历存在
         Long userId = AuthContext.getRequiredUserId();
-        boolean exists = lambdaQuery()
+        Resumes resumes = lambdaQuery()
+                .select(Resumes::getResumeText)
                 .eq(Resumes::getId, resumeId)
                 .eq(Resumes::getUserId, userId)
-                .exists();
-        if (!exists){
+                .one();
+        if (resumes == null) {
             throw new BusinessException(ErrorCode.RESUME_NOT_FOUND);
         }
-        //TODO ③ 更新 resumes.analyzeStatus = AnalyzeStatus.PROCESSING
+        // 更新 resumes.analyzeStatus = AnalyzeStatus.PROCESSING
+        boolean update = lambdaUpdate()
+                .eq(Resumes::getId, resumeId)
+                .in(Resumes::getAnalyzeStatus,AnalyzeStatus.PENDING,
+                        AnalyzeStatus.FAILED)
+                .set(Resumes::getAnalyzeStatus, AnalyzeStatus.PROCESSING)
+                .update();
+
+        if (!update) {
+            throw new BusinessException(ErrorCode.RESUME_ANALYZE_STATUS_ERROR);
+        }
+
+        // 写入本地消息表进行兜底补偿
+        MessageDTO msg = MessageDTO.builder()
+                .bizKey(MsgTopic.RESUME_UPLOAD_CLEANUP.name() + ":" + ":" + userId + ":" + resumeId)
+                .topic(MsgTopic.RESUME_AI_PARSER)
+                .schemaVersion(1)
+                .payload(resumeId.toString())
+                .status(MsgStatus.PENDING)
+                .priority(MsgPriority.HIGH)
+                .build();
+        localMessageApi.saveInCurrentTransaction(msg);
         //TODO ④ 异步/同步调用大模型解析 resumeText（从 resumes 表读取）
+        String resumeText = resumes.getResumeText();
+        if (StrUtil.isBlank(resumeText)) {
+            throw new BusinessException(ErrorCode.RESUME_ANALYSIS_FAILED);
+        }
+        resumeAnalysisTaskHandler.handleResumeAnalysis(resumes.getResumeText());
         //TODO ⑤ 解析结果写入 resume_analyses 表（overallScore, strengthsJson, suggestionsJson）
         //TODO ⑥ 写入 candidate_skill_scores 表（每个维度一条记录）
         //TODO ⑦ 合并/更新 candidate_profile 表（按 userId 聚合各维度平均分）
         //TODO ⑧ 更新 resumes.analyzeStatus = AnalyzeStatus.COMPLETED（或 FAILED）
         //TODO ⑨ Phase 4 扩展点：写入 token_consume_logs
-        return null;
+
+        // 发本地消息触发异步解析（由 MessageDispatcher 消费）
+
+        return ResumeAnalyzeTriggerVO.builder()
+                .taskId(null)
+                .resumeId(resumeId)
+                .analyzeStatus(AnalyzeStatus.PROCESSING)
+                .build();
     }
 
     @Override

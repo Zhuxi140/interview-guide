@@ -35,12 +35,24 @@ spring:
         initialize-schema: false
     openai:
       api-key: ${API_KEY}
-      base-url: https://ws-8erhtjf02it7xo3t.cn-beijing.maas.aliyuncs.com/compatible-mode/v1
+      base-url: https://ws-8erhtjf02it7xo3t.cn-beijing.maas.aliyuncs.com/compatible-mode
       chat:
         options:
           model: qwen-max
 
 app:
+  message:
+    dispatch:
+      # 调度线程只领取消息，业务 Handler 由有界线程池并行执行。
+      high-delay-ms: 5000
+      medium-delay-ms: 30000
+      low-delay-ms: 300000
+      lease-seconds: 120
+      batch-size: 100
+      worker-threads: 8
+      # 默认不缓存已领取消息，避免任务排队期间租约过期。
+      queue-capacity: 0
+      shutdown-await-seconds: 30
   storage:
     endpoint: http://localhost:9000    # RustFS 服务地址
     access-key: tJ4NevbNcFckxi4af8Uq   # 访问密钥（建议使用环境变量）

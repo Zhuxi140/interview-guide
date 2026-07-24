@@ -7,6 +7,7 @@ import interview.common.enums.RiskLevel;
 import interview.common.annonate.MaxRiskLevel;
 import interview.resume.model.enums.AnalyzeStatus;
 import interview.resume.model.req.ResumeUploadReq;
+import interview.resume.model.vo.ResumeAnalyzeTriggerVO;
 import interview.resume.model.vo.ResumeAnalysisVO;
 import interview.resume.model.vo.ResumeDeleteVO;
 import interview.resume.model.vo.ResumeDownloadVO;
@@ -87,10 +88,10 @@ public class ResumesController {
     }
 
     @MaxRiskLevel(RiskLevel.LOW_RISK)
-    @Operation(summary = "触发 AI 简历解析（异步）")
+    @Operation(summary = "触发 AI 简历解析（异步，按需付费）")
     @PostMapping("/{resumeId}/analyze")
-    public Result<ResumeVO> analyzeResume(@PathVariable("resumeId") Long resumeId) {
-        ResumeVO vo = resumesService.analyzeResume(resumeId);
+    public Result<ResumeAnalyzeTriggerVO> analyzeResume(@PathVariable("resumeId") Long resumeId) {
+        ResumeAnalyzeTriggerVO vo = resumesService.analyzeResume(resumeId);
         return Result.success(vo);
     }
 
