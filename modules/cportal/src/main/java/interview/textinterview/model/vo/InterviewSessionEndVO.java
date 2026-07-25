@@ -1,5 +1,7 @@
 package interview.textinterview.model.vo;
 
+import interview.common.enums.InterviewReportGenerationStatus;
+import interview.common.enums.InterviewSessionStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 
@@ -10,10 +12,10 @@ public record InterviewSessionEndVO(
         Long sessionId,
 
         @Schema(description = "会话状态", example = "COMPLETED")
-        String status,
+        InterviewSessionStatus status,
 
         @Schema(description = "报告生成状态 PENDING / PROCESSING / COMPLETED / FAILED", example = "PENDING")
-        String reportStatus,
+        InterviewReportGenerationStatus reportStatus,
 
         @Schema(description = "会话版本号")
         Integer sessionVersion,

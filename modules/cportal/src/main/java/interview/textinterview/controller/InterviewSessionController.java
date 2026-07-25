@@ -1,8 +1,10 @@
 package interview.textinterview.controller;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import interview.common.annonate.MaxRiskLevel;
 import interview.common.constant.ApiVersion;
 import interview.common.constant.Result;
+import interview.common.enums.RiskLevel;
 import interview.textinterview.model.req.InterviewAnswerSubmitReq;
 import interview.textinterview.model.req.InterviewSessionCreateReq;
 import interview.textinterview.model.req.InterviewSessionEndReq;
@@ -33,6 +35,7 @@ public class InterviewSessionController {
     }
 
     @Operation(summary = "查询面试会话状态")
+    @MaxRiskLevel(RiskLevel.NO_RISK)
     @GetMapping("/{sessionId}")
     public Result<InterviewSessionVO> getSession(@PathVariable Long sessionId) {
         return Result.success(interviewSessionService.getSession(sessionId));

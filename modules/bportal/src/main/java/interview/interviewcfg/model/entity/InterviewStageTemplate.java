@@ -29,6 +29,9 @@ public class InterviewStageTemplate implements Serializable {
     @TableField(typeHandler = JsonbStringTypeHandler.class)
     private String stagesSequenceJson;
 
+    @Version
+    private Integer version;
+
     @TableField(fill = FieldFill.INSERT)
     private OffsetDateTime createdAt;
 

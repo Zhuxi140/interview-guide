@@ -1,7 +1,7 @@
 package interview.interviewcfg.model.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
-import interview.framework.mybatis.JsonbStringTypeHandler;
+import interview.common.enums.InterviewScheduleStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -26,22 +26,33 @@ public class InterviewSchedule implements Serializable {
 
     private Long companyUserId;
 
-    private Long candidateUserId;
+    private Long interviewerUserId;
 
-    private Long jobId;
+    private Long applicationId;
 
     private Long templateId;
 
+    private Short roundNo;
+
+    private String stageCode;
+
+    private String idempotencyKey;
+
     private OffsetDateTime interviewTime;
+
+    private Integer durationMinutes;
 
     @Builder.Default
     private String interviewType = "TEXT";
 
     @Builder.Default
-    private String status = "PENDING_CONFIRMATION";
+    private InterviewScheduleStatus status =
+            InterviewScheduleStatus.PENDING_CONFIRMATION;
 
-    @TableField(typeHandler = JsonbStringTypeHandler.class)
-    private String offerDetail;
+    private String statusReason;
+
+    @Version
+    private Integer version;
 
     @TableField(fill = FieldFill.INSERT)
     private OffsetDateTime createdAt;

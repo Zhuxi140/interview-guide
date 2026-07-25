@@ -1,8 +1,13 @@
 package interview.interviewcfg.controller;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import interview.common.annonate.MaxRiskLevel;
+import interview.common.annonate.RequirePermission;
 import interview.common.constant.ApiVersion;
+import interview.common.constant.Perm;
 import interview.common.constant.Result;
+import interview.common.enums.PermissionScope;
+import interview.common.enums.RiskLevel;
 import interview.interviewcfg.model.req.InterviewTemplateCreateReq;
 import interview.interviewcfg.model.req.InterviewTemplateUpdateReq;
 import interview.interviewcfg.model.req.PhaseConfigUpsertReq;
@@ -38,6 +43,11 @@ public class InterviewTemplateController {
     }
 
     @Operation(summary = "查询面试阶段模板列表（分页）")
+    @MaxRiskLevel(RiskLevel.NO_RISK)
+    @RequirePermission(
+            permissions = Perm.InterviewTemplate.LIST,
+            scope = PermissionScope.ENTERPRISE
+    )
     @GetMapping
     public Result<IPage<InterviewTemplateListItemVO>> listTemplates(
             @PathVariable Long enterpriseId,
@@ -51,6 +61,11 @@ public class InterviewTemplateController {
     }
 
     @Operation(summary = "查询模板详情（含阶段序列与组卷策略）")
+    @MaxRiskLevel(RiskLevel.NO_RISK)
+    @RequirePermission(
+            permissions = Perm.InterviewTemplate.DETAIL,
+            scope = PermissionScope.ENTERPRISE
+    )
     @GetMapping("/{templateId}")
     public Result<InterviewTemplateDetailVO> getTemplateDetail(
             @PathVariable Long enterpriseId,
@@ -88,6 +103,11 @@ public class InterviewTemplateController {
     }
 
     @Operation(summary = "查询阶段组卷策略列表")
+    @MaxRiskLevel(RiskLevel.NO_RISK)
+    @RequirePermission(
+            permissions = Perm.InterviewTemplate.PHASE_CONFIG_LIST,
+            scope = PermissionScope.ENTERPRISE
+    )
     @GetMapping("/{templateId}/phase-configs")
     public Result<List<PhaseConfigVO>> listPhaseConfigs(
             @PathVariable Long enterpriseId,

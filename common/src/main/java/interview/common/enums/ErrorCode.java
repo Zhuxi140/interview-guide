@@ -31,6 +31,11 @@ public enum ErrorCode {
     FILE_READ_FAILED(10010,"文件读取失败"),
     INVALID_FILENAME(10011,"文件名为空或不规范"),
     FILE_DELETE_FAILED(10012,"文件删除失败"),
+    PAGE_PARAM_INVALID(10013, "分页参数不合法"),
+    SORT_FIELD_INVALID(10014, "不支持的排序字段"),
+    SORT_DIRECTION_INVALID(10015, "排序方向仅支持 asc 或 desc"),
+    TIME_FORMAT_INVALID(10016, "时间必须使用带时区的 ISO-8601 格式"),
+    TIME_RANGE_INVALID(10017, "开始时间不能晚于结束时间"),
 
 
     // ------------ 20xxx 用户认证与授权错误码 ------------

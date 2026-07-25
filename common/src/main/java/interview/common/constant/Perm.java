@@ -55,6 +55,26 @@ public interface Perm {
         String UPDATE = "application:update-status";
     }
 
+    interface InterviewTemplate {
+        String LIST = "interview-template:list";
+        String DETAIL = "interview-template:detail";
+        String PHASE_CONFIG_LIST = "interview-template:phase-configs:list";
+    }
+
+    interface InterviewSchedule {
+        String LIST = "interview-schedule:list";
+        String DETAIL = "interview-schedule:detail";
+    }
+
+    interface InterviewReport {
+        String DETAIL = "interview-report:detail";
+        String LIST = "enterprise:interview-reports";
+    }
+
+    interface ApplicationTransitionLog {
+        String LIST = "enterprise:application-transition-logs";
+    }
+
     interface Ops {
         String LOCAL_MESSAGE_PAGE = "ops:local-message:page";
         String LOCAL_MESSAGE_DETAIL = "ops:local-message:detail";

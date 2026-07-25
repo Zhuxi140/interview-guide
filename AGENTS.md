@@ -26,6 +26,22 @@ Use four-space indentation and UTF-8. Keep packages lowercase under `interview.*
 - Annotate every newly created Req and VO with Swagger `@Schema` at both class and exposed-field/record-component level. Include examples when they help clarify request or response values.
 - For partial or full updates involving several fields, populate an entity and call the entity-based update so automatic fill annotations apply. For updates of only one or two fields, use `lambdaUpdate` and explicitly set `traceId`, `updatedAt`, `updatedBy`, and other required audit fields.
 
+## Implementation Guardrails
+
+- State material assumptions before implementation. If multiple interpretations would produce meaningfully different results and the repository cannot resolve them, surface the alternatives and ask before proceeding.
+- Prefer the smallest implementation that satisfies the request. Do not add speculative features, single-use abstractions, or unrequested configurability.
+- Make surgical changes: do not refactor, reformat, or clean up adjacent code unless required. Match existing style and only remove imports, variables, or methods made obsolete by the current change.
+- Every changed line must trace to the requested outcome. Report unrelated defects instead of modifying them.
+- For multi-step work, define brief verifiable goals. Reproduce bugs or add targeted regression tests when practical, then run checks proportionate to the change. Code completion alone is not verification.
+
+## Service, Conversion & SQL Rules
+
+- Use `LambdaQuery` for simple Service-layer queries. Querying logically deleted rows (`is_deleted = true`) requires explicit Mapper/XML SQL because normal MyBatis-Plus queries apply logical-delete filtering.
+- Use an entity for partial or full updates involving several fields so automatic fill annotations run. Use `LambdaUpdate` for one or two fields; logical-delete filtering is automatic, but audit fields such as `updatedBy`, `traceId`, and `updatedAt` must be set explicitly.
+- Query operations may return a VO directly. For create, update, or delete operations whose Service result differs from the external VO, return a BO from the Service and convert BO to VO with MapStruct in the Controller.
+- Put complex handwritten SQL in the corresponding Mapper XML. Do not implement it with `@Select`, `@Update`, or similar annotations.
+- MyBatis-Plus primary-key, automatic-fill, and logical-delete behavior does not apply inside handwritten SQL. Handle identifiers, audit fields, timestamps, and logical-delete conditions explicitly.
+
 ## Testing Guidelines
 
 Tests use JUnit Jupiter through `spring-boot-starter-test`, with Spring and Mockito facilities where appropriate. Name test classes `*Test` and mirror the production package. Cover successful behavior, validation failures, authorization boundaries, and persistence edge cases. No coverage threshold is configured; add regression tests for every bug fix.

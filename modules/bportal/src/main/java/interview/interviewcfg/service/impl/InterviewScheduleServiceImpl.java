@@ -1,8 +1,16 @@
 package interview.interviewcfg.service.impl;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import interview.api.system.EnterpriseValidationApi;
+import interview.api.system.UserApi;
+import interview.common.enums.ErrorCode;
+import interview.common.enums.InterviewScheduleStatus;
+import interview.common.exception.BusinessException;
+import interview.framework.context.AuthContext;
 import interview.interviewcfg.mapper.InterviewScheduleMapper;
+import interview.interviewcfg.model.bo.InterviewScheduleQueryBO;
 import interview.interviewcfg.model.entity.InterviewSchedule;
 import interview.interviewcfg.model.req.*;
 import interview.interviewcfg.model.vo.*;
@@ -11,13 +19,20 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
 public class InterviewScheduleServiceImpl
         extends ServiceImpl<InterviewScheduleMapper, InterviewSchedule>
         implements InterviewScheduleService {
+
+    private final InterviewScheduleMapper interviewScheduleMapper;
+    private final EnterpriseValidationApi enterpriseValidationApi;
+    private final UserApi userApi;
 
     @Override
     @Transactional
@@ -46,25 +61,86 @@ public class InterviewScheduleServiceImpl
 
     @Override
     public IPage<InterviewScheduleListItemVO> pageSchedules(Long enterpriseId, Integer page, Integer size,
-                                                             String status, String startTime, String endTime,
+                                                             InterviewScheduleStatus status,
+                                                             String startTime, String endTime,
                                                              String sort, String order) {
         // 纯CRUD
-        // TODO ① 校验企业访问范围、page/size 上限，并将 status 转换为受支持的排期状态枚举。
-        // TODO ② 将 startTime/endTime 按带时区 ISO-8601 解析，校验起止顺序和最大查询跨度。
-        // TODO ③ 将 sort 映射到 interviewTime/createdAt/updatedAt 白名单字段，拒绝任意字符串排序。
-        // TODO ④ 按 enterpriseId、状态和时间范围分页查询未删除排期，并批量关联投递、候选人和岗位信息。
-        // TODO ⑤ 映射 candidateName、jobTitle、interviewType、status、version，返回统一分页结构并避免 N+1 查询。
-        return null;
+        // 校验租户、筛选条件和白名单排序。
+        enterpriseValidationApi.validateEnterpriseBelong(
+                enterpriseId, AuthContext.getRequiredUserId());
+        validatePage(page, size);
+        validateSort(sort);
+        validateOrder(order);
+        OffsetDateTime parsedStartTime = parseTime(startTime);
+        OffsetDateTime parsedEndTime = parseTime(endTime);
+        if (parsedStartTime != null
+                && parsedEndTime != null
+                && parsedStartTime.isAfter(parsedEndTime)) {
+            throw new BusinessException(ErrorCode.TIME_RANGE_INVALID);
+        }
+
+        // 分页关联投递和岗位，并批量补充候选人名称。
+        IPage<InterviewScheduleQueryBO> boPage =
+                interviewScheduleMapper.pageSchedulesWithApplication(
+                        new Page<InterviewSchedule>(page, size),
+                        enterpriseId,
+                        null,
+                        status,
+                        parsedStartTime,
+                        parsedEndTime,
+                        sort,
+                        "asc".equalsIgnoreCase(order)
+                );
+        List<Long> candidateIds = boPage.getRecords().stream()
+                .map(InterviewScheduleQueryBO::candidateUserId)
+                .distinct()
+                .toList();
+        Map<Long, String> candidateNames = candidateIds.isEmpty()
+                ? Map.of()
+                : userApi.getUserNamesByIds(candidateIds);
+        List<InterviewScheduleListItemVO> records = boPage.getRecords().stream()
+                .map(bo -> new InterviewScheduleListItemVO(
+                        bo.id(),
+                        bo.applicationId(),
+                        candidateNames.get(bo.candidateUserId()),
+                        bo.jobTitle(),
+                        bo.interviewTime(),
+                        bo.interviewType(),
+                        bo.status(),
+                        bo.version()
+                ))
+                .toList();
+        Page<InterviewScheduleListItemVO> result =
+                new Page<>(boPage.getCurrent(), boPage.getSize(), boPage.getTotal());
+        result.setRecords(records);
+        return result;
     }
 
     @Override
     public InterviewScheduleDetailVO getScheduleDetail(Long enterpriseId, Long scheduleId) {
         // 纯CRUD
-        // TODO ① 使用 scheduleId + enterpriseId + 未删除条件查询排期，防止跨企业访问。
-        // TODO ② 批量/联表取得 applicationId、candidateUserId、jobId、模板和面试官信息，缺失关联时记录数据异常。
-        // TODO ③ 仅在当前状态和权限允许时返回 offerDetail，并保持 JSON 快照结构可解析。
-        // TODO ④ 映射 interviewTime、interviewType、status、version 以及 createdAt/updatedAt 返回详情。
-        return null;
+        // 校验企业访问范围并通过企业条件读取排期详情。
+        enterpriseValidationApi.validateEnterpriseBelong(enterpriseId, AuthContext.getRequiredUserId());
+        InterviewScheduleQueryBO schedule =
+                interviewScheduleMapper.getScheduleWithApplication(enterpriseId, scheduleId);
+        if (schedule == null) {
+            throw new BusinessException(ErrorCode.INTERVIEW_SCHEDULE_NOT_FOUND);
+        }
+        return new InterviewScheduleDetailVO(
+                schedule.id(),
+                schedule.applicationId(),
+                schedule.candidateUserId(),
+                schedule.jobId(),
+                schedule.templateId(),
+                schedule.interviewerUserId(),
+                schedule.interviewTime(),
+                schedule.interviewType(),
+                schedule.status(),
+                schedule.statusReason(),
+                schedule.version(),
+                schedule.createdAt(),
+                schedule.updatedAt()
+        );
     }
 
     @Override
@@ -104,5 +180,37 @@ public class InterviewScheduleServiceImpl
         // TODO ⑦ 事务提交后发布录用/拒绝领域事件；job_applications 继续只表示初筛事实，不反向覆盖其状态。
         // TODO ⑧ 返回最新 id、status、version 和 updatedAt。
         return null;
+    }
+
+    private void validateSort(String sort) {
+        if (!"interviewTime".equals(sort)
+                && !"createdAt".equals(sort)
+                && !"updatedAt".equals(sort)) {
+            throw new BusinessException(ErrorCode.SORT_FIELD_INVALID);
+        }
+    }
+
+    private void validateOrder(String order) {
+        if (!"asc".equalsIgnoreCase(order)
+                && !"desc".equalsIgnoreCase(order)) {
+            throw new BusinessException(ErrorCode.SORT_DIRECTION_INVALID);
+        }
+    }
+
+    private void validatePage(Integer page, Integer size) {
+        if (page == null || page < 1 || size == null || size < 1 || size > 100) {
+            throw new BusinessException(ErrorCode.PAGE_PARAM_INVALID);
+        }
+    }
+
+    private OffsetDateTime parseTime(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return OffsetDateTime.parse(value);
+        } catch (DateTimeParseException exception) {
+            throw new BusinessException(ErrorCode.TIME_FORMAT_INVALID);
+        }
     }
 }

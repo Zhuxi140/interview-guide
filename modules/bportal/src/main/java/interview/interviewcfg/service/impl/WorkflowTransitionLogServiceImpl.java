@@ -1,7 +1,12 @@
 package interview.interviewcfg.service.impl;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import interview.api.system.EnterpriseValidationApi;
+import interview.common.enums.ErrorCode;
+import interview.common.exception.BusinessException;
+import interview.framework.context.AuthContext;
 import interview.interviewcfg.mapper.WorkflowTransitionLogMapper;
 import interview.interviewcfg.model.entity.WorkflowTransitionLog;
 import interview.interviewcfg.model.vo.WorkflowLogListItemVO;
@@ -15,14 +20,36 @@ public class WorkflowTransitionLogServiceImpl
         extends ServiceImpl<WorkflowTransitionLogMapper, WorkflowTransitionLog>
         implements WorkflowTransitionLogService {
 
+    private final EnterpriseValidationApi enterpriseValidationApi;
+
     @Override
-    public IPage<WorkflowLogListItemVO> pageLogs(Long enterpriseId, Integer page, Integer size, Long scheduleId) {
-        // 纯CRUD
-        // TODO ① 校验当前用户对 enterpriseId 的访问范围，并限制 page/size，避免管理查询无限放大。
-        // TODO ② 日志表没有 enterpriseId，必须通过 interview_schedule 关联并以 schedule.enterpriseId 作为租户过滤条件。
-        // TODO ③ scheduleId 非空时同时校验该排期属于当前企业，禁止直接按外部 ID 跨企业读取日志。
-        // TODO ④ 按 createdAt、id 倒序分页查询 fromStatus、toStatus、operatorUserId、transitionReason，避免 N+1 查询。
-        // TODO ⑤ 映射 WorkflowLogListItemVO，并返回 current、size、total、pages、records 完整分页元数据。
-        return null;
+    public IPage<WorkflowLogListItemVO> pageLogs(Long enterpriseId, Integer page,
+                                                  Integer size, Long applicationId) {
+        // 纯 CRUD
+        Long userId = AuthContext.getRequiredUserId();
+        enterpriseValidationApi.validateEnterpriseBelong(enterpriseId, userId);
+        if (page == null || page < 1 || size == null || size < 1 || size > 100) {
+            throw new BusinessException(ErrorCode.PAGE_PARAM_INVALID);
+        }
+
+        // 日志表自带租户隔离键，查询始终同时限定企业和可选投递。
+        IPage<WorkflowTransitionLog> logPage = lambdaQuery()
+                .eq(WorkflowTransitionLog::getEnterpriseId, enterpriseId)
+                .eq(applicationId != null,
+                        WorkflowTransitionLog::getApplicationId, applicationId)
+                .orderByDesc(WorkflowTransitionLog::getCreatedAt)
+                .orderByDesc(WorkflowTransitionLog::getId)
+                .page(new Page<>(page, size));
+
+        // 简单字段投影为对外 VO，不暴露内部 traceId。
+        return logPage.convert(log -> new WorkflowLogListItemVO(
+                log.getId(),
+                log.getApplicationId(),
+                log.getFromStatus(),
+                log.getToStatus(),
+                log.getOperatorUserId(),
+                log.getTransitionReason(),
+                log.getCreatedAt()
+        ));
     }
 }

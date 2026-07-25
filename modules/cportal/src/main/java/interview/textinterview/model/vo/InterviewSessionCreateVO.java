@@ -1,5 +1,6 @@
 package interview.textinterview.model.vo;
 
+import interview.common.enums.InterviewSessionStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 
@@ -16,6 +17,6 @@ public record InterviewSessionCreateVO(
         InterviewQuestionVO question,
 
         @Schema(description = "会话状态", example = "IN_PROGRESS")
-        String status
+        InterviewSessionStatus status
 ) {
 }

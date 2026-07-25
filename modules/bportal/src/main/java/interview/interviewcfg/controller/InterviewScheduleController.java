@@ -1,8 +1,14 @@
 package interview.interviewcfg.controller;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import interview.common.annonate.MaxRiskLevel;
+import interview.common.annonate.RequirePermission;
 import interview.common.constant.ApiVersion;
+import interview.common.constant.Perm;
 import interview.common.constant.Result;
+import interview.common.enums.InterviewScheduleStatus;
+import interview.common.enums.PermissionScope;
+import interview.common.enums.RiskLevel;
 import interview.interviewcfg.model.req.*;
 import interview.interviewcfg.model.vo.*;
 import interview.interviewcfg.service.InterviewScheduleService;
@@ -46,12 +52,17 @@ public class InterviewScheduleController {
     }
 
     @Operation(summary = "查询企业面试排期列表（分页）")
+    @MaxRiskLevel(RiskLevel.NO_RISK)
+    @RequirePermission(
+            permissions = Perm.InterviewSchedule.LIST,
+            scope = PermissionScope.ENTERPRISE
+    )
     @GetMapping("/interview-schedules")
     public Result<IPage<InterviewScheduleListItemVO>> listSchedules(
             @PathVariable Long enterpriseId,
             @RequestParam(defaultValue = "1") @Min(1) Integer page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) Integer size,
-            @RequestParam(required = false) String status,
+            @RequestParam(required = false) InterviewScheduleStatus status,
             @RequestParam(required = false) String startTime,
             @RequestParam(required = false) String endTime,
             @RequestParam(defaultValue = "interviewTime") String sort,
@@ -62,6 +73,11 @@ public class InterviewScheduleController {
     }
 
     @Operation(summary = "查询排期详情")
+    @MaxRiskLevel(RiskLevel.NO_RISK)
+    @RequirePermission(
+            permissions = Perm.InterviewSchedule.DETAIL,
+            scope = PermissionScope.ENTERPRISE
+    )
     @GetMapping("/interview-schedules/{scheduleId}")
     public Result<InterviewScheduleDetailVO> getScheduleDetail(
             @PathVariable Long enterpriseId,
@@ -97,13 +113,19 @@ public class InterviewScheduleController {
     }
 
     @Operation(summary = "查询人才流转状态机历史日志（分页）")
+    @MaxRiskLevel(RiskLevel.NO_RISK)
+    @RequirePermission(
+            permissions = Perm.ApplicationTransitionLog.LIST,
+            scope = PermissionScope.ENTERPRISE
+    )
     @GetMapping("/workflow-logs")
     public Result<IPage<WorkflowLogListItemVO>> listWorkflowLogs(
             @PathVariable Long enterpriseId,
             @RequestParam(defaultValue = "1") @Min(1) Integer page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) Integer size,
-            @RequestParam(required = false) Long scheduleId) {
+            @RequestParam(required = false) Long applicationId) {
         return Result.success(
-                workflowTransitionLogService.pageLogs(enterpriseId, page, size, scheduleId));
+                workflowTransitionLogService.pageLogs(
+                        enterpriseId, page, size, applicationId));
     }
 }

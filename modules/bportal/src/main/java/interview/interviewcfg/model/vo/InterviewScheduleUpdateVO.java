@@ -1,5 +1,6 @@
 package interview.interviewcfg.model.vo;
 
+import interview.common.enums.InterviewScheduleStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 
@@ -12,7 +13,7 @@ public record InterviewScheduleUpdateVO(
         Long id,
 
         @Schema(description = "排期状态")
-        String status,
+        InterviewScheduleStatus status,
 
         @Schema(description = "面试时间")
         OffsetDateTime interviewTime,

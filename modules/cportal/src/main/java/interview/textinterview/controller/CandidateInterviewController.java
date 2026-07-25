@@ -1,15 +1,22 @@
 package interview.textinterview.controller;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import interview.common.annonate.MaxRiskLevel;
 import interview.common.constant.ApiVersion;
 import interview.common.constant.Result;
+import interview.common.enums.InterviewReportGenerationStatus;
+import interview.common.enums.InterviewScheduleStatus;
+import interview.common.enums.RiskLevel;
+import interview.framework.context.AuthContext;
 import interview.textinterview.model.req.InterviewDecisionReq;
 import interview.textinterview.model.req.InterviewScheduleCancelReq;
 import interview.textinterview.model.vo.*;
+import interview.textinterview.service.CandidateInterviewQueryService;
 import interview.textinterview.service.InterviewReportService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
@@ -23,17 +30,19 @@ import org.springframework.web.bind.annotation.*;
 public class CandidateInterviewController {
 
     private final InterviewReportService interviewReportService;
+    private final CandidateInterviewQueryService candidateInterviewQueryService;
 
     @Operation(summary = "C端查询我的面试排期（分页）")
+    @MaxRiskLevel(RiskLevel.NO_RISK)
     @GetMapping("/interview-schedules")
     public Result<IPage<InterviewScheduleCandidateListItemVO>> listMySchedules(
             @RequestParam(defaultValue = "1") @Min(1) Integer page,
-            @RequestParam(defaultValue = "20") @Min(1) Integer size,
-            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) Integer size,
+            @RequestParam(required = false) InterviewScheduleStatus status,
             @RequestParam(defaultValue = "interviewTime") String sort,
             @RequestParam(defaultValue = "asc") String order) {
-        // TODO C端排期列表需调用schedule服务或跨模块查询
-        return Result.success(null);
+        return Result.success(candidateInterviewQueryService.pageMySchedules(
+                page, size, status, sort, order));
     }
 
     @Operation(summary = "C端接受或拒绝面试邀请")
@@ -55,21 +64,22 @@ public class CandidateInterviewController {
     }
 
     @Operation(summary = "C端查询我的面评报告列表（分页）")
+    @MaxRiskLevel(RiskLevel.NO_RISK)
     @GetMapping("/interview-reports")
     public Result<IPage<InterviewReportCandidateListItemVO>> listMyReports(
             @RequestParam(defaultValue = "1") @Min(1) Integer page,
-            @RequestParam(defaultValue = "20") @Min(1) Integer size,
-            @RequestParam(required = false) String generationStatus) {
-        // TODO userId从AuthContext获取
-        Long userId = 0L;
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) Integer size,
+            @RequestParam(required = false)
+            InterviewReportGenerationStatus generationStatus) {
+        Long userId = AuthContext.getRequiredUserId();
         return Result.success(interviewReportService.pageCandidateReports(userId, page, size, generationStatus));
     }
 
     @Operation(summary = "C端查询本人排期报告")
+    @MaxRiskLevel(RiskLevel.NO_RISK)
     @GetMapping("/interview-schedules/{scheduleId}/report")
     public Result<InterviewReportVO> getMyReport(@PathVariable Long scheduleId) {
-        // TODO userId从AuthContext获取
-        Long userId = 0L;
+        Long userId = AuthContext.getRequiredUserId();
         return Result.success(interviewReportService.getCandidateReport(userId, scheduleId));
     }
 

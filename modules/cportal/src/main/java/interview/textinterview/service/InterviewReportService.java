@@ -2,6 +2,7 @@ package interview.textinterview.service;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.IService;
+import interview.common.enums.InterviewReportGenerationStatus;
 import interview.textinterview.model.entity.InterviewReport;
 import interview.textinterview.model.vo.*;
 
@@ -26,7 +27,8 @@ public interface InterviewReportService extends IService<InterviewReport> {
      * @return 报告分页
      */
     IPage<InterviewReportListItemVO> pageReports(Long enterpriseId, Integer page, Integer size,
-                                                  String generationStatus, String startTime, String endTime);
+                                                  InterviewReportGenerationStatus generationStatus,
+                                                  String startTime, String endTime);
 
     /**
      * C端查询我的面评报告列表（分页）
@@ -37,7 +39,7 @@ public interface InterviewReportService extends IService<InterviewReport> {
      * @return 报告分页
      */
     IPage<InterviewReportCandidateListItemVO> pageCandidateReports(Long userId, Integer page, Integer size,
-                                                                    String generationStatus);
+                                                                    InterviewReportGenerationStatus generationStatus);
 
     /**
      * C端查询本人排期报告

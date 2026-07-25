@@ -12,8 +12,9 @@ public interface WorkflowTransitionLogService extends IService<WorkflowTransitio
      * @param enterpriseId 企业ID
      * @param page 页码
      * @param size 每页条数
-     * @param scheduleId 排期ID
+     * @param applicationId 投递ID
      * @return 日志分页
      */
-    IPage<WorkflowLogListItemVO> pageLogs(Long enterpriseId, Integer page, Integer size, Long scheduleId);
+    IPage<WorkflowLogListItemVO> pageLogs(Long enterpriseId, Integer page,
+                                          Integer size, Long applicationId);
 }

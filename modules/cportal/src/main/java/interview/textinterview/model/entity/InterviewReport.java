@@ -1,6 +1,7 @@
 package interview.textinterview.model.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import interview.common.enums.InterviewReportGenerationStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -25,6 +26,12 @@ public class InterviewReport implements Serializable {
 
     private Long scheduleId;
 
+    @Builder.Default
+    private InterviewReportGenerationStatus generationStatus =
+            InterviewReportGenerationStatus.PENDING;
+
+    private String failureReason;
+
     private Integer overallAiScore;
 
     private String executiveSummary;
@@ -35,8 +42,13 @@ public class InterviewReport implements Serializable {
 
     private String reportPdfUrl;
 
+    private OffsetDateTime completedAt;
+
     @TableField(fill = FieldFill.INSERT)
     private OffsetDateTime createdAt;
+
+    @TableField(fill = FieldFill.INSERT_UPDATE)
+    private OffsetDateTime updatedAt;
 
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private String traceId;

@@ -1,5 +1,6 @@
 package interview.interviewcfg.model.vo;
 
+import interview.common.enums.InterviewScheduleStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 
@@ -33,10 +34,10 @@ public record InterviewScheduleDetailVO(
         String interviewType,
 
         @Schema(description = "排期状态")
-        String status,
+        InterviewScheduleStatus status,
 
-        @Schema(description = "录用详情快照（JSON）")
-        String offerDetail,
+        @Schema(description = "拒绝、取消或未到场原因")
+        String statusReason,
 
         @Schema(description = "乐观锁版本号")
         Integer version,

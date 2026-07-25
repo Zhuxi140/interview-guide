@@ -2,6 +2,9 @@ package interview.textinterview.service.impl;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import interview.common.enums.ErrorCode;
+import interview.common.exception.BusinessException;
+import interview.framework.context.AuthContext;
 import interview.textinterview.mapper.InterviewSessionMapper;
 import interview.textinterview.model.entity.InterviewSession;
 import interview.textinterview.model.req.InterviewAnswerSubmitReq;
@@ -36,12 +39,37 @@ public class InterviewSessionServiceImpl
 
     @Override
     public InterviewSessionVO getSession(Long sessionId) {
-        // 纯CRUD
-        // TODO ① 从 AuthContext 取得 userId，按 sessionId 查询未删除会话并校验会话属于当前候选人。
-        // TODO ② 查询当前题、已答题数量和总题数；会话结束后不得返回可继续作答的题目上下文。
-        // TODO ③ 发现排期或会话状态不一致时返回明确状态冲突，并交由后续对账任务修复，不能静默改写。
-        // TODO ④ 映射 id、scheduleId、totalQuestions、currentQuestionIndex、status、sessionVersion、createdAt。
-        return null;
+        // 纯 CRUD
+        Long userId = AuthContext.getRequiredUserId();
+
+        // 按会话主键和候选人双重限定，避免越权读取其他候选人的面试进度。
+        InterviewSession session = lambdaQuery()
+                .select(
+                        InterviewSession::getId,
+                        InterviewSession::getScheduleId,
+                        InterviewSession::getTotalQuestions,
+                        InterviewSession::getCurrentQuestionIndex,
+                        InterviewSession::getStatus,
+                        InterviewSession::getLastEventSequence,
+                        InterviewSession::getCreatedAt
+                )
+                .eq(InterviewSession::getId, sessionId)
+                .eq(InterviewSession::getUserId, userId)
+                .one();
+        if (session == null) {
+            throw new BusinessException(ErrorCode.INTERVIEW_SESSION_NOT_FOUND);
+        }
+
+        // 当前查询只返回持久化的会话状态，不在读接口中隐式修复业务数据。
+        return new InterviewSessionVO(
+                session.getId(),
+                session.getScheduleId(),
+                session.getTotalQuestions(),
+                session.getCurrentQuestionIndex(),
+                session.getStatus(),
+                session.getLastEventSequence(),
+                session.getCreatedAt()
+        );
     }
 
     @Override

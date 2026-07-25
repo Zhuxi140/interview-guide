@@ -33,6 +33,9 @@ public class InterviewPhaseConfig implements Serializable {
 
     private String promptOverride;
 
+    @Version
+    private Integer version;
+
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private OffsetDateTime updatedAt;
 }

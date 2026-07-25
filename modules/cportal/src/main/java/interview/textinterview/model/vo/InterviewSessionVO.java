@@ -1,5 +1,6 @@
 package interview.textinterview.model.vo;
 
+import interview.common.enums.InterviewSessionStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 
@@ -21,10 +22,10 @@ public record InterviewSessionVO(
         Integer currentQuestionIndex,
 
         @Schema(description = "会话状态 CREATED / IN_PROGRESS / COMPLETED")
-        String status,
+        InterviewSessionStatus status,
 
-        @Schema(description = "会话版本号")
-        Integer sessionVersion,
+        @Schema(description = "会话最后事件序号，用于识别状态是否已推进")
+        Long sessionVersion,
 
         @Schema(description = "创建时间")
         OffsetDateTime createdAt

@@ -1,14 +1,14 @@
 package interview.interviewcfg.model.req;
 
+import interview.interviewcfg.model.enums.HiringDecisionStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
 @Schema(description = "HR 流转面试最终状态请求")
 public record InterviewScheduleStatusReq(
-        @NotBlank(message = "目标状态不能为空")
+        @NotNull(message = "目标状态不能为空")
         @Schema(description = "目标状态 OFFERED / HIRED / REJECTED", example = "HIRED")
-        String status,
+        HiringDecisionStatus status,
 
         @Schema(description = "流转备注")
         String transitionReason,

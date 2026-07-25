@@ -1,7 +1,15 @@
 package interview.textinterview.service.impl;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import interview.api.bportal.InterviewScheduleQueryApi;
+import interview.api.bportal.dto.InterviewScheduleQueryDTO;
+import interview.api.system.EnterpriseValidationApi;
+import interview.common.enums.ErrorCode;
+import interview.common.enums.InterviewReportGenerationStatus;
+import interview.common.exception.BusinessException;
+import interview.framework.context.AuthContext;
 import interview.textinterview.mapper.InterviewReportMapper;
 import interview.textinterview.model.entity.InterviewReport;
 import interview.textinterview.model.vo.*;
@@ -9,56 +17,136 @@ import interview.textinterview.service.InterviewReportService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeParseException;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
 @Service
 @RequiredArgsConstructor
 public class InterviewReportServiceImpl
         extends ServiceImpl<InterviewReportMapper, InterviewReport>
         implements InterviewReportService {
 
+    private final InterviewScheduleQueryApi interviewScheduleQueryApi;
+    private final EnterpriseValidationApi enterpriseValidationApi;
+
     @Override
     public InterviewReportVO getReportBySchedule(Long enterpriseId, Long scheduleId) {
-        // 纯CRUD
-        // TODO ① 通过 ScheduleApi 校验 scheduleId 属于 enterpriseId，禁止仅按报告 ID 跨企业读取。
-        // TODO ② 查询该排期唯一的报告生成任务及报告记录，区分 PENDING、PROCESSING、COMPLETED、FAILED。
-        // TODO ③ 未完成时返回 generationStatus；FAILED 返回受控 failureReason，不能统一伪装成“报告不存在”。
-        // TODO ④ 仅 COMPLETED 时组装 id、scheduleId、overallAiScore、executiveSummary、communicationScore、codeCapabilityReview、createdAt。
-        // TODO ⑤ 当前 InterviewReport 缺少 generationStatus/failureReason，需通过独立任务表或补齐模型后再实现状态闭环。
-        return null;
+        // 纯 CRUD
+        Long userId = AuthContext.getRequiredUserId();
+        enterpriseValidationApi.validateEnterpriseBelong(enterpriseId, userId);
+
+        // 通过排期模块校验企业归属，cportal 不直接访问排期表。
+        InterviewScheduleQueryDTO schedule = interviewScheduleQueryApi.getSchedule(scheduleId);
+        if (schedule == null || !enterpriseId.equals(schedule.enterpriseId())) {
+            throw new BusinessException(ErrorCode.INTERVIEW_SCHEDULE_NOT_FOUND);
+        }
+        return toReportVO(getReport(scheduleId, enterpriseId));
     }
 
     @Override
     public IPage<InterviewReportListItemVO> pageReports(Long enterpriseId, Integer page, Integer size,
-                                                         String generationStatus, String startTime, String endTime) {
-        // 纯CRUD
-        // TODO ① 校验企业访问范围、page/size，并将 generationStatus 转换为允许的报告生成状态。
-        // TODO ② 将 startTime/endTime 按带时区 ISO-8601 解析，校验起止顺序和查询跨度。
-        // TODO ③ 以报告生成任务为分页主表按 enterpriseId 和时间范围筛选，确保 PENDING/FAILED 任务也能出现在列表。
-        // TODO ④ 批量关联 interview_schedule、投递、候选人、岗位及已完成报告，避免逐条查询。
-        // TODO ⑤ 映射 id、scheduleId、candidateName、jobTitle、generationStatus、可空 overallAiScore、createdAt。
-        // TODO ⑥ 按 createdAt/id 稳定倒序并返回统一分页元数据。
-        return null;
+                                                         InterviewReportGenerationStatus generationStatus,
+                                                         String startTime, String endTime) {
+        // 纯 CRUD
+        Long userId = AuthContext.getRequiredUserId();
+        enterpriseValidationApi.validateEnterpriseBelong(enterpriseId, userId);
+        validatePage(page, size);
+        OffsetDateTime start = parseTime(startTime);
+        OffsetDateTime end = parseTime(endTime);
+        validateTimeRange(start, end);
+
+        // 报告表同时保存任务状态，PENDING 和 FAILED 记录也参与分页。
+        IPage<InterviewReport> reportPage = lambdaQuery()
+                .eq(InterviewReport::getEnterpriseId, enterpriseId)
+                .eq(generationStatus != null,
+                        InterviewReport::getGenerationStatus, generationStatus)
+                .ge(start != null, InterviewReport::getCreatedAt, start)
+                .le(end != null, InterviewReport::getCreatedAt, end)
+                .orderByDesc(InterviewReport::getCreatedAt)
+                .orderByDesc(InterviewReport::getId)
+                .page(new Page<>(page, size));
+
+        // 一次跨模块批量查询补齐展示字段，避免报告列表逐条调用。
+        Map<Long, InterviewScheduleQueryDTO> schedules =
+                getScheduleMap(reportPage.getRecords());
+        List<InterviewReportListItemVO> records = reportPage.getRecords().stream()
+                .map(report -> {
+                    InterviewScheduleQueryDTO schedule = schedules.get(report.getScheduleId());
+                    if (schedule != null
+                            && !enterpriseId.equals(schedule.enterpriseId())) {
+                        schedule = null;
+                    }
+                    return new InterviewReportListItemVO(
+                            report.getId(),
+                            report.getScheduleId(),
+                            schedule == null ? null : schedule.candidateName(),
+                            schedule == null ? null : schedule.jobTitle(),
+                            report.getGenerationStatus(),
+                            completedScore(report),
+                            report.getCreatedAt()
+                    );
+                })
+                .toList();
+        return copyPage(reportPage, records);
     }
 
     @Override
     public IPage<InterviewReportCandidateListItemVO> pageCandidateReports(Long userId, Integer page, Integer size,
-                                                                           String generationStatus) {
-        // 纯CRUD
-        // TODO ① userId 必须来自 AuthContext，禁止由客户端指定任意用户；限制 page/size 并校验 generationStatus。
-        // TODO ② 以生成任务关联排期，通过 schedule.candidateUserId=userId 过滤本人数据，包含未完成和失败任务。
-        // TODO ③ 批量取得企业名称、岗位标题和已完成报告分数，避免 N+1 查询及跨模块直连对方表。
-        // TODO ④ 映射 id、scheduleId、enterpriseName、jobTitle、generationStatus、可空 overallAiScore、createdAt。
-        // TODO ⑤ 按 createdAt/id 稳定倒序并返回统一分页结构。
-        return null;
+                                                                           InterviewReportGenerationStatus generationStatus) {
+        // 纯 CRUD
+        validateCurrentUser(userId);
+        validatePage(page, size);
+        // 排期归属由 bportal 内部 API 判断，报告模块只查询本人排期对应的报告。
+        List<Long> scheduleIds =
+                interviewScheduleQueryApi.listScheduleIdsByCandidate(userId);
+        if (scheduleIds.isEmpty()) {
+            return new Page<>(page, size, 0);
+        }
+        IPage<InterviewReport> reportPage = lambdaQuery()
+                .in(InterviewReport::getScheduleId, scheduleIds)
+                .eq(generationStatus != null,
+                        InterviewReport::getGenerationStatus, generationStatus)
+                .orderByDesc(InterviewReport::getCreatedAt)
+                .orderByDesc(InterviewReport::getId)
+                .page(new Page<>(page, size));
+
+        Map<Long, InterviewScheduleQueryDTO> schedules =
+                getScheduleMap(reportPage.getRecords());
+        List<InterviewReportCandidateListItemVO> records =
+                reportPage.getRecords().stream()
+                        .map(report -> {
+                            InterviewScheduleQueryDTO schedule =
+                                    schedules.get(report.getScheduleId());
+                            return new InterviewReportCandidateListItemVO(
+                                    report.getId(),
+                                    report.getScheduleId(),
+                                    schedule == null ? null : schedule.enterpriseName(),
+                                    schedule == null ? null : schedule.jobTitle(),
+                                    report.getGenerationStatus(),
+                                    completedScore(report),
+                                    report.getCreatedAt()
+                            );
+                        })
+                        .toList();
+        return copyPage(reportPage, records);
     }
 
     @Override
     public InterviewReportVO getCandidateReport(Long userId, Long scheduleId) {
-        // 纯CRUD
-        // TODO ① userId 从 AuthContext 获取，通过 ScheduleApi 校验 scheduleId 的 candidateUserId 等于当前用户。
-        // TODO ② 查询唯一报告生成任务和报告记录，使用与 B 端一致的 PENDING/PROCESSING/COMPLETED/FAILED 语义。
-        // TODO ③ 未完成时仅返回 generationStatus，失败时返回受控 failureReason，禁止泄露内部模型或堆栈信息。
-        // TODO ④ 完成后映射允许候选人查看的报告字段；如企业配置报告可见性，还需在此统一校验。
-        return null;
+        // 纯 CRUD
+        validateCurrentUser(userId);
+
+        // 候选人只能读取投递关系中归属于自己的排期报告。
+        InterviewScheduleQueryDTO schedule =
+                interviewScheduleQueryApi.getSchedule(scheduleId);
+        if (schedule == null || !userId.equals(schedule.candidateUserId())) {
+            throw new BusinessException(ErrorCode.INTERVIEW_REPORT_NOT_FOUND);
+        }
+        return toReportVO(getReport(scheduleId, schedule.enterpriseId()));
     }
 
     @Override
@@ -69,5 +157,94 @@ public class InterviewReportServiceImpl
         // TODO ④ 使用配置化 TTL 返回 downloadUrl 和 expiresInSeconds；对象缺失时返回报告文件不可用错误。
         // TODO ⑤ 记录下载审计信息，Phase 8 可扩展下载频控和敏感报告水印。
         return null;
+    }
+
+    private InterviewReport getReport(Long scheduleId, Long enterpriseId) {
+        InterviewReport report = lambdaQuery()
+                .eq(InterviewReport::getScheduleId, scheduleId)
+                .eq(InterviewReport::getEnterpriseId, enterpriseId)
+                .one();
+        if (report == null) {
+            throw new BusinessException(ErrorCode.INTERVIEW_REPORT_NOT_FOUND);
+        }
+        return report;
+    }
+
+    private InterviewReportVO toReportVO(InterviewReport report) {
+        InterviewReportGenerationStatus status = report.getGenerationStatus();
+        InterviewReportDetailVO detail = null;
+        if (status == InterviewReportGenerationStatus.COMPLETED) {
+            detail = new InterviewReportDetailVO(
+                    report.getId(),
+                    report.getScheduleId(),
+                    report.getOverallAiScore(),
+                    report.getExecutiveSummary(),
+                    report.getCommunicationScore(),
+                    report.getCodeCapabilityReview(),
+                    report.getCompletedAt()
+            );
+        }
+        String failureReason =
+                status == InterviewReportGenerationStatus.FAILED
+                        ? report.getFailureReason()
+                        : null;
+        return new InterviewReportVO(status, failureReason, detail);
+    }
+
+    private Map<Long, InterviewScheduleQueryDTO> getScheduleMap(
+            List<InterviewReport> reports) {
+        List<Long> scheduleIds = reports.stream()
+                .map(InterviewReport::getScheduleId)
+                .distinct()
+                .toList();
+        return interviewScheduleQueryApi.listSchedules(scheduleIds).stream()
+                .collect(Collectors.toMap(
+                        InterviewScheduleQueryDTO::id,
+                        Function.identity()
+                ));
+    }
+
+    private Integer completedScore(InterviewReport report) {
+        return report.getGenerationStatus()
+                == InterviewReportGenerationStatus.COMPLETED
+                ? report.getOverallAiScore()
+                : null;
+    }
+
+    private OffsetDateTime parseTime(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return OffsetDateTime.parse(value);
+        } catch (DateTimeParseException exception) {
+            throw new BusinessException(ErrorCode.TIME_FORMAT_INVALID);
+        }
+    }
+
+    private void validateTimeRange(OffsetDateTime start, OffsetDateTime end) {
+        if (start != null && end != null && start.isAfter(end)) {
+            throw new BusinessException(ErrorCode.TIME_RANGE_INVALID);
+        }
+    }
+
+    private void validatePage(Integer page, Integer size) {
+        if (page == null || page < 1 || size == null || size < 1 || size > 100) {
+            throw new BusinessException(ErrorCode.PAGE_PARAM_INVALID);
+        }
+    }
+
+    private void validateCurrentUser(Long userId) {
+        if (!AuthContext.getRequiredUserId().equals(userId)) {
+            throw new BusinessException(ErrorCode.PERMISSION_DENIED);
+        }
+    }
+
+    private <T> IPage<T> copyPage(IPage<InterviewReport> source,
+                                  List<T> records) {
+        Page<T> target =
+                new Page<>(source.getCurrent(), source.getSize(), source.getTotal());
+        target.setRecords(records);
+        return target;
     }
 }

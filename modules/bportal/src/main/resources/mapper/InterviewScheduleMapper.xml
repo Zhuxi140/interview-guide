@@ -2,4 +2,110 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="interview.interviewcfg.mapper.InterviewScheduleMapper">
 
+    <sql id="scheduleColumns">
+        s.id,
+        s.enterprise_id,
+        s.application_id,
+        ja.candidate_id AS candidate_user_id,
+        ja.job_id,
+        s.template_id,
+        s.interviewer_user_id,
+        j.title AS job_title,
+        s.interview_time,
+        s.interview_type,
+        s.status,
+        s.status_reason,
+        s.version,
+        s.created_at,
+        s.updated_at
+    </sql>
+
+    <sql id="scheduleRelations">
+        FROM interview_schedule s
+        JOIN job_applications ja
+          ON ja.id = s.application_id
+         AND ja.is_deleted = FALSE
+        JOIN jobs j
+          ON j.id = ja.job_id
+         AND j.is_deleted = FALSE
+    </sql>
+
+    <select id="pageSchedulesWithApplication"
+            resultType="interview.interviewcfg.model.bo.InterviewScheduleQueryBO">
+        SELECT
+        <include refid="scheduleColumns"/>
+        <include refid="scheduleRelations"/>
+        WHERE s.is_deleted = FALSE
+        <if test="enterpriseId != null">
+            AND s.enterprise_id = #{enterpriseId}
+        </if>
+        <if test="candidateUserId != null">
+            AND ja.candidate_id = #{candidateUserId}
+        </if>
+        <if test="status != null">
+            AND s.status = #{status}
+        </if>
+        <if test="startTime != null">
+            AND s.interview_time &gt;= #{startTime}
+        </if>
+        <if test="endTime != null">
+            AND s.interview_time &lt;= #{endTime}
+        </if>
+        ORDER BY
+        <choose>
+            <when test="sort == 'createdAt'">s.created_at</when>
+            <when test="sort == 'updatedAt'">s.updated_at</when>
+            <otherwise>s.interview_time</otherwise>
+        </choose>
+        <choose>
+            <when test="ascending">ASC</when>
+            <otherwise>DESC</otherwise>
+        </choose>,
+        s.id
+        <choose>
+            <when test="ascending">ASC</when>
+            <otherwise>DESC</otherwise>
+        </choose>
+    </select>
+
+    <select id="getScheduleWithApplication"
+            resultType="interview.interviewcfg.model.bo.InterviewScheduleQueryBO">
+        SELECT
+        <include refid="scheduleColumns"/>
+        <include refid="scheduleRelations"/>
+        WHERE s.id = #{scheduleId}
+          AND s.enterprise_id = #{enterpriseId}
+          AND s.is_deleted = FALSE
+    </select>
+
+    <select id="getScheduleWithApplicationById"
+            resultType="interview.interviewcfg.model.bo.InterviewScheduleQueryBO">
+        SELECT
+        <include refid="scheduleColumns"/>
+        <include refid="scheduleRelations"/>
+        WHERE s.id = #{scheduleId}
+          AND s.is_deleted = FALSE
+    </select>
+
+    <select id="listSchedulesWithApplication"
+            resultType="interview.interviewcfg.model.bo.InterviewScheduleQueryBO">
+        SELECT
+        <include refid="scheduleColumns"/>
+        <include refid="scheduleRelations"/>
+        WHERE s.is_deleted = FALSE
+          AND s.id IN
+        <foreach collection="scheduleIds" item="scheduleId" open="(" separator="," close=")">
+            #{scheduleId}
+        </foreach>
+    </select>
+
+    <select id="listScheduleIdsByCandidate" resultType="java.lang.Long">
+        SELECT s.id
+        FROM interview_schedule s
+        JOIN job_applications ja
+          ON ja.id = s.application_id
+         AND ja.is_deleted = FALSE
+        WHERE s.is_deleted = FALSE
+          AND ja.candidate_id = #{candidateUserId}
+    </select>
 </mapper>

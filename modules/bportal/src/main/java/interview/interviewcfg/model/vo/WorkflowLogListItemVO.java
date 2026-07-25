@@ -1,5 +1,6 @@
 package interview.interviewcfg.model.vo;
 
+import interview.matching.model.enums.JobApplicationStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 
@@ -11,14 +12,14 @@ public record WorkflowLogListItemVO(
         @Schema(description = "日志主键")
         Long id,
 
-        @Schema(description = "排期ID")
-        Long scheduleId,
+        @Schema(description = "投递ID")
+        Long applicationId,
 
         @Schema(description = "跃迁前状态")
-        String fromStatus,
+        JobApplicationStatus fromStatus,
 
         @Schema(description = "跃迁后状态")
-        String toStatus,
+        JobApplicationStatus toStatus,
 
         @Schema(description = "操作人用户ID（系统自动推进为0）")
         Long operatorUserId,

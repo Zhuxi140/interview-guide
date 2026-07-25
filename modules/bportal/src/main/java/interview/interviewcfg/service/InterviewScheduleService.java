@@ -2,6 +2,7 @@ package interview.interviewcfg.service;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.IService;
+import interview.common.enums.InterviewScheduleStatus;
 import interview.interviewcfg.model.entity.InterviewSchedule;
 import interview.interviewcfg.model.req.*;
 import interview.interviewcfg.model.vo.*;
@@ -39,7 +40,8 @@ public interface InterviewScheduleService extends IService<InterviewSchedule> {
      * @return 排期分页
      */
     IPage<InterviewScheduleListItemVO> pageSchedules(Long enterpriseId, Integer page, Integer size,
-                                                      String status, String startTime, String endTime,
+                                                      InterviewScheduleStatus status,
+                                                      String startTime, String endTime,
                                                       String sort, String order);
 
     /**

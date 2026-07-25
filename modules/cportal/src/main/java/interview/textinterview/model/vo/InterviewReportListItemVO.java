@@ -1,5 +1,6 @@
 package interview.textinterview.model.vo;
 
+import interview.common.enums.InterviewReportGenerationStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 
@@ -21,7 +22,7 @@ public record InterviewReportListItemVO(
         String jobTitle,
 
         @Schema(description = "报告生成状态 PENDING / PROCESSING / COMPLETED / FAILED")
-        String generationStatus,
+        InterviewReportGenerationStatus generationStatus,
 
         @Schema(description = "系统最终打分 0-100（未完成时为 null）")
         Integer overallAiScore,

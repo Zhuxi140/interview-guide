@@ -1,5 +1,6 @@
 package interview.textinterview.model.vo;
 
+import interview.common.enums.InterviewReportGenerationStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 
@@ -7,7 +8,7 @@ import lombok.Builder;
 @Schema(description = "面试报告查询响应")
 public record InterviewReportVO(
         @Schema(description = "报告生成状态 PENDING / PROCESSING / COMPLETED / FAILED")
-        String generationStatus,
+        InterviewReportGenerationStatus generationStatus,
 
         @Schema(description = "失败原因（仅 generationStatus=FAILED 时有值）")
         String failureReason,
