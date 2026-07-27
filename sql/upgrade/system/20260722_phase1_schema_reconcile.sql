@@ -43,7 +43,7 @@ UPDATE sys_permissions
 SET api_path = '/api/v1/enterprises/*/contact*'
 WHERE id = 106;
 UPDATE sys_permissions
-SET api_path = '/api/v1/candidate/jobs/*/apply'
+SET api_path = '/api/v1/jobs/*/applications'
 WHERE id = 411;
 
 -- 过期令牌保留审计记录，但不再作为有效令牌参与查询。

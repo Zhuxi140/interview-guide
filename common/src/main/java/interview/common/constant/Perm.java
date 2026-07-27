@@ -47,12 +47,29 @@ public interface Perm {
         String DETAIL = "resume:detail";
         String DELETE = "resume:delete";
         String ANALYZE = "resume:analyze";
+        String ANALYSIS_RESULT = "resume:analysis-result";
+        String DOWNLOAD = "resume:download";
     }
 
     interface Application {
+        String APPLY = "application:apply";
         String LIST = "application:list";
         String DETAIL = "application:detail";
         String UPDATE = "application:update-status";
+        String MY_LIST = "candidate:applications";
+        String WITHDRAW = "candidate:application:withdraw";
+    }
+
+    interface AdminLlm {
+        String PROVIDER_CREATE = "admin:llm:provider:create";
+        String PROVIDER_LIST = "admin:llm:provider:list";
+        String PROVIDER_DETAIL = "admin:llm:provider:detail";
+        String PROVIDER_UPDATE = "admin:llm:provider:update";
+        String PROVIDER_STATUS = "admin:llm:provider:status";
+        String PROVIDER_DELETE = "admin:llm:provider:delete";
+        String PROVIDER_TEST = "admin:llm:provider:test";
+        String SETTING_DETAIL = "admin:llm:setting:detail";
+        String SETTING_UPDATE = "admin:llm:setting:update";
     }
 
     interface InterviewTemplate {

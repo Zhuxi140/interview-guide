@@ -210,6 +210,11 @@ public enum ErrorCode {
     AI_CONTENT_FILTERED(120010, "AI 输出内容被安全策略过滤"),
     AI_TOKEN_LIMIT_EXCEEDED(120011, "AI 上下文长度超过限制"),
     AI_SAFETY_GUARDRAIL_TRIGGERED(120012, "AI 安全护栏触发"),
+    AI_PROVIDER_ALREADY_EXISTS(120013, "AI Provider ID 已存在"),
+    AI_PROVIDER_VERSION_CONFLICT(120014, "AI Provider 配置版本冲突，请刷新后重试"),
+    AI_PROVIDER_IN_USE(120015, "AI Provider 正被全局默认路由使用"),
+    AI_PROVIDER_CONNECTION_FAILED(120016, "AI Provider 连接测试失败"),
+    AI_GLOBAL_SETTING_VERSION_CONFLICT(120017, "AI 全局配置版本冲突，请刷新后重试"),
 
     // ------------ 13xxx Spark 离线任务错误码 ------------
     SPARK_TASK_NOT_FOUND(130001, "Spark 任务不存在"),
