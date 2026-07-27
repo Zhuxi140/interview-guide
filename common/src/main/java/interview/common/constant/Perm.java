@@ -75,6 +75,34 @@ public interface Perm {
         String LIST = "enterprise:application-transition-logs";
     }
 
+    interface AdminBilling {
+        String SKU_LIST = "admin:billing:sku:list";
+        String SKU_DETAIL = "admin:billing:sku:detail";
+        String SKU_CREATE = "admin:billing:sku:create";
+        String SKU_UPDATE = "admin:billing:sku:update";
+        String SKU_STATUS = "admin:billing:sku:status";
+        String ORDER_LIST = "admin:billing:order:list";
+        String ORDER_DETAIL = "admin:billing:order:detail";
+        String ORDER_SIMULATE_PAYMENT = "admin:billing:order:simulate-payment";
+    }
+
+    interface BillingOrder {
+        String CREATE = "billing:order:create";
+        String PAY = "billing:order:pay";
+        String LIST = "billing:order:list";
+        String DETAIL = "billing:order:detail";
+        String CANCEL = "billing:order:cancel";
+    }
+
+    interface BillingWallet {
+        String DETAIL = "billing:wallet:detail";
+        String TRANSACTIONS = "billing:wallet:transactions";
+    }
+
+    interface BillingConsumeLog {
+        String LIST = "billing:consume-log:list";
+    }
+
     interface Ops {
         String LOCAL_MESSAGE_PAGE = "ops:local-message:page";
         String LOCAL_MESSAGE_DETAIL = "ops:local-message:detail";

@@ -21,26 +21,74 @@ Local startup expects PostgreSQL, Redis, and S3-compatible RustFS settings match
 Use four-space indentation and UTF-8. Keep packages lowercase under `interview.*`; use PascalCase for types and camelCase for methods and fields. Retain established suffixes such as `Controller`, `Service`, `ServiceImpl`, `Mapper`, `Req`, `VO`, `BO`, and `Entity`. Keep controllers thin, business rules in services, persistence in mapper interfaces/XML, and shared contracts in `api`. Lombok and MapStruct are configured through Maven; no automatic formatter or linter is enforced, so match nearby code and organize imports before committing.
 
 - Define Redis key prefixes, complete keys, and hash field names in a shared constant class such as `AuthKeyConstant`; do not keep business Redis keys in service implementations.
-- Build database conditions with MyBatis-Plus `lambdaQuery` / `lambdaUpdate` and entity method references. Do not use string column names in `QueryWrapper` or `UpdateWrapper`.
 - Add concise block-level comments inside generated method bodies before major steps such as validation, strategy selection, persistence, external calls, and compensation. Do not satisfy this rule only with a comment above the method, and do not narrate every line. Every abstract interface method must have Javadoc containing a description, every `@param`, and `@return` for non-void methods.
 - Annotate every newly created Req and VO with Swagger `@Schema` at both class and exposed-field/record-component level. Include examples when they help clarify request or response values.
-- For partial or full updates involving several fields, populate an entity and call the entity-based update so automatic fill annotations apply. For updates of only one or two fields, use `lambdaUpdate` and explicitly set `traceId`, `updatedAt`, `updatedBy`, and other required audit fields.
 
-## Implementation Guardrails
+## Behavioral Guardrails (from `规范2.md`)
 
-- State material assumptions before implementation. If multiple interpretations would produce meaningfully different results and the repository cannot resolve them, surface the alternatives and ask before proceeding.
-- Prefer the smallest implementation that satisfies the request. Do not add speculative features, single-use abstractions, or unrequested configurability.
-- Make surgical changes: do not refactor, reformat, or clean up adjacent code unless required. Match existing style and only remove imports, variables, or methods made obsolete by the current change.
-- Every changed line must trace to the requested outcome. Report unrelated defects instead of modifying them.
-- For multi-step work, define brief verifiable goals. Reproduce bugs or add targeted regression tests when practical, then run checks proportionate to the change. Code completion alone is not verification.
+**Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
 
-## Service, Conversion & SQL Rules
+### 1. Think Before Coding
+**Don't assume. Don't hide confusion. Surface tradeoffs.**
+- State your assumptions explicitly. If uncertain, ask.
+- If multiple interpretations exist, present them — don't pick silently.
+- If a simpler approach exists, say so. Push back when warranted.
+- If something is unclear, stop. Name what's confusing. Ask.
 
-- Use `LambdaQuery` for simple Service-layer queries. Querying logically deleted rows (`is_deleted = true`) requires explicit Mapper/XML SQL because normal MyBatis-Plus queries apply logical-delete filtering.
-- Use an entity for partial or full updates involving several fields so automatic fill annotations run. Use `LambdaUpdate` for one or two fields; logical-delete filtering is automatic, but audit fields such as `updatedBy`, `traceId`, and `updatedAt` must be set explicitly.
-- Query operations may return a VO directly. For create, update, or delete operations whose Service result differs from the external VO, return a BO from the Service and convert BO to VO with MapStruct in the Controller.
-- Put complex handwritten SQL in the corresponding Mapper XML. Do not implement it with `@Select`, `@Update`, or similar annotations.
-- MyBatis-Plus primary-key, automatic-fill, and logical-delete behavior does not apply inside handwritten SQL. Handle identifiers, audit fields, timestamps, and logical-delete conditions explicitly.
+### 2. Simplicity First
+**Minimum code that solves the problem. Nothing speculative.**
+- No features beyond what was asked.
+- No abstractions for single-use code.
+- No "flexibility" or "configurability" that wasn't requested.
+- No error handling for impossible scenarios.
+- If you write 200 lines and it could be 50, rewrite it.
+
+### 3. Surgical Changes
+**Touch only what you must. Clean up only your own mess.**
+- Don't "improve" adjacent code, comments, or formatting.
+- Don't refactor things that aren't broken.
+- Match existing style, even if you'd do it differently.
+- If you notice unrelated dead code, mention it — don't delete it.
+- Remove imports/variables/functions that YOUR changes made unused.
+- Don't remove pre-existing dead code unless asked.
+
+### 4. Goal-Driven Execution
+**Define success criteria. Loop until verified.**
+- "Add validation" → "Write tests for invalid inputs, then make them pass"
+- "Fix the bug" → "Write a test that reproduces it, then make it pass"
+- "Refactor X" → "Ensure tests pass before and after"
+- For multi-step tasks, state a brief plan with verifiable goals.
+
+## Service, Conversion & SQL Rules (from `规范.md`)
+
+### 1. 查询（Service 层）
+- 简单查询：一律使用 **LambdaQuery**。
+- 查询 `isDeleted = true` 时，LambdaQuery 无法自动追加，**必须手写 SQL**（在 Mapper 或 XML 中）。
+
+### 2. 更新（Service 层）
+- **全量/半量更新**：使用实体类（自动填充生效）。
+- **非实体类更新**：使用 **LambdaUpdate**，注意：
+  - 自动追加 `isDeleted = false`（无需手写）。
+  - 自动填充字段（如 `UpdateBy`、`traceId`）**不会生效**，必须显式 `.set()`。
+
+### 3. VO / BO / 转换
+- **普通查询接口**：允许直接用 VO 接收和返回。
+- **非查询接口**（如增删改）且返回的 VO 与 Service 操作结果字段不一致：
+  - Service 层必须返回 **BO**。
+  - Controller 使用 **MapStruct** 转换 BO → VO 后返回。
+
+### 4. Mapper 层手写 SQL
+- 复杂 SQL **不允许**使用 `@Select`、`@Update` 等注解，必须写在对应 **XML** 中。
+- 手写 SQL 时，**实体类上所有 MyBatis-Plus 自动填充/注解（如主键、`createAt`、`isDeleted` 等）均失效**，需自行处理。
+
+### 5. 总结速记
+| 场景 | 工具 | 注意 |
+|------|------|------|
+| 简单查询 | LambdaQuery | 查 `isDeleted=true` 需手写 SQL |
+| 更新（实体类） | 实体对象 | 自动填充生效 |
+| 更新（非实体） | LambdaUpdate | 自动填充失效，需显式 set；自动追加 `isDeleted=false` |
+| 非查询接口返回 | BO + MapStruct | VO 与 BO 不一致时强制转换 |
+| 复杂手写 SQL | XML | 所有自动注解失效，自行处理 |
 
 ## Testing Guidelines
 
