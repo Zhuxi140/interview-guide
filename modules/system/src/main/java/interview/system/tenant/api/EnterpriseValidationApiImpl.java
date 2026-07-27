@@ -1,10 +1,13 @@
 package interview.system.tenant.api;
 
+import cn.hutool.core.util.StrUtil;
 import interview.api.system.EnterpriseValidationApi;
+import interview.api.system.dto.EnterprisePublicProfileDTO;
 import interview.common.enums.ErrorCode;
 import interview.common.exception.BusinessException;
 import interview.system.tenant.model.entity.Enterprise;
 import interview.system.tenant.model.entity.EnterpriseTeamMember;
+import interview.system.tenant.model.enums.EnterpriseStatus;
 import interview.system.tenant.service.EnterpriseTeamMembersService;
 import interview.system.tenant.service.EnterprisesService;
 import lombok.RequiredArgsConstructor;
@@ -57,5 +60,60 @@ public class EnterpriseValidationApiImpl implements EnterpriseValidationApi {
                 .list()
                 .stream()
                 .collect(Collectors.toMap(Enterprise::getId, Enterprise::getName));
+    }
+
+    @Override
+    public List<EnterprisePublicProfileDTO> listPublicEnterprises(String industry) {
+        // 只暴露正常、未删除的企业，并在 system 模块内完成行业筛选。
+        return enterprisesService.lambdaQuery()
+                .select(
+                        Enterprise::getId,
+                        Enterprise::getName,
+                        Enterprise::getShortName,
+                        Enterprise::getIndustry,
+                        Enterprise::getScale,
+                        Enterprise::getLogoUrl
+                )
+                .eq(Enterprise::getStatus, EnterpriseStatus.NORMAL)
+                .eq(StrUtil.isNotBlank(industry), Enterprise::getIndustry, industry)
+                .list()
+                .stream()
+                .map(enterprise -> new EnterprisePublicProfileDTO(
+                        enterprise.getId(),
+                        enterprise.getName(),
+                        enterprise.getShortName(),
+                        enterprise.getIndustry(),
+                        enterprise.getScale(),
+                        enterprise.getLogoUrl()
+                ))
+                .toList();
+    }
+
+    @Override
+    public EnterprisePublicProfileDTO getPublicEnterprise(Long enterpriseId) {
+        // 岗位详情只查询目标企业，避免加载全部可见企业。
+        Enterprise enterprise = enterprisesService.lambdaQuery()
+                .select(
+                        Enterprise::getId,
+                        Enterprise::getName,
+                        Enterprise::getShortName,
+                        Enterprise::getIndustry,
+                        Enterprise::getScale,
+                        Enterprise::getLogoUrl
+                )
+                .eq(Enterprise::getId, enterpriseId)
+                .eq(Enterprise::getStatus, EnterpriseStatus.NORMAL)
+                .one();
+        if (enterprise == null) {
+            return null;
+        }
+        return new EnterprisePublicProfileDTO(
+                enterprise.getId(),
+                enterprise.getName(),
+                enterprise.getShortName(),
+                enterprise.getIndustry(),
+                enterprise.getScale(),
+                enterprise.getLogoUrl()
+        );
     }
 }

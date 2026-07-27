@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
+import interview.framework.mybatis.JsonbStringTypeHandler;
 import lombok.*;
 
 import java.io.Serializable;
@@ -26,7 +27,7 @@ import java.time.OffsetDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@TableName("resume_analyses")
+@TableName(value = "resume_analyses", autoResultMap = true)
 public class ResumeAnalyses implements Serializable {
 
     private static final long serialVersionUID = 1L;
@@ -50,12 +51,14 @@ public class ResumeAnalyses implements Serializable {
     /**
      * 优点列表 (JSON)
      */
-    private Object strengthsJson;
+    @TableField(typeHandler = JsonbStringTypeHandler.class)
+    private String strengthsJson;
 
     /**
      * 改进建议 (JSON)
      */
-    private Object suggestionsJson;
+    @TableField(typeHandler = JsonbStringTypeHandler.class)
+    private String suggestionsJson;
 
     /**
      * 评测时间

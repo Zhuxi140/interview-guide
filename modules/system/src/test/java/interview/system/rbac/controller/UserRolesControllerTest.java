@@ -4,7 +4,6 @@ import interview.common.constant.Result;
 import interview.common.enums.ErrorCode;
 import interview.common.exception.BusinessException;
 import interview.system.rbac.model.req.AssignUserRolesReq;
-import interview.system.rbac.model.req.RemoveUserRolesReq;
 import interview.system.rbac.model.vo.UserRoleItemVO;
 import interview.system.rbac.service.UserRolesService;
 import org.junit.jupiter.api.BeforeEach;
@@ -80,14 +79,11 @@ class UserRolesControllerTest {
     class RemoveUserRoles {
 
         @Test
-        void removeUserRoles_success() {
-            RemoveUserRolesReq req = new RemoveUserRolesReq();
-            req.setRoleIds(List.of(1, 2));
-
-            Result<Void> result = controller.removeUserRoles(1L, req);
+        void removeUserRole_success() {
+            Result<Void> result = controller.removeUserRole(1L, 2);
 
             assertNotNull(result);
-            verify(userRolesService).removeUserRoles(1L, req);
+            verify(userRolesService).removeUserRole(1L, 2);
         }
     }
 

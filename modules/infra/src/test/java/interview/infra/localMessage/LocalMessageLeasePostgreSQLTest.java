@@ -1,5 +1,7 @@
 package interview.infra.localMessage;
 
+import interview.framework.mybatis.JsonbStringTypeHandler;
+import org.apache.ibatis.type.JdbcType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
@@ -55,6 +57,7 @@ class LocalMessageLeasePostgreSQLTest {
                         id BIGINT PRIMARY KEY,
                         priority VARCHAR(16) NOT NULL,
                         status VARCHAR(16) NOT NULL,
+                        payload JSONB,
                         next_retry_at TIMESTAMPTZ,
                         lease_owner VARCHAR(128),
                         lease_until TIMESTAMPTZ,
@@ -108,6 +111,28 @@ class LocalMessageLeasePostgreSQLTest {
         assertEquals(firstClaim.leaseVersion() + 1, secondClaim.leaseVersion());
         assertEquals(0, finish("worker-a", firstClaim.leaseVersion()));
         assertEquals(1, finish("worker-b", secondClaim.leaseVersion()));
+    }
+
+    @Test
+    void jsonbTypeHandler_shouldBindRawJsonInsteadOfVarchar() throws Exception {
+        // JSON 字符串必须作为 JSONB 参数绑定，不能由 JDBC 按 VARCHAR 发送。
+        String payload = "{\"resumeId\":1,\"objectKey\":\"resume/1.pdf\"}";
+        JsonbStringTypeHandler handler = new JsonbStringTypeHandler();
+
+        try (Connection connection = connection();
+             PreparedStatement statement = connection.prepareStatement(
+                     "UPDATE local_message SET payload = ? WHERE id = 1")) {
+            handler.setNonNullParameter(statement, 1, payload, JdbcType.OTHER);
+            assertEquals(1, statement.executeUpdate());
+        }
+
+        try (Connection connection = connection();
+             Statement statement = connection.createStatement();
+             ResultSet result = statement.executeQuery(
+                     "SELECT payload ->> 'objectKey' FROM local_message WHERE id = 1")) {
+            assertTrue(result.next());
+            assertEquals("resume/1.pdf", result.getString(1));
+        }
     }
 
     private Claim claim(Connection connection, String worker, OffsetDateTime now) throws Exception {

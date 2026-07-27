@@ -3,6 +3,7 @@ package interview.job.service;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.IService;
 import interview.job.model.entity.Job;
+import interview.job.model.req.CandidateJobSearchReq;
 import interview.job.model.req.JobCreateReq;
 import interview.job.model.req.JobListQuery;
 import interview.job.model.req.JobStatusReq;
@@ -15,8 +16,7 @@ import interview.job.model.vo.*;
 public interface JobService extends IService<Job> {
 
     /**
-     * 创建企业
-     * <p>当前用户自动成为企业 OWNER</p>
+     * 创建岗位
      *
      * @param enterpriseId 企业 ID
      * @param req          发布岗位请求
@@ -43,13 +43,30 @@ public interface JobService extends IService<Job> {
     JobDetailVO getJobDetail(Long enterpriseId, Long jobId);
 
     /**
+     * 查询 C 端可投递岗位
+     *
+     * @param req 分页与筛选参数
+     * @return 可投递岗位分页结果
+     */
+    IPage<CandidateJobListItemVO> pageCandidateJobs(CandidateJobSearchReq req);
+
+    /**
+     * 查询 C 端可投递岗位详情
+     *
+     * @param jobId 岗位 ID
+     * @return 可投递岗位详情
+     */
+    CandidateJobDetailVO getCandidateJobDetail(Long jobId);
+
+    /**
      * 编辑岗位
      *
      * @param enterpriseId 企业 ID
      * @param jobId        岗位 ID
      * @param req          编辑参数
+     * @return 岗位编辑结果
      */
-    void updateJob(Long enterpriseId, Long jobId, JobUpdateReq req);
+    JobUpdateVO updateJob(Long enterpriseId, Long jobId, JobUpdateReq req);
 
     /**
      * 开关岗位（开放/关闭）
@@ -57,14 +74,16 @@ public interface JobService extends IService<Job> {
      * @param enterpriseId 企业 ID
      * @param jobId        岗位 ID
      * @param req          目标状态
+     * @return 岗位状态流转结果
      */
-    void updateJobStatus(Long enterpriseId, Long jobId, JobStatusReq req);
+    JobStatusUpdateVO updateJobStatus(Long enterpriseId, Long jobId, JobStatusReq req);
 
     /**
      * 删除岗位（逻辑删除）
      *
      * @param enterpriseId 企业 ID
-     * @param jobId        岗位 ID
+     * @param jobId 岗位 ID
+     * @param expectedVersion 客户端读取到的岗位版本
      */
-    void deleteJob(Long enterpriseId, Long jobId);
+    void deleteJob(Long enterpriseId, Long jobId, Integer expectedVersion);
 }

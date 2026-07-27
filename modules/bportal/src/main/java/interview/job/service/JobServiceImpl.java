@@ -7,30 +7,44 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import interview.api.system.EnterpriseValidationApi;
+import interview.api.system.dto.EnterprisePublicProfileDTO;
 import interview.common.enums.ErrorCode;
 import interview.common.exception.BusinessException;
 import interview.framework.context.AuthContext;
 import interview.job.mapper.JobMapper;
 import interview.job.model.entity.Job;
 import interview.job.model.enums.JobStatus;
+import interview.job.model.req.CandidateJobSearchReq;
 import interview.job.model.req.JobCreateReq;
 import interview.job.model.req.JobListQuery;
 import interview.job.model.req.JobStatusReq;
 import interview.job.model.req.JobUpdateReq;
 import interview.job.model.vo.*;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.Collections;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
+/**
+ * @author zhuxi
+ */
 @RequiredArgsConstructor
+@Slf4j
 @Service
 public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements JobService {
 
     private final EnterpriseValidationApi enterpriseValidationApi;
+    private final ObjectMapper objectMapper;
 
     @Override
     @Transactional(rollbackFor = BusinessException.class)
@@ -43,6 +57,10 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements JobSe
         enterpriseValidationApi.validateEnterpriseBelong(enterpriseId, userId);
         OffsetDateTime now = OffsetDateTime.now();
         JobStatus status = req.getStatus();
+        if (status == JobStatus.CLOSED) {
+            throw new BusinessException(ErrorCode.PARAM_VALID_ERROR, "创建岗位仅允许 DRAFT 或 OPEN");
+        }
+        JobStatus initialStatus = status != null ? status : JobStatus.DRAFT;
         Job job = Job.builder()
                 .enterpriseId(enterpriseId)
                 .userId(userId)
@@ -50,12 +68,13 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements JobSe
                 .jdContent(req.getJdContent())
                 .department(req.getDepartment())
                 .location(req.getLocation())
-                .status(status != null ? status : JobStatus.OPEN)
+                .status(initialStatus)
                 .minSalary(req.getMinSalary())
                 .maxSalary(req.getMaxSalary())
                 .experienceReq(req.getExperienceReq())
                 .educationReq(req.getEducationReq())
-                .skillsJson(req.getSkillsJson())
+                .skillsJson(writeSkills(req.getSkills()))
+                .version(0)
                 .createdAt(now)
                 .build();
 
@@ -63,7 +82,8 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements JobSe
         return JobCreateVO.builder()
                 .id(job.getId())
                 .title(req.getTitle())
-                .status(status != null ? status : JobStatus.OPEN)
+                .status(initialStatus)
+                .version(0)
                 .createdAt(now)
                 .build();
     }
@@ -74,7 +94,7 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements JobSe
         LambdaQueryWrapper<Job> wrapper = new LambdaQueryWrapper<Job>()
                 .select(Job::getId, Job::getTitle,
                         Job::getDepartment, Job::getLocation,
-                        Job::getStatus, Job::getCreatedAt)
+                        Job::getStatus, Job::getVersion, Job::getCreatedAt)
                 .eq(Job::getEnterpriseId, enterpriseId)
                 .eq(status != null, Job::getStatus, status)
                 .and(StrUtil.isNotBlank(query.getKeyword()),
@@ -84,7 +104,8 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements JobSe
                                 .or()
                                 .like(Job::getLocation, query.getKeyword())
                 )
-                .orderByDesc(Job::getCreatedAt);
+                .orderByAsc("asc".equalsIgnoreCase(query.getOrder()), Job::getCreatedAt)
+                .orderByDesc(!"asc".equalsIgnoreCase(query.getOrder()), Job::getCreatedAt);
         Page<Job> jobPage = baseMapper.selectPage(new Page<>(query.getPage(), query.getSize()), wrapper);
         Page<JobListItemVO> voPage = new Page<>(jobPage.getCurrent(), jobPage.getSize(), jobPage.getTotal());
         List<Job> records = jobPage.getRecords();
@@ -96,6 +117,7 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements JobSe
                                 .department(raw.getDepartment())
                                 .location(raw.getLocation())
                                 .status(raw.getStatus())
+                                .version(raw.getVersion())
                                 .createdAt(raw.getCreatedAt())
                                 .candidateCount(0)
                                 .build()
@@ -116,7 +138,7 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements JobSe
         }
         return JobDetailVO.builder()
                 .id(job.getId())
-                .userId(job.getUserId())
+                .createdBy(job.getUserId())
                 .title(job.getTitle())
                 .jdContent(job.getJdContent())
                 .department(job.getDepartment())
@@ -125,18 +147,144 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements JobSe
                 .maxSalary(job.getMaxSalary())
                 .experienceReq(job.getExperienceReq())
                 .educationReq(job.getEducationReq())
-                .skillsJson(job.getSkillsJson())
+                .skills(readSkills(job.getSkillsJson()))
                 .status(job.getStatus())
+                .version(job.getVersion())
                 .createdAt(job.getCreatedAt())
                 .updatedAt(job.getUpdatedAt())
                 .build();
     }
 
     @Override
+    public IPage<CandidateJobListItemVO> pageCandidateJobs(CandidateJobSearchReq req) {
+        // 通过 system 对外 API 获取允许公开展示的正常企业，避免跨模块直接读取企业表。
+        List<EnterprisePublicProfileDTO> enterprises =
+                enterpriseValidationApi.listPublicEnterprises(req.getIndustry());
+        if (enterprises.isEmpty()) {
+            return new Page<>(req.getPage(), req.getSize(), 0);
+        }
+        Map<Long, EnterprisePublicProfileDTO> enterpriseMap = enterprises.stream()
+                .collect(Collectors.toMap(EnterprisePublicProfileDTO::id, Function.identity()));
+        List<Long> companyMatchedIds = findCompanyMatchedIds(enterprises, req.getKeyword());
+
+        // 只查询开放、未删除且所属企业可用的岗位，并组合 C 端筛选条件。
+        LambdaQueryWrapper<Job> wrapper = new LambdaQueryWrapper<Job>()
+                .eq(Job::getStatus, JobStatus.OPEN)
+                .in(Job::getEnterpriseId, enterpriseMap.keySet())
+                .like(StrUtil.isNotBlank(req.getCity()), Job::getLocation, req.getCity())
+                .eq(req.getExperienceReq() != null, Job::getExperienceReq, req.getExperienceReq())
+                .eq(req.getEducationReq() != null, Job::getEducationReq, req.getEducationReq())
+                .and(StrUtil.isNotBlank(req.getKeyword()),
+                        query -> {
+                            query.like(Job::getTitle, req.getKeyword())
+                                    .or()
+                                    .like(Job::getDepartment, req.getKeyword())
+                                    .or()
+                                    .like(Job::getJdContent, req.getKeyword());
+                            if (!companyMatchedIds.isEmpty()) {
+                                query.or().in(Job::getEnterpriseId, companyMatchedIds);
+                            }
+                        })
+                .orderByAsc("asc".equalsIgnoreCase(req.getOrder()), Job::getCreatedAt)
+                .orderByDesc(!"asc".equalsIgnoreCase(req.getOrder()), Job::getCreatedAt)
+                .orderByAsc("asc".equalsIgnoreCase(req.getOrder()), Job::getId)
+                .orderByDesc(!"asc".equalsIgnoreCase(req.getOrder()), Job::getId);
+
+        Page<Job> jobPage = baseMapper.selectPage(
+                new Page<>(req.getPage(), req.getSize()),
+                wrapper
+        );
+        Page<CandidateJobListItemVO> result =
+                new Page<>(jobPage.getCurrent(), jobPage.getSize(), jobPage.getTotal());
+        result.setRecords(jobPage.getRecords().stream()
+                .map(job -> toCandidateJobListItem(job, enterpriseMap.get(job.getEnterpriseId())))
+                .toList());
+        return result;
+    }
+
+    @Override
+    public CandidateJobDetailVO getCandidateJobDetail(Long jobId) {
+        // 岗位本身必须处于开放状态，逻辑删除条件由 MyBatis-Plus 自动附加。
+        Job job = baseMapper.selectOne(new LambdaQueryWrapper<Job>()
+                .eq(Job::getId, jobId)
+                .eq(Job::getStatus, JobStatus.OPEN));
+        if (job == null) {
+            throw new BusinessException(ErrorCode.JOB_NOT_FOUND);
+        }
+
+        // 所属企业必须仍为正常状态，否则岗位不能继续对 C 端展示。
+        EnterprisePublicProfileDTO enterprise =
+                enterpriseValidationApi.getPublicEnterprise(job.getEnterpriseId());
+        if (enterprise == null) {
+            throw new BusinessException(ErrorCode.JOB_NOT_FOUND);
+        }
+        return new CandidateJobDetailVO(
+                job.getId(),
+                job.getEnterpriseId(),
+                getEnterpriseDisplayName(enterprise),
+                enterprise.industry(),
+                enterprise.scale(),
+                enterprise.logoUrl(),
+                job.getTitle(),
+                job.getJdContent(),
+                job.getDepartment(),
+                job.getLocation(),
+                job.getMinSalary(),
+                job.getMaxSalary(),
+                job.getExperienceReq(),
+                job.getEducationReq(),
+                readSkills(job.getSkillsJson()),
+                job.getCreatedAt()
+        );
+    }
+
+    private List<Long> findCompanyMatchedIds(
+            List<EnterprisePublicProfileDTO> enterprises,
+            String keyword
+    ) {
+        if (StrUtil.isBlank(keyword)) {
+            return Collections.emptyList();
+        }
+        return enterprises.stream()
+                .filter(enterprise -> StrUtil.containsIgnoreCase(enterprise.name(), keyword)
+                        || StrUtil.containsIgnoreCase(enterprise.shortName(), keyword))
+                .map(EnterprisePublicProfileDTO::id)
+                .toList();
+    }
+
+    private CandidateJobListItemVO toCandidateJobListItem(
+            Job job,
+            EnterprisePublicProfileDTO enterprise
+    ) {
+        return new CandidateJobListItemVO(
+                job.getId(),
+                job.getEnterpriseId(),
+                getEnterpriseDisplayName(enterprise),
+                enterprise.industry(),
+                enterprise.logoUrl(),
+                job.getTitle(),
+                job.getDepartment(),
+                job.getLocation(),
+                job.getMinSalary(),
+                job.getMaxSalary(),
+                job.getExperienceReq(),
+                job.getEducationReq(),
+                readSkills(job.getSkillsJson()),
+                job.getCreatedAt()
+        );
+    }
+
+    private String getEnterpriseDisplayName(EnterprisePublicProfileDTO enterprise) {
+        return StrUtil.isNotBlank(enterprise.shortName())
+                ? enterprise.shortName()
+                : enterprise.name();
+    }
+
+    @Override
     @Transactional
-    public void updateJob(Long enterpriseId, Long jobId, JobUpdateReq req) {
+    public JobUpdateVO updateJob(Long enterpriseId, Long jobId, JobUpdateReq req) {
         Job existing = lambdaQuery()
-                .select(Job::getMinSalary, Job::getMaxSalary)
+                .select(Job::getMinSalary, Job::getMaxSalary, Job::getVersion)
                 .eq(Job::getId, jobId)
                 .eq(Job::getEnterpriseId, enterpriseId)
                 .one();
@@ -149,6 +297,7 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements JobSe
             throw new BusinessException(ErrorCode.PARAM_VALID_ERROR, "最高薪资不能低于最低薪资");
         }
         Long userId = AuthContext.getRequiredUserId();
+        OffsetDateTime updatedAt = OffsetDateTime.now();
         Job update = new Job();
         update.setId(jobId);
         update.setEnterpriseId(enterpriseId);
@@ -176,49 +325,81 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements JobSe
         if (req.getEducationReq() != null) {
             update.setEducationReq(req.getEducationReq());
         }
-        if (StrUtil.isNotBlank(req.getSkillsJson())) {
-            update.setSkillsJson(req.getSkillsJson());
+        if (req.getSkills() != null) {
+            update.setSkillsJson(writeSkills(req.getSkills()));
         }
         update.setUpdatedBy(userId);
-        update.setUpdatedAt(OffsetDateTime.now());
+        update.setUpdatedAt(updatedAt);
+        update.setVersion(req.getExpectedVersion() + 1);
 
         int affected = baseMapper.update(update, Wrappers.<Job>lambdaUpdate()
                 .eq(Job::getId, jobId)
-                .eq(Job::getEnterpriseId, enterpriseId));
+                .eq(Job::getEnterpriseId, enterpriseId)
+                .eq(Job::getVersion, req.getExpectedVersion()));
         if (affected == 0) {
-            throw new BusinessException(ErrorCode.JOB_NOT_FOUND);
+            throw new BusinessException(ErrorCode.JOB_VERSION_CONFLICT);
         }
+        return new JobUpdateVO(jobId, req.getExpectedVersion() + 1, updatedAt);
     }
 
     @Override
     @Transactional(rollbackFor = BusinessException.class)
-    public void updateJobStatus(Long enterpriseId, Long jobId, JobStatusReq req) {
+    public JobStatusUpdateVO updateJobStatus(Long enterpriseId, Long jobId, JobStatusReq req) {
+        if (req.getStatus() == JobStatus.DRAFT) {
+            throw new BusinessException(ErrorCode.PARAM_VALID_ERROR, "状态流转仅允许 OPEN 或 CLOSED");
+        }
         Long userId = AuthContext.getRequiredUserId();
+        OffsetDateTime updatedAt = OffsetDateTime.now();
         int affected = baseMapper.update(null, Wrappers.<Job>lambdaUpdate()
                 .eq(Job::getId, jobId)
                 .eq(Job::getEnterpriseId, enterpriseId)
+                .eq(Job::getVersion, req.getExpectedVersion())
                 .set(Job::getStatus, req.getStatus())
+                .set(Job::getVersion, req.getExpectedVersion() + 1)
                 .set(Job::getUpdatedBy, userId)
                 .set(Job::getTraceId, null)
-                .set(Job::getUpdatedAt, OffsetDateTime.now()));
+                .set(Job::getUpdatedAt, updatedAt));
         if (affected == 0) {
-            throw new BusinessException(ErrorCode.JOB_NOT_FOUND);
+            throw new BusinessException(ErrorCode.JOB_VERSION_CONFLICT);
         }
+        return new JobStatusUpdateVO(
+                jobId, req.getStatus(), req.getExpectedVersion() + 1, updatedAt);
     }
 
     @Override
     @Transactional(rollbackFor = BusinessException.class)
-    public void deleteJob(Long enterpriseId, Long jobId) {
+    public void deleteJob(Long enterpriseId, Long jobId, Integer expectedVersion) {
         Long userId = AuthContext.getRequiredUserId();
         int affected = baseMapper.update(null, Wrappers.<Job>lambdaUpdate()
                 .eq(Job::getId, jobId)
                 .eq(Job::getEnterpriseId, enterpriseId)
+                .eq(Job::getVersion, expectedVersion)
                 .set(Job::getIsDeleted, true)
+                .set(Job::getVersion, expectedVersion + 1)
                 .set(Job::getUpdatedBy, userId)
                 .set(Job::getTraceId, null)
                 .set(Job::getUpdatedAt, OffsetDateTime.now()));
         if (affected == 0) {
-            throw new BusinessException(ErrorCode.JOB_NOT_FOUND);
+            throw new BusinessException(ErrorCode.JOB_VERSION_CONFLICT);
+        }
+    }
+
+    private String writeSkills(List<String> skills) {
+        if (skills == null) {
+            return null;
+        }
+        return objectMapper.writeValueAsString(skills);
+    }
+
+    private List<String> readSkills(String skillsJson) {
+        if (StrUtil.isBlank(skillsJson)) {
+            return List.of();
+        }
+        try {
+            return Arrays.asList(objectMapper.readValue(skillsJson, String[].class));
+        } catch (Exception e) {
+            log.error("岗位技能 JSON 解析失败: {}", skillsJson, e);
+            throw new BusinessException(ErrorCode.JSON_TO_OBJECT_ERROR);
         }
     }
 }

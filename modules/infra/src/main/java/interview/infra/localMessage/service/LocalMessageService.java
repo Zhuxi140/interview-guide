@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.service.IService;
 import interview.common.enums.MsgPriority;
 import interview.common.enums.MsgStatus;
 import interview.infra.localMessage.model.entity.LocalMessage;
+import interview.infra.localMessage.model.req.LocalMessagePageReq;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -13,17 +14,10 @@ public interface LocalMessageService extends IService<LocalMessage> {
 
     /**
      * 分页查询本地消息
-     * @param page 页码
-     * @param size 每页数量
-     * @param status 消息状态
-     * @param topic 消息主题
-     * @param priority 优先级
-     * @param startTime 开始时间
-     * @param endTime 结束时间
+     * @param req 分页和筛选参数
      * @return 消息分页
      */
-    IPage<LocalMessage> pageQuery(Integer page, Integer size, String status, String topic, String priority,
-                                  OffsetDateTime startTime, OffsetDateTime endTime);
+    IPage<LocalMessage> pageQuery(LocalMessagePageReq req);
 
     /**
      * 获取消息详情

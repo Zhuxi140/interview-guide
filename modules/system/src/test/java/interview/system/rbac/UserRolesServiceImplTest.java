@@ -10,7 +10,6 @@ import interview.system.rbac.mapper.UserRolesMapper;
 import interview.system.rbac.model.entity.Role;
 import interview.system.rbac.model.entity.UserRole;
 import interview.system.rbac.model.req.AssignUserRolesReq;
-import interview.system.rbac.model.req.RemoveUserRolesReq;
 import interview.system.rbac.model.vo.UserRoleItemVO;
 import interview.system.rbac.service.impl.RolesServiceImpl;
 import interview.system.rbac.service.impl.UserRolesServiceImpl;
@@ -212,56 +211,41 @@ class UserRolesServiceImplTest {
     @Nested
     class RemoveUserRoles {
 
-        private RemoveUserRolesReq req;
-
         @BeforeEach
         void setUp() {
-            req = new RemoveUserRolesReq();
-            doReturn(queryWrapper).when(userRolesService).lambdaQuery();
             doReturn(updateWrapper).when(userRolesService).lambdaUpdate();
         }
 
         /**
-         * 测试对象：UserRolesServiceImpl.removeUserRoles(Long userId, RemoveUserRolesReq req)
-         * 测试功能：只删除已存在的角色 ID，不存在的被过滤掉
-         * 输入：userId=1L, req.roleIds=[1, 2]
-         *       lambdaQuery().list() 返回 roleId=1 存在
-         * 预期输出：lambdaUpdate 执行 eq(userId=1L) + in(roleId=[1]) + remove()
-         *         roleId=2 未命中因不存在
+         * 测试对象：UserRolesServiceImpl.removeUserRole(Long userId, Integer roleId)
+         * 测试功能：精确删除指定用户的单个平台角色
+         * 输入：userId=1L, roleId=2
+         * 预期输出：lambdaUpdate 执行两个等值条件并删除成功
          * 可能异常：N/A
          */
         @Test
-        void removeUserRoles_removesOnlyExistingIds() {
-            req.setRoleIds(List.of(1, 2));
-            UserRole existing1 = UserRole.builder().userId(userId).roleId(1).build();
-            when(queryWrapper.list()).thenReturn(List.of(existing1));
+        void removeUserRole_success() {
+            when(updateWrapper.remove()).thenReturn(true);
 
-            userRolesService.removeUserRoles(userId, req);
+            userRolesService.removeUserRole(userId, 2);
 
             verify(updateWrapper).eq(any(), eq(userId));
-            verify(updateWrapper).in(any(), argThat((List<Integer> ids) ->
-                    ids.contains(1) && !ids.contains(2)));
+            verify(updateWrapper).eq(any(), eq(2));
             verify(updateWrapper).remove();
         }
 
         /**
-         * 测试对象：UserRolesServiceImpl.removeUserRoles(Long userId, RemoveUserRolesReq req)
-         * 测试功能：全部角色 ID 都不存在时，in 传入空列表，remove 无害执行
-         * 输入：userId=1L, req.roleIds=[999, 888]
-         *       lambdaQuery().list() 返回空（用户无任何角色）
-         * 预期输出：lambdaUpdate 执行 eq(userId=1L) + in(roleId=[]) + remove()
-         * 可能异常：N/A
+         * 测试对象：UserRolesServiceImpl.removeUserRole(Long userId, Integer roleId)
+         * 测试功能：角色关联不存在时返回明确业务错误
+         * 输入：userId=1L, roleId=999
+         * 预期输出：抛出 BusinessException
          */
         @Test
-        void removeUserRoles_nonexistentIds() {
-            req.setRoleIds(List.of(999, 888));
-            when(queryWrapper.list()).thenReturn(List.of());
+        void removeUserRole_notExists() {
+            when(updateWrapper.remove()).thenReturn(false);
 
-            userRolesService.removeUserRoles(userId, req);
-
-            verify(updateWrapper).eq(any(), eq(userId));
-            verify(updateWrapper).in(any(), argThat((List<Integer> ids) -> ids.isEmpty()));
-            verify(updateWrapper).remove();
+            assertThrows(BusinessException.class,
+                    () -> userRolesService.removeUserRole(userId, 999));
         }
     }
 

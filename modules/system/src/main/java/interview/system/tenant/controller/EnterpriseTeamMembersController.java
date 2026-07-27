@@ -18,6 +18,10 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.validation.annotation.Validated;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Pattern;
 
 /**
  * @author zhuxi
@@ -26,6 +30,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping(ApiVersion.V1 + "/enterprises/{enterpriseId}/members")
 @Tag(name = "团队成员管理")
 @RequiredArgsConstructor
+@Validated
 public class EnterpriseTeamMembersController {
 
     private final EnterpriseTeamMembersService teamMembersService;
@@ -36,9 +41,12 @@ public class EnterpriseTeamMembersController {
     @GetMapping
     public Result<IPage<TeamMemberItemVO>> listTeamMembers(
             @PathVariable("enterpriseId") Long enterpriseId,
-            @RequestParam(defaultValue = "1") Integer page,
-            @RequestParam(defaultValue = "20") Integer size,
-            @RequestParam(defaultValue = "desc") String order
+            @RequestParam(defaultValue = "1") @Min(1) Integer page,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) Integer size,
+            @RequestParam(defaultValue = "createdAt")
+            @Pattern(regexp = "^createdAt$") String sort,
+            @RequestParam(defaultValue = "desc")
+            @Pattern(regexp = "^(?i)(asc|desc)$") String order
             ) {
         IPage<TeamMemberItemVO> pageResult = teamMembersService.listTeamMembers(enterpriseId, page, size,order);
         return Result.success(pageResult);

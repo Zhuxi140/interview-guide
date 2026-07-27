@@ -9,9 +9,9 @@ import interview.common.enums.RiskLevel;
 import interview.common.annonate.MaxRiskLevel;
 import interview.common.annonate.RequirePermission;
 import interview.matching.model.enums.JobApplicationStatus;
-import interview.matching.model.req.JobApplicationStatusReq;
-import interview.matching.model.req.JobApplicationSubmitReq;
+import interview.matching.model.req.*;
 import interview.matching.model.vo.JobApplicationListItemVO;
+import interview.matching.model.vo.JobApplicationStatusVO;
 import interview.matching.model.vo.JobApplicationSubmitVO;
 import interview.matching.model.vo.JobApplicationVO;
 import interview.matching.model.vo.MyApplicationListItemVO;
@@ -20,7 +20,11 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -30,16 +34,21 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping(ApiVersion.V1)
 @Tag(name = "投递与初筛")
 @RequiredArgsConstructor
+@Validated
 public class JobApplicationsController {
 
     private final JobApplicationsService jobApplicationsService;
 
     @MaxRiskLevel(RiskLevel.NO_RISK)
     @Operation(summary = "候选人投递简历")
-    @PostMapping("/candidate/jobs/{jobId}/apply")
+    @PostMapping("/jobs/{jobId}/applications")
     public Result<JobApplicationSubmitVO> submitApplication(@PathVariable("jobId") Long jobId,
-                                                             @RequestBody @Valid JobApplicationSubmitReq req) {
-        JobApplicationSubmitVO vo = jobApplicationsService.submitApplication(jobId, req);
+                                                             @RequestBody @Valid JobApplicationSubmitReq req,
+                                                             @RequestHeader("Idempotency-Key")
+                                                             @NotBlank @Size(max = 128)
+                                                             String idempotencyKey) {
+        JobApplicationSubmitVO vo = jobApplicationsService.submitApplication(
+                jobId, req, idempotencyKey);
         return Result.success(vo);
     }
 
@@ -50,10 +59,9 @@ public class JobApplicationsController {
     public Result<IPage<JobApplicationListItemVO>> listApplications(
             @PathVariable("enterpriseId") Long enterpriseId,
             @PathVariable("jobId") Long jobId,
-            @RequestParam(defaultValue = "1") @Min(1) Integer page,
-            @RequestParam(defaultValue = "20") @Min(1) Integer size,
-            @RequestParam(required = false) JobApplicationStatus status) {
-        IPage<JobApplicationListItemVO> result = jobApplicationsService.pageApplications(enterpriseId, jobId, page, size, status);
+            @Valid @ParameterObject JobApplicationPageReq req) {
+        IPage<JobApplicationListItemVO> result =
+                jobApplicationsService.pageApplications(enterpriseId, jobId, req);
         return Result.success(result);
     }
 
@@ -72,22 +80,30 @@ public class JobApplicationsController {
     @MaxRiskLevel(RiskLevel.MID_RISK)
     @Operation(summary = "HR 更新投递状态")
     @PatchMapping("/enterprises/{enterpriseId}/applications/{applicationId}/status")
-    public Result<Void> updateApplicationStatus(
+    public Result<JobApplicationStatusVO> updateApplicationStatus(
             @PathVariable("enterpriseId") Long enterpriseId,
             @PathVariable("applicationId") Long applicationId,
             @RequestBody @Valid JobApplicationStatusReq req) {
-        jobApplicationsService.updateApplicationStatus(enterpriseId, applicationId, req);
-        return Result.success();
+        return Result.success(jobApplicationsService.updateApplicationStatus(
+                enterpriseId, applicationId, req));
     }
 
     @MaxRiskLevel(RiskLevel.NO_RISK)
     @Operation(summary = "C 端查询我的投递记录（分页）")
     @GetMapping("/candidate/applications")
     public Result<IPage<MyApplicationListItemVO>> listMyApplications(
-            @RequestParam(defaultValue = "1") @Min(1) Integer page,
-            @RequestParam(defaultValue = "20") @Min(1) Integer size,
-            @RequestParam(required = false) JobApplicationStatus status) {
-        IPage<MyApplicationListItemVO> result = jobApplicationsService.pageMyApplications(page, size, status);
+            @Valid @ParameterObject JobApplicationPageReq req) {
+        IPage<MyApplicationListItemVO> result = jobApplicationsService.pageMyApplications(req);
         return Result.success(result);
+    }
+
+    @MaxRiskLevel(RiskLevel.LOW_RISK)
+    @Operation(summary = "候选人撤回投递")
+    @PostMapping("/candidate/applications/{applicationId}/withdraw")
+    public Result<JobApplicationStatusVO> withdrawApplication(
+            @PathVariable("applicationId") Long applicationId,
+            @RequestBody @Valid JobApplicationWithdrawReq req) {
+        return Result.success(
+                jobApplicationsService.withdrawApplication(applicationId, req));
     }
 }

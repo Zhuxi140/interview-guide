@@ -18,5 +18,5 @@ public record RefreshTokenVO (
     String refreshToken,
 
     @Schema(description = "短期时间（秒）")
-    Long expiresIn
+    Long expiresInSeconds
 ) {}

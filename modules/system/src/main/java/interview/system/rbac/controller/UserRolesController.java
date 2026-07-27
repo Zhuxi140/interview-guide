@@ -8,7 +8,6 @@ import interview.common.enums.RiskLevel;
 import interview.common.annonate.MaxRiskLevel;
 import interview.common.annonate.RequirePermission;
 import interview.system.rbac.model.req.AssignUserRolesReq;
-import interview.system.rbac.model.req.RemoveUserRolesReq;
 import interview.system.rbac.model.vo.UserRoleItemVO;
 import interview.system.rbac.service.UserRolesService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -52,9 +51,10 @@ public class UserRolesController {
     @MaxRiskLevel(RiskLevel.NO_RISK)
     @RequirePermission(permissions = Perm.AdminUserRoles.REMOVE, scope = PermissionScope.PLATFORM)
     @Operation(summary = "移除用户的指定平台角色")
-    @DeleteMapping("/{userId}/roles")
-    public Result<Void> removeUserRoles(@PathVariable Long userId, @RequestBody @Valid RemoveUserRolesReq req) {
-        userRolesService.removeUserRoles(userId, req);
+    @DeleteMapping("/{userId}/roles/{roleId}")
+    public Result<Void> removeUserRole(@PathVariable Long userId,
+                                       @PathVariable Integer roleId) {
+        userRolesService.removeUserRole(userId, roleId);
         return Result.success();
     }
 }

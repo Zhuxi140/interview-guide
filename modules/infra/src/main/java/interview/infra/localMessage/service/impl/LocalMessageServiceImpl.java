@@ -11,6 +11,7 @@ import interview.common.enums.MsgStatus;
 import interview.common.exception.BusinessException;
 import interview.infra.localMessage.mapper.LocalMessageMapper;
 import interview.infra.localMessage.model.entity.LocalMessage;
+import interview.infra.localMessage.model.req.LocalMessagePageReq;
 import interview.infra.localMessage.service.LocalMessageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,17 +32,16 @@ public class LocalMessageServiceImpl extends ServiceImpl<LocalMessageMapper, Loc
         implements LocalMessageService {
 
     @Override
-    public IPage<LocalMessage> pageQuery(Integer page, Integer size, String status, String topic, String priority,
-                                         OffsetDateTime startTime, OffsetDateTime endTime) {
+    public IPage<LocalMessage> pageQuery(LocalMessagePageReq req) {
         // 使用类型安全条件构建管理端查询。
         LambdaQueryWrapper<LocalMessage> wrapper = Wrappers.lambdaQuery(LocalMessage.class)
-                .eq(status != null, LocalMessage::getStatus, status)
-                .eq(topic != null, LocalMessage::getTopic, topic)
-                .eq(priority != null, LocalMessage::getPriority, priority)
-                .ge(startTime != null, LocalMessage::getCreatedAt, startTime)
-                .le(endTime != null, LocalMessage::getCreatedAt, endTime)
+                .eq(req.getStatus() != null, LocalMessage::getStatus, req.getStatus())
+                .eq(req.getTopic() != null, LocalMessage::getTopic, req.getTopic())
+                .eq(req.getPriority() != null, LocalMessage::getPriority, req.getPriority())
+                .ge(req.getStartTime() != null, LocalMessage::getCreatedAt, req.getStartTime())
+                .le(req.getEndTime() != null, LocalMessage::getCreatedAt, req.getEndTime())
                 .orderByDesc(LocalMessage::getCreatedAt);
-        return page(new Page<>(page, size), wrapper);
+        return page(new Page<>(req.getPage(), req.getSize()), wrapper);
     }
 
     @Override

@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.*;
 import interview.common.enums.MsgPriority;
 import interview.common.enums.MsgStatus;
 import interview.common.enums.MsgTopic;
+import interview.framework.mybatis.JsonbStringTypeHandler;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -31,6 +32,7 @@ public class LocalMessage implements Serializable {
 
     private Integer schemaVersion;
 
+    @TableField(typeHandler = JsonbStringTypeHandler.class)
     private String payload;
 
     private MsgPriority priority;
@@ -43,6 +45,7 @@ public class LocalMessage implements Serializable {
 
     private OffsetDateTime nextRetryAt;
 
+    @TableField(typeHandler = JsonbStringTypeHandler.class)
     private String retryHistory;
 
     private String lastError;

@@ -88,10 +88,10 @@ class AuthControllerTest {
         private final RegisterReq req = new RegisterReq();
         private final RegisterBo bo = RegisterBo.builder()
                 .userId(1L).username("testuser").accessToken("jwt-xxx")
-                .refreshToken("rt-xxx").expiresIn(1800L).build();
+                .refreshToken("rt-xxx").expiresInSeconds(1800L).build();
         private final RegisterVO vo = RegisterVO.builder()
                 .userId(1L).username("testuser").accessToken("jwt-xxx")
-                .refreshToken("rt-xxx").expiresIn(1800L).build();
+                .refreshToken("rt-xxx").expiresInSeconds(1800L).build();
 
         @BeforeEach
         void setUp() {
@@ -123,10 +123,10 @@ class AuthControllerTest {
         private final LoginReq req = new LoginReq();
         private final LoginBO bo = LoginBO.builder()
                 .userId(1L).username("testuser").accessToken("jwt-xxx")
-                .refreshToken("rt-xxx").expiresIn(1800L).build();
+                .refreshToken("rt-xxx").expiresInSeconds(1800L).build();
         private final LoginVO vo = LoginVO.builder()
                 .userId(1L).username("testuser").accessToken("jwt-xxx")
-                .refreshToken("rt-xxx").expiresIn(1800L).build();
+                .refreshToken("rt-xxx").expiresInSeconds(1800L).build();
 
         @BeforeEach
         void setUp() {
@@ -136,14 +136,15 @@ class AuthControllerTest {
 
         @Test
         void login_success() {
-            when(authService.login(req)).thenReturn(bo);
+            when(request.getRemoteAddr()).thenReturn("127.0.0.1");
+            when(authService.login(req, "127.0.0.1")).thenReturn(bo);
             when(authConverter.toLoginVO(bo)).thenReturn(vo);
 
             Result<LoginVO> result = authController.login(req);
 
             assertNotNull(result.getData());
             assertEquals("jwt-xxx", result.getData().accessToken());
-            verify(authService).login(req);
+            verify(authService).login(req, "127.0.0.1");
             verify(authConverter).toLoginVO(bo);
         }
     }
@@ -155,12 +156,12 @@ class AuthControllerTest {
         void logout_success() {
             LogoutReq req = new LogoutReq();
             req.setRefreshToken("rt-xxx");
-            req.setAccessToken("jwt-xxx");
+            when(request.getHeader("Authorization")).thenReturn("Bearer jwt-xxx");
 
             Result<Void> result = authController.logout(req);
 
             assertNotNull(result);
-            verify(authService).logout(req);
+            verify(authService).logout(req, "jwt-xxx");
         }
     }
 
@@ -171,9 +172,9 @@ class AuthControllerTest {
         void refreshToken_success() {
             RefreshTokenReq req = new RefreshTokenReq();
             req.setRefreshToken("rt-xxx");
-            req.setAccessToken("jwt-xxx");
             RefreshTokenVO vo = RefreshTokenVO.builder()
-                    .accessToken("new-jwt").refreshToken("new-rt").expiresIn(1800L).build();
+                    .accessToken("new-jwt").refreshToken("new-rt")
+                    .expiresInSeconds(1800L).build();
             when(authService.refreshToken(req)).thenReturn(vo);
 
             Result<RefreshTokenVO> result = authController.refreshToken(req);
@@ -235,7 +236,7 @@ class AuthControllerTest {
         @Test
         void switchEnterprise_success() {
             SwitchEnterpriseVO vo = SwitchEnterpriseVO.builder()
-                    .accessToken("new-jwt").expiresIn(1800L).build();
+                    .accessToken("new-jwt").expiresInSeconds(1800L).build();
             when(request.getHeader("Authorization")).thenReturn(authHeader);
             when(authService.switchEnterprise(200L, "old-jwt-token")).thenReturn(vo);
 
@@ -243,7 +244,7 @@ class AuthControllerTest {
 
             assertNotNull(result.getData());
             assertEquals("new-jwt", result.getData().accessToken());
-            assertEquals(1800L, result.getData().expiresIn());
+            assertEquals(1800L, result.getData().expiresInSeconds());
             verify(authService).switchEnterprise(200L, "old-jwt-token");
         }
     }

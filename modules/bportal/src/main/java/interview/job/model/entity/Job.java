@@ -3,6 +3,7 @@ package interview.job.model.entity;
 import com.baomidou.mybatisplus.annotation.*;
 import interview.common.enums.EducationLevel;
 import interview.common.enums.ExperienceLevel;
+import interview.framework.mybatis.JsonbStringTypeHandler;
 import interview.job.model.enums.JobStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -16,7 +17,7 @@ import java.time.OffsetDateTime;
 /**
  * @author zhuxi
  */
-@TableName(value = "jobs")
+@TableName(value = "jobs", autoResultMap = true)
 @Data
 @Builder
 @NoArgsConstructor
@@ -46,9 +47,13 @@ public class Job implements Serializable {
 
     private EducationLevel educationReq;
 
+    @TableField(typeHandler = JsonbStringTypeHandler.class)
     private String skillsJson;
 
     private JobStatus status;
+
+    @Version
+    private Integer version;
 
     @TableLogic
     private Boolean isDeleted;

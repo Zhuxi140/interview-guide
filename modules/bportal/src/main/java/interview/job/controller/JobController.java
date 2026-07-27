@@ -17,7 +17,9 @@ import interview.job.service.JobService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -27,6 +29,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping(ApiVersion.V1 + "/enterprises/{enterpriseId}/jobs")
 @Tag(name = "岗位管理")
 @RequiredArgsConstructor
+@Validated
 public class JobController {
 
     private final JobService jobService;
@@ -65,22 +68,20 @@ public class JobController {
     @MaxRiskLevel(RiskLevel.MID_RISK)
     @Operation(summary = "编辑岗位")
     @PatchMapping("/{jobId}")
-    public Result<Void> updateJob(@PathVariable("enterpriseId") Long enterpriseId,
-                                           @PathVariable("jobId") Long jobId,
-                                           @RequestBody @Valid JobUpdateReq req) {
-        jobService.updateJob(enterpriseId, jobId, req);
-        return Result.success();
+    public Result<JobUpdateVO> updateJob(@PathVariable("enterpriseId") Long enterpriseId,
+                                         @PathVariable("jobId") Long jobId,
+                                         @RequestBody @Valid JobUpdateReq req) {
+        return Result.success(jobService.updateJob(enterpriseId, jobId, req));
     }
 
     @RequirePermission(permissions = Perm.Job.TOGGLE_STATUS, scope = PermissionScope.ENTERPRISE)
     @MaxRiskLevel(RiskLevel.MID_RISK)
     @Operation(summary = "开关岗位（开放/关闭）")
     @PatchMapping("/{jobId}/status")
-    public Result<Void> updateJobStatus(@PathVariable("enterpriseId") Long enterpriseId,
-                                                 @PathVariable("jobId") Long jobId,
-                                                 @RequestBody @Valid JobStatusReq req) {
-        jobService.updateJobStatus(enterpriseId, jobId, req);
-        return Result.success();
+    public Result<JobStatusUpdateVO> updateJobStatus(@PathVariable("enterpriseId") Long enterpriseId,
+                                                      @PathVariable("jobId") Long jobId,
+                                                      @RequestBody @Valid JobStatusReq req) {
+        return Result.success(jobService.updateJobStatus(enterpriseId, jobId, req));
     }
 
     @RequirePermission(permissions = Perm.Job.DELETE, scope = PermissionScope.ENTERPRISE)
@@ -88,8 +89,11 @@ public class JobController {
     @Operation(summary = "删除岗位（逻辑删除）")
     @DeleteMapping("/{jobId}")
     public Result<Void> deleteJob(@PathVariable("enterpriseId") Long enterpriseId,
-                                         @PathVariable("jobId") Long jobId) {
-        jobService.deleteJob(enterpriseId, jobId);
+                                  @PathVariable("jobId") Long jobId,
+                                  @RequestHeader("If-Match")
+                                  @Min(value = 0, message = "版本号不能小于 0")
+                                  Integer expectedVersion) {
+        jobService.deleteJob(enterpriseId, jobId, expectedVersion);
         return Result.success();
     }
 }

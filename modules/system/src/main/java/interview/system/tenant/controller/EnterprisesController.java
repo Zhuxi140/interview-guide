@@ -24,6 +24,7 @@ import interview.system.tenant.model.vo.EnterpriseContactPhoneUpdateVO;
 import interview.system.tenant.model.vo.EnterpriseDetailVO;
 import interview.system.tenant.model.vo.EnterpriseListItemVO;
 import interview.system.tenant.model.vo.EnterpriseContactVerifyStartVO;
+import interview.system.tenant.model.vo.EnterpriseContactVerifyTokenVO;
 import interview.system.tenant.model.vo.EnterpriseUpdateVO;
 import interview.system.auth.model.vo.SecureChallengeStartVO;
 import interview.system.tenant.service.EnterpriseContactVerificationService;
@@ -126,11 +127,12 @@ public class EnterprisesController {
     @RequirePermission(permissions = Perm.Enterprise.UPDATE_CONTACT, scope = PermissionScope.ENTERPRISE)
     @Operation(summary = "验证企业新联系电话并签发安全操作令牌")
     @PostMapping("/{enterpriseId}/contact-verification/new/verify")
-    public Result<String> verifyNewContactPhone(
+    public Result<EnterpriseContactVerifyTokenVO> verifyNewContactPhone(
             @PathVariable("enterpriseId") Long enterpriseId,
             @RequestBody @Valid EnterpriseContactCodeVerifyReq req) {
         // 验证新联系电话并返回一次性安全操作令牌
-        return Result.success(contactVerificationService.verifyNewPhone(enterpriseId, req));
+        String token = contactVerificationService.verifyNewPhone(enterpriseId, req);
+        return Result.success(new EnterpriseContactVerifyTokenVO(token));
     }
 
     @MaxRiskLevel(RiskLevel.MID_RISK)

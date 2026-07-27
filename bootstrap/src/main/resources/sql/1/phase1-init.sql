@@ -1,6 +1,6 @@
 -- ============================================================
 -- Phase 1: 地基搭建
--- 数据库: PostgreSQL 16+
+-- 数据库: PostgreSQL 14+
 -- 说明: 不使用物理外键，所有外键关系在应用层保证
 --       时间字段使用 TIMESTAMPTZ，布尔使用 BOOLEAN，JSON 使用 JSONB
 --       主键由应用层雪花算法生成，DDL 仅声明 BIGINT NOT NULL
@@ -25,7 +25,8 @@ CREATE TABLE IF NOT EXISTS sys_users (
     phone           VARCHAR(64),
     user_type       VARCHAR(16)     NOT NULL,
     risk_level      SMALLINT        DEFAULT 0,
-    status          SMALLINT        DEFAULT 1,
+    status          SMALLINT        NOT NULL DEFAULT 2,
+    version         INT             NOT NULL DEFAULT 0,
     is_deleted      BOOLEAN         DEFAULT FALSE,
     created_at      TIMESTAMPTZ     NOT NULL,
     updated_at      TIMESTAMPTZ,
@@ -154,9 +155,6 @@ COMMENT ON COLUMN sys_user_roles.updated_at IS '更新时间';
 COMMENT ON COLUMN sys_user_roles.created_at IS '创建时间';
 
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_user_role ON sys_user_roles (user_id, role_id);
-
-
 -- ==================== 6. sys_role_permissions ====================
 CREATE TABLE IF NOT EXISTS sys_role_permissions (
     role_id         INTEGER         NOT NULL,
@@ -176,9 +174,6 @@ COMMENT ON COLUMN sys_role_permissions.trace_id IS '调用链 ID';
 COMMENT ON COLUMN sys_role_permissions.updated_at IS '更新时间';
 COMMENT ON COLUMN sys_role_permissions.created_at IS '创建时间';
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_role_permission ON sys_role_permissions (role_id, permission_id);
-
-
 -- ==================== 7. enterprises ====================
 CREATE TABLE IF NOT EXISTS enterprises (
     id              BIGINT          NOT NULL,
@@ -188,7 +183,7 @@ CREATE TABLE IF NOT EXISTS enterprises (
     scale           VARCHAR(32),
     contact_email   VARCHAR(128)    NOT NULL,
     contact_phone   VARCHAR(20)     NOT NULL,
-    status          SMALLINT        NOT NULL    DEFAULT 1,
+    status          SMALLINT        NOT NULL    DEFAULT 2,
     logo_url        VARCHAR(512),
     created_at      TIMESTAMPTZ     NOT NULL,
     is_deleted      BOOLEAN         DEFAULT FALSE,
@@ -254,8 +249,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     location        VARCHAR(64)     NOT NULL,
     min_salary      DECIMAL(10, 2),
     max_salary      DECIMAL(10, 2),
-    experience_req  VARCHAR(32),
-    education_req   VARCHAR(32),
+    experience_req  SMALLINT,
+    education_req   SMALLINT,
     skills_json     JSONB,
     status          SMALLINT        DEFAULT 1,
     created_at      TIMESTAMPTZ     NOT NULL,
@@ -276,28 +271,34 @@ COMMENT ON COLUMN jobs.department IS '所属部门';
 COMMENT ON COLUMN jobs.location IS '工作地点';
 COMMENT ON COLUMN jobs.min_salary IS '最低薪资（元）';
 COMMENT ON COLUMN jobs.max_salary IS '最高薪资（元）';
-COMMENT ON COLUMN jobs.experience_req IS '经验要求';
-COMMENT ON COLUMN jobs.education_req IS '学历要求';
+COMMENT ON COLUMN jobs.experience_req IS '经验要求枚举编码';
+COMMENT ON COLUMN jobs.education_req IS '学历要求枚举编码';
 COMMENT ON COLUMN jobs.skills_json IS '技能标签 JSON 数组';
-COMMENT ON COLUMN jobs.status IS '岗位状态 (1: 开放中, 0: 已关闭)';
+COMMENT ON COLUMN jobs.status IS '岗位状态 (2: 草稿, 1: 开放中, 0: 已关闭)';
+COMMENT ON COLUMN jobs.version IS '管理端编辑使用的乐观锁版本号';
 COMMENT ON COLUMN jobs.created_at IS '发布时间';
 COMMENT ON COLUMN jobs.is_deleted IS '逻辑删除标识';
 COMMENT ON COLUMN jobs.updated_by IS '轻量审计：操作人';
 COMMENT ON COLUMN jobs.trace_id IS '调用链 ID';
 COMMENT ON COLUMN jobs.updated_at IS '更新时间';
 
+CREATE INDEX IF NOT EXISTS idx_jobs_enterprise_status ON jobs (enterprise_id, status);
+
 
 -- ============================================================
--- Phase 1 角色种子数据（idempotent：先删后插，避免重复执行报错）
+-- Phase 1 角色种子数据（幂等更新，不删除既有角色关联）
 -- role_scope: PLATFORM / ENTERPRISE / USER
 -- ============================================================
-DELETE FROM sys_roles WHERE id BETWEEN 1001 AND 3001;
 
 -- PLATFORM 域（平台运营端 Admin）
 INSERT INTO sys_roles (id, role_code, role_name, role_scope, created_at) VALUES
 (1001, 'SUPER_ADMIN',       '超级管理员',   'PLATFORM',   NOW()),
 (1002, 'FINANCE_ADMIN',     '财务管理员',   'PLATFORM',   NOW()),
-(1003, 'PLATFORM_OPS',      '平台运维',     'PLATFORM',   NOW());
+(1003, 'PLATFORM_OPS',      '平台运维',     'PLATFORM',   NOW())
+ON CONFLICT (id) DO UPDATE SET
+    role_code = EXCLUDED.role_code,
+    role_name = EXCLUDED.role_name,
+    role_scope = EXCLUDED.role_scope;
 
 -- ENTERPRISE 域（B 端企业，通过 enterprise_team_members.role_id 分配）
 INSERT INTO sys_roles (id, role_code, role_name, role_scope, created_at) VALUES
@@ -305,8 +306,16 @@ INSERT INTO sys_roles (id, role_code, role_name, role_scope, created_at) VALUES
 (2002, 'ENTERPRISE_ADMIN',  '企业管理员',   'ENTERPRISE', NOW()),
 (2003, 'HR_MANAGER',        'HR 经理',      'ENTERPRISE', NOW()),
 (2004, 'HR_RECRUITER',      '招聘专员',     'ENTERPRISE', NOW()),
-(2005, 'INTERVIEWER',       '面试官',       'ENTERPRISE', NOW());
+(2005, 'INTERVIEWER',       '面试官',       'ENTERPRISE', NOW())
+ON CONFLICT (id) DO UPDATE SET
+    role_code = EXCLUDED.role_code,
+    role_name = EXCLUDED.role_name,
+    role_scope = EXCLUDED.role_scope;
 
 -- USER 域（C 端求职者，注册时 sys_user_roles 自动分配）
 INSERT INTO sys_roles (id, role_code, role_name, role_scope, created_at) VALUES
-(3001, 'CANDIDATE',         '求职者',       'USER',       NOW());
+(3001, 'CANDIDATE',         '求职者',       'USER',       NOW())
+ON CONFLICT (id) DO UPDATE SET
+    role_code = EXCLUDED.role_code,
+    role_name = EXCLUDED.role_name,
+    role_scope = EXCLUDED.role_scope;

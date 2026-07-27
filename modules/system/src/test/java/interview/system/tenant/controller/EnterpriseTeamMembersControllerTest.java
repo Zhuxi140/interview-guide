@@ -47,7 +47,8 @@ class EnterpriseTeamMembersControllerTest {
             page.setRecords(List.of(vo));
             when(teamMembersService.listTeamMembers(1L, 1, 20, "desc")).thenReturn(page);
 
-            Result<IPage<TeamMemberItemVO>> result = controller.listTeamMembers(1L, 1, 20, "desc");
+            Result<IPage<TeamMemberItemVO>> result =
+                    controller.listTeamMembers(1L, 1, 20, "createdAt", "desc");
 
             assertEquals(1, result.getData().getRecords().size());
             assertEquals("HR_MANAGER", result.getData().getRecords().get(0).roleCode());

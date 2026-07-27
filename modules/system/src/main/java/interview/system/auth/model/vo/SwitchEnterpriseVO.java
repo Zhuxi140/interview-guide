@@ -9,5 +9,5 @@ public record SwitchEnterpriseVO(
     @Schema(description = "新短时 JWT")
     String accessToken,
     @Schema(description = "过期时间（秒）")
-    Long expiresIn
+    Long expiresInSeconds
 ) {}

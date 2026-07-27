@@ -9,6 +9,7 @@ import lombok.Builder;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.List;
 
 /**
  * @author zhuxi
@@ -35,12 +36,14 @@ public record JobDetailVO(
         ExperienceLevel experienceReq,
         @Schema(description = "学历要求")
         EducationLevel educationReq,
-        @Schema(description = "技能标签 JSON")
-        String skillsJson,
+        @Schema(description = "技能标签")
+        List<String> skills,
         @Schema(description = "岗位状态")
         JobStatus status,
         @Schema(description = "发布人 ID")
-        Long userId,
+        Long createdBy,
+        @Schema(description = "并发版本号")
+        Integer version,
         @Schema(description = "创建时间")
         @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
         OffsetDateTime createdAt,

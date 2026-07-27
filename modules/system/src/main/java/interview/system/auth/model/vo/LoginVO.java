@@ -53,5 +53,5 @@ public record LoginVO (
     String refreshToken,
 
     @Schema(description = "短时token过期时间（秒）")
-    Long expiresIn
+    Long expiresInSeconds
 ) {}

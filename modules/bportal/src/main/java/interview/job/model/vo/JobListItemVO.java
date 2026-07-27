@@ -24,6 +24,8 @@ public record JobListItemVO(
         String location,
         @Schema(description = "岗位状态")
         JobStatus status,
+        @Schema(description = "并发版本号")
+        Integer version,
         @Schema(description = "创建时间")
         @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
         OffsetDateTime createdAt,

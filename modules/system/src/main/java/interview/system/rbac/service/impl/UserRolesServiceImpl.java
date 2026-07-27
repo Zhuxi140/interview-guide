@@ -12,7 +12,6 @@ import interview.system.rbac.mapper.UserRolesMapper;
 import interview.system.rbac.model.entity.Role;
 import interview.system.rbac.model.entity.UserRole;
 import interview.system.rbac.model.req.AssignUserRolesReq;
-import interview.system.rbac.model.req.RemoveUserRolesReq;
 import interview.system.rbac.model.vo.UserRoleItemVO;
 import interview.system.rbac.service.UserRolesService;
 import lombok.AllArgsConstructor;
@@ -75,24 +74,15 @@ public class UserRolesServiceImpl extends ServiceImpl<UserRolesMapper, UserRole>
 
     @Override
     @Transactional(rollbackFor = BusinessException.class)
-    public void removeUserRoles(Long userId, RemoveUserRolesReq req) {
-        List<Integer> roleIds = req.getRoleIds().stream().distinct().toList();
-
-        List<Integer> existing = lambdaQuery()
+    public void removeUserRole(Long userId, Integer roleId) {
+        // 路径精确指定一个角色，删除条件同时绑定用户与平台角色。
+        boolean removed = lambdaUpdate()
                 .eq(UserRole::getUserId, userId)
-                .select(UserRole::getRoleId)
-                .list()
-                .stream()
-                .map(UserRole::getRoleId)
-                .toList();
-
-        lambdaUpdate()
-                .eq(UserRole::getUserId, userId)
-                .in(UserRole::getRoleId,
-                        roleIds.stream()
-                        .filter(existing::contains)
-                        .toList())
+                .eq(UserRole::getRoleId, roleId)
                 .remove();
+        if (!removed) {
+            throw new BusinessException(ErrorCode.ROLE_NOT_EXIST);
+        }
     }
 
 

@@ -26,6 +26,7 @@ import interview.resume.model.vo.ResumeAnalysisVO;
 import interview.resume.model.vo.ResumeListItemVO;
 import interview.resume.model.vo.ResumeUploadVO;
 import interview.resume.model.vo.ResumeVO;
+import interview.resume.model.vo.ResumeDownloadVO;
 import interview.resume.service.*;
 import interview.resume.message.ResumeCleanupMessageFactory;
 import interview.resume.support.ResumeLockKey;
@@ -37,6 +38,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.time.OffsetDateTime;
+import java.time.Duration;
 import java.util.List;
 
 /**
@@ -149,7 +151,7 @@ public class ResumesServiceImpl extends ServiceImpl<ResumesMapper, Resumes> impl
         return ResumeUploadVO.builder()
                 .id(resumesId)
                 .fileName(resumes.getFileName())
-                .fileType(resumes.getFileType())
+                .detectedMediaType(resumes.getFileType())
                 .fileSize(resumes.getFileSize())
                 .createdAt(resumes.getCreatedAt())
                 .analyzeStatus(AnalyzeStatus.PENDING)
@@ -218,7 +220,7 @@ public class ResumesServiceImpl extends ServiceImpl<ResumesMapper, Resumes> impl
                 .eq(Resumes::getUserId, userId)
                 .count();
         if (count >= MAX_RESUME_COUNT) {
-            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED);
+            throw new BusinessException(ErrorCode.RESUME_MOST_IS_FIVE);
         }
 
         // 提前分配简历 ID，保证消息业务键和简历记录在同一事务内建立关联。
@@ -233,7 +235,9 @@ public class ResumesServiceImpl extends ServiceImpl<ResumesMapper, Resumes> impl
     }
 
     @Override
-    public IPage<ResumeListItemVO> pageResumes(Integer page, Integer size, String fileName, AnalyzeStatus analyzeStatus) {
+    public IPage<ResumeListItemVO> pageResumes(
+            Integer page, Integer size, String fileName,
+            AnalyzeStatus analyzeStatus, String order) {
         // ① 获取当前用户
         Long userId = AuthContext.getRequiredUserId();
         // ② 构建查询条件（文件名模糊 + 解析状态精确 + 按上传时间降序）
@@ -246,7 +250,8 @@ public class ResumesServiceImpl extends ServiceImpl<ResumesMapper, Resumes> impl
                 .eq(Resumes::getUserId, userId)
                 .and(StrUtil.isNotBlank(fileName), w -> w.like(Resumes::getFileName,fileName))
                 .and(analyzeStatus != null,w->w.eq(Resumes::getAnalyzeStatus,analyzeStatus))
-                .orderByDesc(Resumes::getCreatedAt);
+                .orderByAsc("asc".equalsIgnoreCase(order), Resumes::getCreatedAt)
+                .orderByDesc(!"asc".equalsIgnoreCase(order), Resumes::getCreatedAt);
         // ③ 分页查询
         Page<Resumes> resumesPage = new Page<>(page, size);
         Page<Resumes> rawPages = baseMapper.selectPage(resumesPage, wrapper);
@@ -257,7 +262,8 @@ public class ResumesServiceImpl extends ServiceImpl<ResumesMapper, Resumes> impl
                         ResumeListItemVO.builder()
                                 .id(raw.getId())
                                 .fileName(raw.getFileName())
-                                .fileType(raw.getFileType())
+                                .detectedMediaType(raw.getFileType())
+                                .fileSize(raw.getFileSize())
                                 .analyzeStatus(raw.getAnalyzeStatus())
                                 .createdAt(raw.getCreatedAt())
                                 .build()
@@ -276,8 +282,8 @@ public class ResumesServiceImpl extends ServiceImpl<ResumesMapper, Resumes> impl
         Long userId = AuthContext.getRequiredUserId();
         Resumes resumes = lambdaQuery()
                 .select(
-                        Resumes::getUserId,Resumes::getFileName,Resumes::getFileSize,
-                        Resumes::getFileType,Resumes::getFileHash,Resumes::getStorageUrl,
+                        Resumes::getId, Resumes::getFileName,Resumes::getFileSize,
+                        Resumes::getFileType,
                         Resumes::getResumeText,Resumes::getAnalyzeStatus,Resumes::getCreatedAt,
                         Resumes::getUpdatedAt
                 )
@@ -291,17 +297,33 @@ public class ResumesServiceImpl extends ServiceImpl<ResumesMapper, Resumes> impl
         // ② 返回详情 VO
         return ResumeVO.builder()
                 .id(resumes.getId())
-                .userId(resumes.getUserId())
                 .fileName(resumes.getFileName())
                 .fileSize(resumes.getFileSize())
-                .fileType(resumes.getFileType())
-                .fileHash(resumes.getFileHash())
-                .storageUrl(resumes.getStorageUrl())
+                .detectedMediaType(resumes.getFileType())
                 .resumeText(resumes.getResumeText())
                 .analyzeStatus(resumes.getAnalyzeStatus())
                 .createdAt(resumes.getCreatedAt())
                 .updatedAt(resumes.getUpdatedAt())
                 .build();
+    }
+
+    @Override
+    public ResumeDownloadVO getDownloadUrl(Long resumeId) {
+        Long userId = AuthContext.getRequiredUserId();
+
+        // 只读取当前用户简历的内部对象键，不向客户端直接暴露该键。
+        Resumes resume = lambdaQuery()
+                .select(Resumes::getStorageUrl)
+                .eq(Resumes::getId, resumeId)
+                .eq(Resumes::getUserId, userId)
+                .one();
+        if (resume == null) {
+            throw new BusinessException(ErrorCode.RESUME_NOT_FOUND);
+        }
+        long expiresInSeconds = 300L;
+        String downloadUrl = fileStorageService.generatePresignedDownloadUrl(
+                resume.getStorageUrl(), Duration.ofSeconds(expiresInSeconds));
+        return new ResumeDownloadVO(downloadUrl, expiresInSeconds);
     }
 
     @Override

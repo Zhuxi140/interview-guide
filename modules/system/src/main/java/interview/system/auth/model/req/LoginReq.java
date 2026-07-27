@@ -22,7 +22,4 @@ public class LoginReq {
 
     @Schema(description = "设备 UA")
     private String deviceInfo;
-
-    @Schema(description = "登录 IP（后端可自动获取）")
-    private String ipAddress;
 }

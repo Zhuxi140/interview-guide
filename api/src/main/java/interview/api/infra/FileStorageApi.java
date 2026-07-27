@@ -5,6 +5,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.time.Duration;
 
 public interface FileStorageApi {
 
@@ -19,4 +20,12 @@ public interface FileStorageApi {
     String verifyFileType(long size, String originName, InputStream fileInputStream) throws IOException;
 
     String generateFileKey(String originalFilename,FileSort prefix);
+
+    /**
+     * 生成对象的短期下载地址
+     * @param key 对象键
+     * @param duration 地址有效期
+     * @return 预签名下载地址
+     */
+    String generatePresignedDownloadUrl(String key, Duration duration);
 }

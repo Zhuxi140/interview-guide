@@ -3,6 +3,7 @@ package interview.system.tenant;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
 import com.baomidou.mybatisplus.extension.conditions.update.LambdaUpdateChainWrapper;
+import interview.api.bportal.JobValidationApi;
 import interview.api.system.SecureChallengeApi;
 import interview.common.constant.SecureActionContext;
 import interview.common.enums.ErrorCode;
@@ -57,6 +58,7 @@ class EnterprisesServiceImplTest {
     @Mock private EnterprisesMapper enterprisesMapper;
     @Mock private RolesService rolesService;
     @Mock private SecureChallengeApi secureChallengeApi;
+    @Mock private JobValidationApi jobValidationApi;
 
     private EnterprisesServiceImpl enterprisesService;
     private LambdaQueryChainWrapper<Enterprise> enterpriseQueryWrapper;
@@ -74,7 +76,7 @@ class EnterprisesServiceImplTest {
     void setUp() {
         enterprisesService = spy(new EnterprisesServiceImpl(
             customIdGenerator, userRolesService, enterpriseTeamMembersService,
-            enterprisesMapper, rolesService, secureChallengeApi
+            enterprisesMapper, rolesService, secureChallengeApi, jobValidationApi
         ));
         ReflectionTestUtils.setField(enterprisesService, "baseMapper", enterprisesMapper);
         enterpriseQueryWrapper = mockQueryWrapper();
@@ -345,6 +347,7 @@ class EnterprisesServiceImplTest {
 
             req.setContactEmail("new@test.com");
             SecureActionContext context = SecureActionContext.builder()
+                    .userId(userId)
                     .actionType(SecureActionType.UPDATE_ENTERPRISE_EMAIL)
                     .resourceId(enterpriseId)
                     .enterpriseId(enterpriseId)
@@ -363,6 +366,7 @@ class EnterprisesServiceImplTest {
         void updateEnterpriseContactEmail_fail_deleteTokenCannotCrossUse() {
             mockEnterpriseBelong();
             SecureActionContext context = SecureActionContext.builder()
+                    .userId(userId)
                     .actionType(SecureActionType.DELETE_ENTERPRISE)
                     .resourceId(enterpriseId)
                     .enterpriseId(enterpriseId)
@@ -380,6 +384,7 @@ class EnterprisesServiceImplTest {
         void updateEnterpriseContactEmail_fail_tokenBoundToAnotherEnterprise() {
             mockEnterpriseBelong();
             SecureActionContext context = SecureActionContext.builder()
+                    .userId(userId)
                     .actionType(SecureActionType.UPDATE_ENTERPRISE_EMAIL)
                     .resourceId(999L)
                     .enterpriseId(999L)
@@ -414,6 +419,7 @@ class EnterprisesServiceImplTest {
             AuthContext.setAuthContext(AuthContext.AuthUser.builder()
                     .userId(userId).build());
             secureActionContext = SecureActionContext.builder()
+                    .userId(userId)
                     .actionType(SecureActionType.UPDATE_ENTERPRISE_PHONE)
                     .resourceId(enterpriseId)
                     .enterpriseId(enterpriseId)
@@ -505,6 +511,7 @@ class EnterprisesServiceImplTest {
             when(enterpriseTeamMembersService.lambdaUpdate()).thenReturn(memberUpdateWrapper);
 
             SecureActionContext context = SecureActionContext.builder()
+                    .userId(userId)
                     .actionType(SecureActionType.DELETE_ENTERPRISE)
                     .resourceId(enterpriseId)
                     .enterpriseId(enterpriseId)

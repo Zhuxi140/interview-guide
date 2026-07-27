@@ -6,9 +6,11 @@ import interview.job.model.enums.JobStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 /**
  * @author zhuxi
@@ -48,9 +50,11 @@ public class JobCreateReq {
     @Schema(description = "学历要求")
     private EducationLevel educationReq;
 
-    @Schema(description = "技能标签 JSON")
-    private String skillsJson;
+    @Size(max = 30, message = "技能标签不能超过 30 个")
+    @Schema(description = "技能标签")
+    private List<@NotBlank(message = "技能标签不能为空")
+            @Size(max = 64, message = "单个技能标签不能超过 64 个字符") String> skills;
 
-    @Schema(description = "岗位状态，不传默认开放")
+    @Schema(description = "岗位状态，仅允许 DRAFT / OPEN；不传默认 DRAFT")
     private JobStatus status;
 }

@@ -1,6 +1,6 @@
 -- ============================================================
 -- 智能 SaaS 招聘与多模态面试平台 —— 全量 DDL + 权限种子
--- 数据库: PostgreSQL 16+
+-- 数据库: PostgreSQL 14+
 -- 说明: 不使用物理外键，所有外键关系在应用层保证
 --       时间字段使用 TIMESTAMPTZ，布尔使用 BOOLEAN，JSON 使用 JSONB
 --       主键由应用层雪花算法生成，DDL 仅声明 BIGINT NOT NULL
@@ -24,7 +24,8 @@ CREATE TABLE IF NOT EXISTS sys_users (
     phone           VARCHAR(64),
     user_type       VARCHAR(16)     NOT NULL,
     risk_level      SMALLINT        DEFAULT 0,
-    status          SMALLINT        DEFAULT 1,
+    status          SMALLINT        NOT NULL DEFAULT 2,
+    version         INT             NOT NULL DEFAULT 0,
     is_deleted      BOOLEAN         DEFAULT FALSE,
     created_at      TIMESTAMPTZ     NOT NULL,
     updated_at      TIMESTAMPTZ,
@@ -152,9 +153,6 @@ COMMENT ON COLUMN sys_user_roles.trace_id IS '调用链 ID';
 COMMENT ON COLUMN sys_user_roles.updated_at IS '更新时间';
 COMMENT ON COLUMN sys_user_roles.created_at IS '创建时间';
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_user_role ON sys_user_roles (user_id, role_id);
-
-
 -- ==================== 6. sys_role_permissions ====================
 CREATE TABLE IF NOT EXISTS sys_role_permissions (
     role_id         INTEGER         NOT NULL,
@@ -174,9 +172,6 @@ COMMENT ON COLUMN sys_role_permissions.trace_id IS '调用链 ID';
 COMMENT ON COLUMN sys_role_permissions.updated_at IS '更新时间';
 COMMENT ON COLUMN sys_role_permissions.created_at IS '创建时间';
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_role_permission ON sys_role_permissions (role_id, permission_id);
-
-
 -- ==================== 7. enterprises ====================
 CREATE TABLE IF NOT EXISTS enterprises (
     id              BIGINT          NOT NULL,
@@ -186,7 +181,7 @@ CREATE TABLE IF NOT EXISTS enterprises (
     scale           VARCHAR(32),
     contact_email   VARCHAR(128)    NOT NULL,
     contact_phone   VARCHAR(20)     NOT NULL,
-    status          SMALLINT        NOT NULL    DEFAULT 1,
+    status          SMALLINT        NOT NULL    DEFAULT 2,
     logo_url        VARCHAR(512),
     created_at      TIMESTAMPTZ     NOT NULL,
     is_deleted      BOOLEAN         DEFAULT FALSE,
@@ -252,8 +247,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     location        VARCHAR(64)     NOT NULL,
     min_salary      DECIMAL(10, 2),
     max_salary      DECIMAL(10, 2),
-    experience_req  VARCHAR(32),
-    education_req   VARCHAR(32),
+    experience_req  SMALLINT,
+    education_req   SMALLINT,
     skills_json     JSONB,
     status          SMALLINT        DEFAULT 1,
     created_at      TIMESTAMPTZ     NOT NULL,
@@ -274,15 +269,18 @@ COMMENT ON COLUMN jobs.department IS '所属部门';
 COMMENT ON COLUMN jobs.location IS '工作地点';
 COMMENT ON COLUMN jobs.min_salary IS '最低薪资（元）';
 COMMENT ON COLUMN jobs.max_salary IS '最高薪资（元）';
-COMMENT ON COLUMN jobs.experience_req IS '经验要求';
-COMMENT ON COLUMN jobs.education_req IS '学历要求';
+COMMENT ON COLUMN jobs.experience_req IS '经验要求枚举编码';
+COMMENT ON COLUMN jobs.education_req IS '学历要求枚举编码';
 COMMENT ON COLUMN jobs.skills_json IS '技能标签 JSON 数组';
-COMMENT ON COLUMN jobs.status IS '岗位状态 (1: 开放中, 0: 已关闭)';
+COMMENT ON COLUMN jobs.status IS '岗位状态 (2: 草稿, 1: 开放中, 0: 已关闭)';
+COMMENT ON COLUMN jobs.version IS '管理端编辑使用的乐观锁版本号';
 COMMENT ON COLUMN jobs.created_at IS '发布时间';
 COMMENT ON COLUMN jobs.is_deleted IS '逻辑删除标识';
 COMMENT ON COLUMN jobs.updated_by IS '轻量审计：操作人';
 COMMENT ON COLUMN jobs.trace_id IS '调用链 ID';
 COMMENT ON COLUMN jobs.updated_at IS '更新时间';
+
+CREATE INDEX IF NOT EXISTS idx_jobs_enterprise_status ON jobs (enterprise_id, status);
 
 
 -- ==================== Phase 2: 简历接收与 AI 初筛 ====================
@@ -299,6 +297,8 @@ CREATE TABLE IF NOT EXISTS resumes (
     storage_url     TEXT,
     resume_text     TEXT,
     analyze_status  VARCHAR(20),
+    upload_deadline_at TIMESTAMPTZ,
+    cleanup_message_id BIGINT,
     created_at      TIMESTAMPTZ     NOT NULL,
     is_deleted      BOOLEAN         DEFAULT FALSE,
     updated_by      BIGINT,
@@ -317,14 +317,20 @@ COMMENT ON COLUMN resumes.file_hash IS 'SHA-256 文件哈希';
 COMMENT ON COLUMN resumes.storage_url IS 'RustFS / OSS 存储 URL';
 COMMENT ON COLUMN resumes.resume_text IS '解析后的简历纯文本';
 COMMENT ON COLUMN resumes.analyze_status IS 'UPLOADING / PENDING / PROCESSING / COMPLETED / FAILED / UPLOAD_FAILED';
+COMMENT ON COLUMN resumes.upload_deadline_at IS '上传预占截止时间，超时后由修复任务收敛';
+COMMENT ON COLUMN resumes.cleanup_message_id IS '上传清理消息逻辑引用，不建立跨模块外键';
 COMMENT ON COLUMN resumes.created_at IS '上传时间';
 COMMENT ON COLUMN resumes.is_deleted IS '逻辑删除';
 COMMENT ON COLUMN resumes.updated_by IS '[逻辑外键]→sys_users';
 COMMENT ON COLUMN resumes.trace_id IS '触发解析的调用链 ID';
 COMMENT ON COLUMN resumes.updated_at IS '最后更新时间';
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_resumes_file_hash ON resumes (user_id, file_hash);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_resumes_file_hash
+    ON resumes (user_id, file_hash) WHERE is_deleted = FALSE;
 CREATE INDEX IF NOT EXISTS idx_resumes_user_id ON resumes (user_id);
+CREATE INDEX IF NOT EXISTS idx_resumes_upload_timeout
+    ON resumes (upload_deadline_at, id)
+    WHERE analyze_status = 'UPLOADING' AND is_deleted = FALSE;
 
 
 -- ==================== 11. resume_analyses ====================
@@ -412,6 +418,7 @@ CREATE TABLE IF NOT EXISTS job_applications (
     job_id          BIGINT          NOT NULL,
     candidate_id    BIGINT          NOT NULL,
     resume_id       BIGINT          NOT NULL,
+    idempotency_key VARCHAR(128)    NOT NULL,
     ai_match_score  INT,
     status          VARCHAR(32)     DEFAULT 'APPLIED',
     created_at      TIMESTAMPTZ     NOT NULL,
@@ -428,8 +435,9 @@ COMMENT ON COLUMN job_applications.enterprise_id IS '强隔离：关联企业租
 COMMENT ON COLUMN job_applications.job_id IS '[逻辑外键]→jobs';
 COMMENT ON COLUMN job_applications.candidate_id IS '[逻辑外键]→sys_users, 仅 user_type=''CANDIDATE''';
 COMMENT ON COLUMN job_applications.resume_id IS '[逻辑外键]→resumes';
+COMMENT ON COLUMN job_applications.idempotency_key IS '候选人投递请求幂等键';
 COMMENT ON COLUMN job_applications.ai_match_score IS '大模型计算的人岗匹配度打分';
-COMMENT ON COLUMN job_applications.status IS 'APPLIED / REVIEWING / PASSED / REJECTED';
+COMMENT ON COLUMN job_applications.status IS 'APPLIED / REVIEWING / PASSED / REJECTED / WITHDRAWN';
 COMMENT ON COLUMN job_applications.created_at IS '投递时间';
 COMMENT ON COLUMN job_applications.is_deleted IS '逻辑删除标识';
 COMMENT ON COLUMN job_applications.updated_by IS '轻量审计：操作的 HR ID';
@@ -441,20 +449,28 @@ CREATE INDEX IF NOT EXISTS idx_applications_candidate_id ON job_applications (ca
 CREATE INDEX IF NOT EXISTS idx_applications_status ON job_applications (enterprise_id, status);
 CREATE UNIQUE INDEX IF NOT EXISTS uk_applications_job_candidate_active
     ON job_applications (job_id, candidate_id) WHERE is_deleted = false;
+CREATE UNIQUE INDEX IF NOT EXISTS uk_applications_candidate_idempotency_active
+    ON job_applications (candidate_id, idempotency_key)
+    WHERE is_deleted = false;
 
 
 -- ==================== 15. local_message ====================
 CREATE TABLE IF NOT EXISTS local_message (
     id              BIGINT          NOT NULL,
     topic           VARCHAR(64)     NOT NULL,
+    biz_key         VARCHAR(160),
+    schema_version  SMALLINT        NOT NULL DEFAULT 1,
     payload         JSONB           NOT NULL,
-    priority        VARCHAR(16)     DEFAULT 'MEDIUM',
-    status          VARCHAR(16)     DEFAULT 'PENDING',
-    retry_count     INT             DEFAULT 0,
-    max_retries     INT             DEFAULT 3,
+    priority        VARCHAR(16)     NOT NULL DEFAULT 'MEDIUM',
+    status          VARCHAR(20)     NOT NULL DEFAULT 'PENDING',
+    retry_count     INT             NOT NULL DEFAULT 0,
+    max_retries     INT             NOT NULL DEFAULT 3,
     next_retry_at   TIMESTAMPTZ,
     retry_history   JSONB,
     last_error      TEXT,
+    lease_owner     VARCHAR(128),
+    lease_until     TIMESTAMPTZ,
+    lease_version   BIGINT          NOT NULL DEFAULT 0,
     trace_id        VARCHAR(128),
     created_at      TIMESTAMPTZ     NOT NULL,
     updated_at      TIMESTAMPTZ,
@@ -463,21 +479,29 @@ CREATE TABLE IF NOT EXISTS local_message (
 
 COMMENT ON TABLE local_message IS '通用本地消息表（异步补偿/重试）';
 COMMENT ON COLUMN local_message.id IS '主键';
-COMMENT ON COLUMN local_message.topic IS '消息类型：FILE_DELETE / SEND_SMS 等';
+COMMENT ON COLUMN local_message.topic IS '消息主题；FILE_DELETE 仅保留兼容旧记录';
+COMMENT ON COLUMN local_message.biz_key IS '业务幂等键，同一 topic 下唯一';
+COMMENT ON COLUMN local_message.schema_version IS '消息载荷协议版本';
 COMMENT ON COLUMN local_message.payload IS '业务数据 JSON';
-COMMENT ON COLUMN local_message.priority IS '优先级：HIGH(5s/5次) / MEDIUM(60s/3次) / LOW(30min/1次)';
-COMMENT ON COLUMN local_message.status IS 'PENDING / SUCCESS / FAILED / IGNORED';
+COMMENT ON COLUMN local_message.priority IS '优先级：HIGH / MEDIUM / LOW';
+COMMENT ON COLUMN local_message.status IS 'PENDING / PROCESSING / SUCCESS / FAILED / IGNORED';
 COMMENT ON COLUMN local_message.retry_count IS '已重试次数';
 COMMENT ON COLUMN local_message.max_retries IS '最大重试次数';
 COMMENT ON COLUMN local_message.next_retry_at IS '下次重试时间（指数退避）';
 COMMENT ON COLUMN local_message.retry_history IS '重试历史数组：[{"retry":1,"at":"...","error":"...","traceId":"..."}]';
 COMMENT ON COLUMN local_message.last_error IS '最近一次失败原因';
+COMMENT ON COLUMN local_message.lease_owner IS '当前租约持有者';
+COMMENT ON COLUMN local_message.lease_until IS '租约截止时间，过期 PROCESSING 消息允许重领';
+COMMENT ON COLUMN local_message.lease_version IS '租约栅栏版本，阻止旧执行者回写';
 COMMENT ON COLUMN local_message.trace_id IS '触发该消息的调用链 ID';
 COMMENT ON COLUMN local_message.created_at IS '创建时间';
 COMMENT ON COLUMN local_message.updated_at IS '更新时间';
 
-CREATE INDEX IF NOT EXISTS idx_lmsg_status_retry ON local_message (status, next_retry_at);
-CREATE INDEX IF NOT EXISTS idx_lmsg_priority ON local_message (priority, status);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_local_message_topic_biz_key
+    ON local_message (topic, biz_key) WHERE biz_key IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_local_message_dispatch
+    ON local_message (priority, status, next_retry_at, lease_until, created_at)
+    WHERE status IN ('PENDING', 'PROCESSING');
 
 
 -- ==================== 16. llm_provider_config ====================
@@ -521,16 +545,18 @@ COMMENT ON COLUMN llm_global_setting.updated_at IS '更新时间';
 
 
 -- ============================================================
--- 种子数据：角色（idempotent：先删后插）
+-- 种子数据：角色（幂等更新，不删除既有角色关联）
 -- role_scope: PLATFORM / ENTERPRISE / USER
 -- ============================================================
-DELETE FROM sys_roles WHERE id BETWEEN 1001 AND 3001;
-
 -- PLATFORM 域（平台运营端 Admin）
 INSERT INTO sys_roles (id, role_code, role_name, role_scope, created_at) VALUES
 (1001, 'SUPER_ADMIN',       '超级管理员',   'PLATFORM',   NOW()),
 (1002, 'FINANCE_ADMIN',     '财务管理员',   'PLATFORM',   NOW()),
-(1003, 'PLATFORM_OPS',      '平台运维',     'PLATFORM',   NOW());
+(1003, 'PLATFORM_OPS',      '平台运维',     'PLATFORM',   NOW())
+ON CONFLICT (id) DO UPDATE SET
+    role_code = EXCLUDED.role_code,
+    role_name = EXCLUDED.role_name,
+    role_scope = EXCLUDED.role_scope;
 
 -- ENTERPRISE 域（B 端企业，通过 enterprise_team_members.role_id 分配）
 INSERT INTO sys_roles (id, role_code, role_name, role_scope, created_at) VALUES
@@ -538,11 +564,19 @@ INSERT INTO sys_roles (id, role_code, role_name, role_scope, created_at) VALUES
 (2002, 'ENTERPRISE_ADMIN',  '企业管理员',   'ENTERPRISE', NOW()),
 (2003, 'HR_MANAGER',        'HR 经理',      'ENTERPRISE', NOW()),
 (2004, 'HR_RECRUITER',      '招聘专员',     'ENTERPRISE', NOW()),
-(2005, 'INTERVIEWER',       '面试官',       'ENTERPRISE', NOW());
+(2005, 'INTERVIEWER',       '面试官',       'ENTERPRISE', NOW())
+ON CONFLICT (id) DO UPDATE SET
+    role_code = EXCLUDED.role_code,
+    role_name = EXCLUDED.role_name,
+    role_scope = EXCLUDED.role_scope;
 
 -- USER 域（C 端求职者，注册时 sys_user_roles 自动分配）
 INSERT INTO sys_roles (id, role_code, role_name, role_scope, created_at) VALUES
-(3001, 'CANDIDATE',         '求职者',       'USER',       NOW());
+(3001, 'CANDIDATE',         '求职者',       'USER',       NOW())
+ON CONFLICT (id) DO UPDATE SET
+    role_code = EXCLUDED.role_code,
+    role_name = EXCLUDED.role_name,
+    role_scope = EXCLUDED.role_scope;
 
 
 -- ============================================================
@@ -560,7 +594,7 @@ INSERT INTO sys_permissions (id, perm_code, perm_type, api_path, status) VALUES
 (103, 'enterprise:detail', 'API', '/api/v1/enterprises/*', 1),
 (104, 'enterprise:update', 'API', '/api/v1/enterprises/*', 1),
 (105, 'enterprise:delete', 'API', '/api/v1/enterprises/*', 1),
-(106, 'enterprise:update-contact', 'API', '/api/v1/enterprises/*/contact', 1),
+(106, 'enterprise:update-contact', 'API', '/api/v1/enterprises/*/contact*', 1),
 
 -- 1.2 团队成员管理
 (111, 'team:list',   'API', '/api/v1/enterprises/*/members', 1),
@@ -594,23 +628,27 @@ INSERT INTO sys_permissions (id, perm_code, perm_type, api_path, status) VALUES
 (406, 'resume:analysis-result','API', '/api/v1/resumes/*/analysis', 1),
 
 -- 2.2 投递与初筛
-(411, 'application:apply',           'API', '/api/v1/jobs/*/apply', 1),
+(411, 'application:apply',           'API', '/api/v1/candidate/jobs/*/apply', 1),
 (412, 'application:list',            'API', '/api/v1/enterprises/*/jobs/*/applications', 1),
 (413, 'application:detail',          'API', '/api/v1/enterprises/*/applications/*', 1),
 (414, 'application:update-status',   'API', '/api/v1/enterprises/*/applications/*/status', 1),
 (415, 'candidate:applications',      'API', '/api/v1/candidate/applications', 1),
 
 -- 2.5 本地消息管理
-(421, 'ops:local-message:page',        'API', '/api/v1/admin/local-messages/page', 1),
+(421, 'ops:local-message:page',        'API', '/api/v1/admin/local-messages', 1),
 (422, 'ops:local-message:detail',      'API', '/api/v1/admin/local-messages/*', 1),
 (423, 'ops:local-message:retry',       'API', '/api/v1/admin/local-messages/*/retry', 1),
-(424, 'ops:local-message:batch-retry', 'API', '/api/v1/admin/local-messages/batch-retry', 1),
-(425, 'ops:local-message:status',      'API', '/api/v1/admin/local-messages/*/status', 1);
+(424, 'ops:local-message:batch-retry', 'API', '/api/v1/admin/local-messages/batch-retry', 1)
+ON CONFLICT (id) DO UPDATE SET
+    perm_code = EXCLUDED.perm_code,
+    perm_type = EXCLUDED.perm_type,
+    api_path = EXCLUDED.api_path,
+    status = EXCLUDED.status;
 
 
 -- ===== sys_role_permissions =====
 
--- SUPER_ADMIN (1001) — 全部 37 个权限
+-- SUPER_ADMIN (1001) — 全部 36 个权限
 INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
 (1001, 101, NOW()), (1001, 102, NOW()), (1001, 103, NOW()), (1001, 104, NOW()), (1001, 105, NOW()), (1001, 106, NOW()),
 (1001, 111, NOW()), (1001, 112, NOW()), (1001, 113, NOW()), (1001, 114, NOW()),
@@ -619,16 +657,19 @@ INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
 (1001, 301, NOW()), (1001, 302, NOW()), (1001, 303, NOW()), (1001, 304, NOW()), (1001, 305, NOW()), (1001, 306, NOW()),
 (1001, 401, NOW()), (1001, 402, NOW()), (1001, 403, NOW()), (1001, 404, NOW()), (1001, 405, NOW()), (1001, 406, NOW()),
 (1001, 411, NOW()), (1001, 412, NOW()), (1001, 413, NOW()), (1001, 414, NOW()), (1001, 415, NOW()),
-(1001, 421, NOW()), (1001, 422, NOW()), (1001, 423, NOW()), (1001, 424, NOW()), (1001, 425, NOW());
+(1001, 421, NOW()), (1001, 422, NOW()), (1001, 423, NOW()), (1001, 424, NOW())
+ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 -- FINANCE_ADMIN (1002) — 企业查看 + 简历查看
 INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
 (1002, 102, NOW()), (1002, 103, NOW()),
-(1002, 402, NOW()), (1002, 403, NOW());
+(1002, 402, NOW()), (1002, 403, NOW())
+ON CONFLICT (role_id, permission_id) DO NOTHING;
 
--- PLATFORM_OPS (1003) — 仅本地消息运维 5 条
+-- PLATFORM_OPS (1003) — 仅本地消息运维 4 条
 INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
-(1003, 421, NOW()), (1003, 422, NOW()), (1003, 423, NOW()), (1003, 424, NOW()), (1003, 425, NOW());
+(1003, 421, NOW()), (1003, 422, NOW()), (1003, 423, NOW()), (1003, 424, NOW())
+ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 -- ENTERPRISE_OWNER (2001) — 企业/团队/岗位/简历/投递（无 Admin 和 ops）
 INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
@@ -636,7 +677,8 @@ INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
 (2001, 111, NOW()), (2001, 112, NOW()), (2001, 113, NOW()), (2001, 114, NOW()),
 (2001, 301, NOW()), (2001, 302, NOW()), (2001, 303, NOW()), (2001, 304, NOW()), (2001, 305, NOW()), (2001, 306, NOW()),
 (2001, 401, NOW()), (2001, 402, NOW()), (2001, 403, NOW()), (2001, 404, NOW()), (2001, 405, NOW()), (2001, 406, NOW()),
-(2001, 412, NOW()), (2001, 413, NOW()), (2001, 414, NOW());
+(2001, 412, NOW()), (2001, 413, NOW()), (2001, 414, NOW())
+ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 -- ENTERPRISE_ADMIN (2002) — 与 OWNER 一致，仅去掉 enterprise:delete
 INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
@@ -644,27 +686,32 @@ INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
 (2002, 111, NOW()), (2002, 112, NOW()), (2002, 113, NOW()), (2002, 114, NOW()),
 (2002, 301, NOW()), (2002, 302, NOW()), (2002, 303, NOW()), (2002, 304, NOW()), (2002, 305, NOW()), (2002, 306, NOW()),
 (2002, 401, NOW()), (2002, 402, NOW()), (2002, 403, NOW()), (2002, 404, NOW()), (2002, 405, NOW()), (2002, 406, NOW()),
-(2002, 412, NOW()), (2002, 413, NOW()), (2002, 414, NOW());
+(2002, 412, NOW()), (2002, 413, NOW()), (2002, 414, NOW())
+ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 -- HR_MANAGER (2003) — 团队查看/邀请/改角色 + 岗位全部 + 简历全部 + 投递管理全部
 INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
 (2003, 111, NOW()), (2003, 112, NOW()), (2003, 113, NOW()),
 (2003, 301, NOW()), (2003, 302, NOW()), (2003, 303, NOW()), (2003, 304, NOW()), (2003, 305, NOW()), (2003, 306, NOW()),
 (2003, 401, NOW()), (2003, 402, NOW()), (2003, 403, NOW()), (2003, 404, NOW()), (2003, 405, NOW()), (2003, 406, NOW()),
-(2003, 412, NOW()), (2003, 413, NOW()), (2003, 414, NOW());
+(2003, 412, NOW()), (2003, 413, NOW()), (2003, 414, NOW())
+ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 -- HR_RECRUITER (2004) — 岗位发布/查看/编辑（无删除和开关）+ 简历除删除外 + 投递管理
 INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
 (2004, 301, NOW()), (2004, 302, NOW()), (2004, 303, NOW()), (2004, 304, NOW()),
 (2004, 401, NOW()), (2004, 402, NOW()), (2004, 403, NOW()), (2004, 405, NOW()), (2004, 406, NOW()),
-(2004, 412, NOW()), (2004, 413, NOW()), (2004, 414, NOW());
+(2004, 412, NOW()), (2004, 413, NOW()), (2004, 414, NOW())
+ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 -- INTERVIEWER (2005) — 仅查看岗位 + 查看简历和投递
 INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
 (2005, 302, NOW()), (2005, 303, NOW()),
 (2005, 402, NOW()), (2005, 403, NOW()), (2005, 406, NOW()),
-(2005, 412, NOW()), (2005, 413, NOW());
+(2005, 412, NOW()), (2005, 413, NOW())
+ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 -- CANDIDATE (3001) — 投递简历 + 查看我的投递
 INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
-(3001, 411, NOW()), (3001, 415, NOW());
+(3001, 411, NOW()), (3001, 415, NOW())
+ON CONFLICT (role_id, permission_id) DO NOTHING;

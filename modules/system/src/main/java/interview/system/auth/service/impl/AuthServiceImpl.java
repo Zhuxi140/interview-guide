@@ -116,50 +116,53 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
 
     @Override
     @Transactional(rollbackFor = BusinessException.class)
-    public LoginBO login(LoginReq login) {
+    public LoginBO login(LoginReq login, String clientIp) {
 
         // 验证用户名、状态、密码
         User user = checkAndGetUser(login);
+        return buildLoginResult(user, login.getDeviceInfo(), clientIp);
+    }
 
-        Long userId = user.getId();
-        // 构建Token 并 去除本设备的旧Token
-        String raw = checkAndGetUserToken(userId, login.getDeviceInfo(), login.getIpAddress());
+    @Override
+    @Transactional(rollbackFor = BusinessException.class)
+    public LoginBO loginBySms(SmsLoginReq login, String clientIp) {
+        // 手机号必须属于正常用户，随后原子核销登录验证码。
+        User user = getLoginUserByPhone(login.getPhone());
+        smsService.verifyCode(login.getPhone(), login.getCode(), SmsType.LOGIN);
+        return buildLoginResult(user, login.getDeviceInfo(), clientIp);
+    }
 
-        // 加载企业信息 和 角色权限信息
-        EnterpriseContext enterpriseContext = loadEnterpriseContext(userId);
-        RbacContext rbacContext = loadRbacContext(userId, enterpriseContext.enterpriseId);
-
-        List<String> platformRoleCodes = rbacContext.platformRoleCodes;
-
-        Map<String, Object> claims = new HashMap<>();
-        claims.put("userId", userId);
-        claims.put("username", user.getUsername());
-        claims.put("userType", user.getUserType().name());
-        claims.put("riskLevel", user.getRiskLevel().getCode());
-        claims.put("platformRoleCodes", platformRoleCodes);
-        claims.put("entRoleMap", rbacContext.entRoleMap);
-        Long enterpriseId = enterpriseContext.enterpriseId;
-        if (enterpriseId != null) {
-            claims.put("enterpriseId", enterpriseId);
+    @Override
+    @Transactional(rollbackFor = BusinessException.class)
+    public void resetPassword(PasswordResetReq resetReq) {
+        // 先确认手机号对应用户，再原子核销重置密码验证码。
+        User user = usersService.lambdaQuery()
+                .select(User::getId, User::getStatus)
+                .eq(User::getPhone, resetReq.getPhone())
+                .one();
+        if (user == null) {
+            throw new BusinessException(ErrorCode.USER_NOT_FOUND);
         }
-        String token = jwttUtil.generatorToken(claims, userId);
+        if (user.getStatus() != UserStatus.NORMAL) {
+            throw new BusinessException(ErrorCode.USER_ALREADY_FREEZE);
+        }
+        smsService.verifyCode(resetReq.getPhone(), resetReq.getCode(), SmsType.RESET_PWD);
 
-        return LoginBO.builder()
-                    .userId(userId)
-                    .enterpriseId(enterpriseId)
-                    .enterpriseName(enterpriseContext.name)
-                    .logoUrl(enterpriseContext.logoUrl)
-                    .enterprises(enterpriseContext.enterprises)
-                    .username(user.getUsername())
-                    .nickname(user.getNickname())
-                    .avatarUrl(user.getAvatarUrl())
-                    .userType(user.getUserType().name())
-                    .roles(platformRoleCodes)
-                    .permissions(rbacContext.permissions)
-                    .accessToken(token)
-                    .refreshToken(raw)
-                    .expiresIn(jwtProperties.getExpiration() * 60)
-                    .build();
+        // 密码修改成功后撤销该用户全部 Refresh Token，要求所有设备重新登录。
+        boolean updated = usersService.lambdaUpdate()
+                  .eq(User::getId, user.getId())
+                  .set(User::getPasswordHash, CryptoUtil.hashPassword(resetReq.getNewPassword()))
+                  .set(User::getUpdatedAt, OffsetDateTime.now())
+                .update();
+        if (!updated) {
+            throw new BusinessException(ErrorCode.ACCOUNT_DATA_ANOMALY);
+        }
+        lambdaUpdate()
+                .eq(UserToken::getUserId, user.getId())
+                  .eq(UserToken::getIsRevoked, false)
+                  .set(UserToken::getIsRevoked, true)
+                  .set(UserToken::getTraceId, null)
+                  .update();
     }
 
     @Override
@@ -179,7 +182,7 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
                 .one();
 
         if (token == null) {
-            log.error("异常的登录状态,refreshToken：[{}]不存在或过期", refreshToken);
+            log.error("异常的登录状态：Refresh Token 不存在或已过期");
             throw new BusinessException(ErrorCode.ACCOUNT_DATA_ANOMALY);
         }
 
@@ -206,7 +209,7 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
         }
 
         // 触发重放检测
-        if (token.getIsRevoked()){
+        if (Boolean.TRUE.equals(token.getIsRevoked())){
             log.error("检测到过期Refresh Token 再次被使用! userId:[{}], IP:[{}]", userId, ipAddress);
 
             boolean updated = lambdaUpdate()
@@ -225,28 +228,6 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
 
         // 生成refreshToken
         String raw = checkAndGetUserToken(userId, token.getDeviceInfo(), ipAddress);
-
-        // 验证accessToken
-        String access = refresh.getAccessToken();
-        Claims claims;
-        try{
-            claims = jwttUtil.parseToken(access);
-        }catch (ExpiredJwtException e){
-            claims = e.getClaims();
-        }catch (Exception e){
-            throw new BusinessException(ErrorCode.TOKEN_INVALID);
-        }
-
-        long expire = claims.getExpiration().getTime() - System.currentTimeMillis();
-        if (expire > 0) {
-            // 如果accessToken未过期，则加入黑名单
-            stringRedisTemplate.opsForValue().set(
-                    AuthKeyConstant.getTokenBanKey(access),
-                    "1",
-                    expire,
-                    TimeUnit.MILLISECONDS
-            );
-        }
 
         // 加载企业信息、用户信息 和 角色权限信息
         EnterpriseContext enterpriseContext = loadEnterpriseContext(userId);
@@ -272,7 +253,7 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
         return RefreshTokenVO.builder()
                     .accessToken(accessToken)
                     .refreshToken(raw)
-                    .expiresIn(jwtProperties.getExpiration() * 60)
+                    .expiresInSeconds(jwtProperties.getExpiration() * 60)
                     .build();
     }
 
@@ -325,15 +306,14 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
 
         return SwitchEnterpriseVO.builder()
                 .accessToken(newToken)
-                .expiresIn(jwtProperties.getExpiration() * 60L)
+                .expiresInSeconds(jwtProperties.getExpiration() * 60L)
                 .build();
     }
 
     @Override
     @Transactional(rollbackFor = BusinessException.class)
-    public void logout(LogoutReq logout) {
+    public void logout(LogoutReq logout, String accessToken) {
 
-        String accessToken = logout.getAccessToken();
         try{
             Claims claims = jwttUtil.parseToken(accessToken);
             Date expiration = claims.getExpiration();
@@ -548,7 +528,7 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
                 .username(user.getUsername())
                 .accessToken(jwtToken)
                 .refreshToken(raw)
-                .expiresIn(jwtProperties.getExpiration() * 60L)
+                .expiresInSeconds(jwtProperties.getExpiration() * 60L)
                 .build();
     }
 
@@ -580,6 +560,71 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
             throw new BusinessException(ErrorCode.PASSWORD_ERROR);
         }
         return user;
+    }
+
+    private User getLoginUserByPhone(String phone) {
+        User user = usersService.lambdaQuery()
+                .select(
+                        User::getId,
+                        User::getUsername,
+                        User::getPhone,
+                        User::getEmail,
+                        User::getNickname,
+                        User::getAvatarUrl,
+                        User::getUserType,
+                        User::getRiskLevel,
+                        User::getStatus
+                )
+                .eq(User::getPhone, phone)
+                .one();
+        if (user == null) {
+            throw new BusinessException(ErrorCode.USER_NOT_FOUND);
+        }
+        if (user.getStatus() != UserStatus.NORMAL) {
+            throw new BusinessException(ErrorCode.USER_ALREADY_FREEZE);
+        }
+        return user;
+    }
+
+    private LoginBO buildLoginResult(User user, String deviceInfo, String clientIp) {
+        Long userId = user.getId();
+
+        // 创建新设备令牌并加载企业、角色和权限上下文。
+        String raw = checkAndGetUserToken(userId, deviceInfo, clientIp);
+        EnterpriseContext enterpriseContext = loadEnterpriseContext(userId);
+        RbacContext rbacContext = loadRbacContext(userId, enterpriseContext.enterpriseId);
+        List<String> platformRoleCodes = rbacContext.platformRoleCodes;
+
+        // 生成携带当前授权快照的短时 Access Token。
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("userId", userId);
+        claims.put("username", user.getUsername());
+        claims.put("userType", user.getUserType().name());
+        claims.put("riskLevel", user.getRiskLevel().getCode());
+        claims.put("platformRoleCodes", platformRoleCodes);
+        claims.put("entRoleMap", rbacContext.entRoleMap);
+        Long enterpriseId = enterpriseContext.enterpriseId;
+        if (enterpriseId != null) {
+            claims.put("enterpriseId", enterpriseId);
+        }
+        String token = jwttUtil.generatorToken(claims, userId);
+
+        return LoginBO.builder()
+                .userId(userId)
+                .enterpriseId(enterpriseId)
+                .enterpriseName(enterpriseContext.name)
+                .logoUrl(enterpriseContext.logoUrl)
+                .enterprises(enterpriseContext.enterprises)
+                .username(user.getUsername())
+                .nickname(user.getNickname())
+                .avatarUrl(user.getAvatarUrl())
+                .userType(user.getUserType().name())
+                .roles(platformRoleCodes)
+                .permissions(rbacContext.permissions)
+                .accessToken(token)
+                .refreshToken(raw)
+                .expiresInSeconds(jwtProperties.getExpiration() * 60)
+                .build();
     }
 
     private String checkAndGetUserToken(Long userId,String deviceInfo,String ipAddress){

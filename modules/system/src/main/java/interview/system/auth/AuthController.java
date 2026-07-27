@@ -72,16 +72,32 @@ public class AuthController {
     @Operation(summary = "用户登录")
     @PostMapping("/login")
     public Result<LoginVO> login(@RequestBody @Valid LoginReq loginReq) {
-        LoginBO login = authService.login(loginReq);
+        LoginBO login = authService.login(loginReq, request.getRemoteAddr());
         LoginVO loginVO = authConverter.toLoginVO(login);
         return Result.success(loginVO);
+    }
+
+    @Operation(summary = "手机号验证码登录")
+    @PostMapping("/login/sms")
+    public Result<LoginVO> loginBySms(@RequestBody @Valid SmsLoginReq loginReq) {
+        // 客户端 IP 只从服务端请求上下文取得，禁止客户端请求体覆盖。
+        LoginBO login = authService.loginBySms(loginReq, request.getRemoteAddr());
+        return Result.success(authConverter.toLoginVO(login));
+    }
+
+    @Operation(summary = "使用短信验证码重置密码")
+    @PostMapping("/password/reset")
+    public Result<Void> resetPassword(@RequestBody @Valid PasswordResetReq resetReq) {
+        authService.resetPassword(resetReq);
+        return Result.success();
     }
 
     @MaxRiskLevel(RiskLevel.HIGH_RISK)
     @Operation(summary = "用户登出")
     @PostMapping("/logout")
     public Result<Void> logout(@RequestBody @Valid LogoutReq logout) {
-        authService.logout(logout);
+        String accessToken = StrUtil.removePrefix(request.getHeader("Authorization"), "Bearer ");
+        authService.logout(logout, accessToken);
         return Result.success();
     }
 

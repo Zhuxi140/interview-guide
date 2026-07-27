@@ -24,16 +24,22 @@ spring:
   sql:
     init:
       mode: always
-      schema-locations: classpath:sql/1/phase1-init.sql
+      # 新环境统一从已合并的当前阶段脚本初始化；旧环境使用 sql/upgrade 下的模块升级脚本。
+      schema-locations: classpath:sql/init.sql
       #data-locations:
 
   ai:
     vectorstore:
       pgvector:
-        initialize-schema: true
+        # 当前 PostgreSQL 14 镜像未安装 pgvector；Phase 7 启用向量检索时更换镜像后再开启。
+        initialize-schema: false
     openai:
-      api-key: xx
-      base-url: ddd
+      api-key: ${API_KEY}
+      base-url: https://ws-8erhtjf02it7xo3t.cn-beijing.maas.aliyuncs.com/compatible-mode/v1
+      chat:
+        options:
+          model: qwen-max
+
 app:
   storage:
     endpoint: http://localhost:9000    # RustFS 服务地址

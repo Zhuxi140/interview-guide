@@ -4,6 +4,7 @@ import interview.job.model.enums.JobStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Pattern;
 import lombok.Data;
 
 /**
@@ -28,4 +29,12 @@ public class JobListQuery {
 
     @Schema(description = "搜索关键词")
     private String keyword;
+
+    @Pattern(regexp = "^createdAt$", message = "仅支持按 createdAt 排序")
+    @Schema(description = "排序字段", example = "createdAt")
+    private String sort = "createdAt";
+
+    @Pattern(regexp = "^(?i)(asc|desc)$", message = "排序方向仅支持 asc / desc")
+    @Schema(description = "排序方向", example = "desc")
+    private String order = "desc";
 }

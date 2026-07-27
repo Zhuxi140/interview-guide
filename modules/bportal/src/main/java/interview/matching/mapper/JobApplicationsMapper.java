@@ -22,15 +22,19 @@ import org.apache.ibatis.annotations.Param;
  */
 public interface JobApplicationsMapper extends BaseMapper<JobApplications> {
 
+    int insertIgnore(JobApplications application);
+
     IPage<JobApplicationListBO> pageApplicationsWithJoin(IPage<?> page,
                                                          @Param("enterpriseId") Long enterpriseId,
                                                          @Param("jobId") Long jobId,
-                                                         @Param("status") JobApplicationStatus status);
+                                                         @Param("status") JobApplicationStatus status,
+                                                         @Param("ascending") boolean ascending);
 
     JobApplicationBO getApplicationWithJoin(@Param("enterpriseId") Long enterpriseId,
                                             @Param("applicationId") Long applicationId);
 
     IPage<MyApplicationListBO> pageMyApplicationsWithJoin(IPage<?> page,
                                                           @Param("candidateId") Long candidateId,
-                                                          @Param("status") JobApplicationStatus status);
+                                                          @Param("status") JobApplicationStatus status,
+                                                          @Param("ascending") boolean ascending);
 }

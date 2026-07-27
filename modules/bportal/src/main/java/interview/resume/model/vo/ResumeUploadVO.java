@@ -16,8 +16,8 @@ public record ResumeUploadVO(
         String fileName,
         @Schema(description = "文件大小（字节）")
         Long fileSize,
-        @Schema(description = "文件类型")
-        String fileType,
+        @Schema(description = "服务端检测的媒体类型")
+        String detectedMediaType,
         @Schema(description = "分析状态")
         AnalyzeStatus analyzeStatus,
         @Schema(description = "创建时间")

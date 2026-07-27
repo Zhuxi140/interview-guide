@@ -15,10 +15,13 @@ import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.*;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.LocalDateTime;
+import java.time.Duration;
 import java.time.format.DateTimeFormatter;
 import java.util.Set;
 
@@ -28,6 +31,7 @@ import java.util.Set;
 public class FileStorageService implements FileStorageApi {
 
     private final S3Client s3Client;
+    private final S3Presigner s3Presigner;
     private final StorageConfigProperties properties;
 
     Set<String> allowedTypes = Set.of(
@@ -194,5 +198,28 @@ public class FileStorageService implements FileStorageApi {
         }
 
         return realType;
+    }
+
+    @Override
+    public String generatePresignedDownloadUrl(String key, Duration duration) {
+        if (StrUtil.isBlank(key)) {
+            throw new BusinessException(ErrorCode.INVALID_FILENAME);
+        }
+
+        // 预签名地址只授予指定对象的短期读取权限。
+        GetObjectRequest objectRequest = GetObjectRequest.builder()
+                .bucket(properties.getBucket())
+                .key(key)
+                .build();
+        GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
+                .signatureDuration(duration)
+                .getObjectRequest(objectRequest)
+                .build();
+        try {
+            return s3Presigner.presignGetObject(presignRequest).url().toString();
+        } catch (Exception e) {
+            log.error("生成文件预签名下载地址失败: {}", key, e);
+            throw new BusinessException(ErrorCode.FILE_DOWNLOAD_FAILED);
+        }
     }
 }

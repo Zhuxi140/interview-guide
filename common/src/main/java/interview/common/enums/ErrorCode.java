@@ -23,7 +23,7 @@ public enum ErrorCode {
     DATA_TYPE_ERROR(10002, "数据类型错误"),
     OBJECT_TO_JSON_ERROR(10003, "JSON 序列化错误"),
     JSON_TO_OBJECT_ERROR(10004, "JSON 反序列化错误"),
-    TRACE_ID_MISSING(10005, "调用链 ID 缺失"),
+    TRACE_ID_MISSING(10005, "服务端未能建立调用链 ID"),
     ENCRYPTION_ERROR(10006, "加密失败"),
     DECRYPTION_ERROR(10007, "解密失败"),
     FILE_UPLOAD_FAILED(10008, "文件上传失败,请稍后重试或联系客服"),
@@ -50,7 +50,7 @@ public enum ErrorCode {
     EMAIL_ALREADY_EXISTS(20007, "邮箱已注册"),
     REFRESH_TOKEN_EXPIRED(20008, "Refresh Token 已过期，请重新登录"),
     REFRESH_TOKEN_REVOKED(20009, "Refresh Token 已被撤销"),
-    DEVICE_LIMIT_EXCEEDED(20010, "登录设备数量超过限制"),
+    DEVICE_LIMIT_EXCEEDED(20018, "登录设备数量超过限制"),
     USER_NOT_FOUND(20011, "用户不存在"),
     PASSWORD_ERROR(20012, "密码错误"),
     ACCOUNT_DISABLED(20013, "账号已被禁用"),
@@ -111,8 +111,9 @@ public enum ErrorCode {
     FILE_SIZE_TOO_LARGE_OR_EMPTY(40015,"上传文件为空或者过大(>10MB)"),
     FILE_IS_EXISTS(40016,"文件已存在"),
     RESUME_IS_NOT_YOUR(40017,"请投递自己的简历"),
-    NOT_AGAIN_APPLY(40018,"请勿重复投递"),
     RESUME_MOST_IS_FIVE(40019,"简历最多只能有5份,请先删除一份，再上传简历"),
+    JOB_VERSION_CONFLICT(40020,"岗位已被其他请求修改，请刷新后重试"),
+    IDEMPOTENCY_KEY_CONFLICT(40021,"幂等键已用于其他投递请求"),
 
     // ------------ 50xxx 文本/面试流程错误码 ------------
     INTERVIEW_SCHEDULE_NOT_FOUND(50001, "面试排期不存在"),
@@ -211,7 +212,7 @@ public enum ErrorCode {
 
     // ------------ 14xxx 本地消息管理错误码 ------------
     LOCAL_MESSAGE_NOT_FOUND(140001, "本地消息不存在"),
-    LOCAL_MESSAGE_STATUS_INVALID(140002, "本地消息状态不合法，仅允许重试 PENDING 或 FAILED 状态的消息"),
+    LOCAL_MESSAGE_STATUS_INVALID(140002, "本地消息状态不合法，仅允许重试 FAILED 状态的消息"),
     LOCAL_MESSAGE_RETRY_FAILED(140003, "本地消息重试执行失败"),
     LOCAL_MESSAGE_RETRY_LIMIT_EXCEEDED(140004, "本地消息重试次数已达上限"),
     ;

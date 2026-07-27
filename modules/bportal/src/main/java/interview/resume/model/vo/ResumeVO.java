@@ -16,18 +16,12 @@ import java.time.OffsetDateTime;
 public record ResumeVO(
         @Schema(description = "简历ID")
         Long id,
-        @Schema(description = "用户ID")
-        Long userId,
         @Schema(description = "文件名")
         String fileName,
         @Schema(description = "文件大小（字节）")
         Long fileSize,
-        @Schema(description = "文件类型")
-        String fileType,
-        @Schema(description = "文件哈希")
-        String fileHash,
-        @Schema(description = "存储URL")
-        String storageUrl,
+        @Schema(description = "服务端检测的媒体类型")
+        String detectedMediaType,
         @Schema(description = "简历文本内容")
         String resumeText,
         @Schema(description = "分析状态")

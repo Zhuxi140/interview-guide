@@ -8,6 +8,6 @@ public record RegisterBo(
         String username,
         String accessToken,
         String refreshToken,
-        Long expiresIn
+        Long expiresInSeconds
 ) {
 }

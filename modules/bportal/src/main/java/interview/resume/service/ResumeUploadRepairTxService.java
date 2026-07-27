@@ -18,6 +18,7 @@ import java.time.OffsetDateTime;
 
 /**
  * 单条简历上传死记录修复事务。
+ * @author zhuxi
  */
 @Service
 @RequiredArgsConstructor

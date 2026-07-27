@@ -3,7 +3,6 @@ package interview.system.rbac.service;
 import com.baomidou.mybatisplus.extension.service.IService;
 import interview.system.rbac.model.entity.UserRole;
 import interview.system.rbac.model.req.AssignUserRolesReq;
-import interview.system.rbac.model.req.RemoveUserRolesReq;
 import interview.system.rbac.model.vo.UserRoleItemVO;
 
 import java.util.List;
@@ -30,10 +29,10 @@ public interface UserRolesService extends IService<UserRole> {
     List<UserRoleItemVO> getUserRoles(Long userId);
 
     /**
-     * 移除用户角色
+     * 移除用户的单个平台角色
      * @param userId 用户ID
-     * @param req 角色ID列表
+     * @param roleId 角色ID
      */
-    void removeUserRoles(Long userId, RemoveUserRolesReq req);
+    void removeUserRole(Long userId, Integer roleId);
 
 }

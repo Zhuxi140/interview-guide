@@ -58,12 +58,17 @@ public class JobApplications implements Serializable {
     private Long resumeId;
 
     /**
+     * 客户端请求幂等键
+     */
+    private String idempotencyKey;
+
+    /**
      * 大模型计算的人岗匹配度打分
      */
     private Integer aiMatchScore;
 
     /**
-     * APPLIED / REVIEWING / PASSED / REJECTED
+     * APPLIED / REVIEWING / PASSED / REJECTED / WITHDRAWN
      */
     private JobApplicationStatus status;
 

@@ -3,6 +3,7 @@ package interview.matching.service;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.baomidou.mybatisplus.core.toolkit.IdWorker;
 import interview.api.system.EnterpriseValidationApi;
 import interview.api.system.UserApi;
 import interview.common.enums.ErrorCode;
@@ -18,17 +19,12 @@ import interview.matching.model.bo.JobApplicationListBO;
 import interview.matching.model.bo.MyApplicationListBO;
 import interview.matching.model.entity.JobApplications;
 import interview.matching.model.enums.JobApplicationStatus;
-import interview.matching.model.req.JobApplicationStatusReq;
-import interview.matching.model.req.JobApplicationSubmitReq;
-import interview.matching.model.vo.JobApplicationListItemVO;
-import interview.matching.model.vo.JobApplicationSubmitVO;
-import interview.matching.model.vo.JobApplicationVO;
-import interview.matching.model.vo.MyApplicationListItemVO;
+import interview.matching.model.req.*;
+import interview.matching.model.vo.*;
 import interview.resume.model.entity.Resumes;
 import interview.resume.service.ResumesService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -52,7 +48,8 @@ public class JobApplicationsServiceImpl extends ServiceImpl<JobApplicationsMappe
 
     @Override
     @Transactional(rollbackFor = BusinessException.class)
-    public JobApplicationSubmitVO submitApplication(Long jobId, JobApplicationSubmitReq req) {
+    public JobApplicationSubmitVO submitApplication(
+            Long jobId, JobApplicationSubmitReq req, String idempotencyKey) {
         Long userId = AuthContext.getRequiredUserId();
 
         // ① 校验当前用户 userType = CANDIDATE
@@ -87,31 +84,43 @@ public class JobApplicationsServiceImpl extends ServiceImpl<JobApplicationsMappe
 
         // ④ 构造投递记录，由数据库唯一索引兜底防重复
         JobApplications jobApplications = JobApplications.builder()
+                .id(IdWorker.getId())
                 .enterpriseId(job.getEnterpriseId())
                 .jobId(jobId)
                 .candidateId(userId)
                 .resumeId(req.getResumeId())
+                .idempotencyKey(idempotencyKey)
                 .status(JobApplicationStatus.APPLIED)
+                .createdAt(OffsetDateTime.now())
                 .build();
 
-        try {
-            save(jobApplications);
-        } catch (DataIntegrityViolationException e) {
-            log.error("重复投递: jobId={}, candidateId={}, resumeId={}", jobId, userId, req.getResumeId(), e);
-            throw new BusinessException(ErrorCode.NOT_AGAIN_APPLY);
+        int inserted = jobApplicationsMapper.insertIgnore(jobApplications);
+        if (inserted == 0) {
+            // 同一幂等键重放时返回原结果；不同请求重复投递仍按业务冲突处理。
+            JobApplications existing = lambdaQuery()
+                    .select(JobApplications::getId, JobApplications::getEnterpriseId,
+                            JobApplications::getJobId, JobApplications::getResumeId,
+                            JobApplications::getStatus,
+                            JobApplications::getCreatedAt)
+                    .eq(JobApplications::getCandidateId, userId)
+                    .eq(JobApplications::getIdempotencyKey, idempotencyKey)
+                    .one();
+            if (existing != null) {
+                if (!jobId.equals(existing.getJobId())
+                        || !req.getResumeId().equals(existing.getResumeId())) {
+                    throw new BusinessException(ErrorCode.IDEMPOTENCY_KEY_CONFLICT);
+                }
+                return toSubmitVO(existing);
+            }
+            throw new BusinessException(ErrorCode.JOB_APPLICATION_ALREADY_EXISTS);
         }
 
-        return JobApplicationSubmitVO.builder()
-                .id(jobApplications.getId())
-                .enterpriseId(job.getEnterpriseId())
-                .jobId(jobId)
-                .status(JobApplicationStatus.APPLIED)
-                .createdAt(jobApplications.getCreatedAt())
-                .build();
+        return toSubmitVO(jobApplications);
     }
 
     @Override
-    public IPage<JobApplicationListItemVO> pageApplications(Long enterpriseId, Long jobId, Integer page, Integer size, JobApplicationStatus status) {
+    public IPage<JobApplicationListItemVO> pageApplications(
+            Long enterpriseId, Long jobId, JobApplicationPageReq req) {
         // 纯CRUD
         //TODO 【HR 端分页查询投递列表】
         // ① 校验：enterpriseValidationApi.validateEnterpriseBelong(enterpriseId, AuthContext.getRequiredUserId())
@@ -121,15 +130,16 @@ public class JobApplicationsServiceImpl extends ServiceImpl<JobApplicationsMappe
         boolean exists = jobService.lambdaQuery()
                 .eq(Job::getEnterpriseId, enterpriseId)
                 .eq(Job::getId, jobId)
-                .eq(Job::getStatus, JobStatus.OPEN)
                 .exists();
         if (!exists){
             throw new BusinessException(ErrorCode.JOB_NOT_FOUND);
         }
         // ③ 构建 Page 分页对象
-        Page<JobApplications> pageObj = new Page<>(page, size);
+        Page<JobApplications> pageObj = new Page<>(req.getPage(), req.getSize());
         // ④ 调用 jobApplicationsMapper.pageApplicationsWithJoin(IPage, enterpriseId, jobId, status)
-        IPage<JobApplicationListBO> boPage = jobApplicationsMapper.pageApplicationsWithJoin(pageObj, enterpriseId, jobId, status);
+        IPage<JobApplicationListBO> boPage = jobApplicationsMapper.pageApplicationsWithJoin(
+                pageObj, enterpriseId, jobId, req.getStatus(),
+                "asc".equalsIgnoreCase(req.getOrder()));
         List<JobApplicationListBO> records = boPage.getRecords();
         List<Long> userIds = records.stream()
                 .map(JobApplicationListBO::candidateId)
@@ -192,51 +202,46 @@ public class JobApplicationsServiceImpl extends ServiceImpl<JobApplicationsMappe
 
     @Override
     @Transactional(rollbackFor = BusinessException.class)
-    public void updateApplicationStatus(Long enterpriseId, Long applicationId, JobApplicationStatusReq req) {
-        // 纯CRUD
-        //TODO 【HR 更新投递状态】
-
-        // ①排除 APPLIED：不允许回退到"已投递"状态，否则抛 40011（非法值由 Jackson 枚举反序列化兜底）
-        if (req.getStatus().equals(JobApplicationStatus.APPLIED)){
+    public JobApplicationStatusVO updateApplicationStatus(
+            Long enterpriseId, Long applicationId, JobApplicationStatusReq req) {
+        // HR 初筛只允许按状态机向前流转或淘汰。
+        if (!isHrTransitionAllowed(req.getExpectedStatus(), req.getStatus())) {
             throw new BusinessException(ErrorCode.JOB_APPLICATION_STATUS_INVALID);
         }
 
         // ②校验：enterpriseValidationApi.validateEnterpriseBelong(enterpriseId, AuthContext.getRequiredUserId())
         enterpriseValidationApi.validateEnterpriseBelong(enterpriseId, AuthContext.getRequiredUserId());
 
-        // 检查记录是否存在
-        boolean exists = lambdaQuery()
-                .eq(JobApplications::getId, applicationId)
-                .eq(JobApplications::getEnterpriseId, enterpriseId)
-                .exists();
-
-        if (!exists){
-            throw new BusinessException(ErrorCode.APPLICATION_NOT_FOUND);
-        }
-
-        // ③ 构造条件更新：id + enterpriseId + isDeleted=false，set status + updatedBy + updatedAt
+        // 使用路径资源、租户和期望状态完成原子条件更新。
         Long userId = AuthContext.getRequiredUserId();
-        lambdaUpdate()
+        OffsetDateTime updatedAt = OffsetDateTime.now();
+        boolean updated = lambdaUpdate()
                 .eq(JobApplications::getEnterpriseId, enterpriseId)
                 .eq(JobApplications::getId, applicationId)
+                .eq(JobApplications::getStatus, req.getExpectedStatus())
                 .set(JobApplications::getStatus, req.getStatus())
                 .set(JobApplications::getUpdatedBy,userId)
                 .set(JobApplications::getTraceId, null)
-                // TODO: traceId完善后，要传入
-                .set(JobApplications::getUpdatedAt, OffsetDateTime.now())
+                .set(JobApplications::getUpdatedAt, updatedAt)
                 .update();
+        if (!updated) {
+            throwStatusConflictOrNotFound(enterpriseId, applicationId);
+        }
+        return new JobApplicationStatusVO(applicationId, req.getStatus(), updatedAt);
     }
 
     @Override
-    public IPage<MyApplicationListItemVO> pageMyApplications(Integer page, Integer size, JobApplicationStatus status) {
+    public IPage<MyApplicationListItemVO> pageMyApplications(JobApplicationPageReq req) {
         // 纯CRUD
         //TODO 【C 端分页查询我的投递记录】
         // ① 从 AuthContext.getRequiredUserId() 获取当前用户 ID 作为 candidateId
         Long candidateId = AuthContext.getRequiredUserId();
         // ② 构建 Page 分页对象
-        Page<JobApplications> rawPage = new Page<>(page,size);
+        Page<JobApplications> rawPage = new Page<>(req.getPage(), req.getSize());
         // ③ 调用 jobApplicationsMapper.pageMyApplicationsWithJoin(IPage, candidateId, status)
-        IPage<MyApplicationListBO> boPage = jobApplicationsMapper.pageMyApplicationsWithJoin(rawPage, candidateId, status);
+        IPage<MyApplicationListBO> boPage = jobApplicationsMapper.pageMyApplicationsWithJoin(
+                rawPage, candidateId, req.getStatus(),
+                "asc".equalsIgnoreCase(req.getOrder()));
 
         List<MyApplicationListBO> records = boPage.getRecords();
         List<Long> enterpriseIds = records.stream()
@@ -263,6 +268,71 @@ public class JobApplicationsServiceImpl extends ServiceImpl<JobApplicationsMappe
         voPage.setRecords(vos);
         return voPage;
 
+    }
+
+    @Override
+    @Transactional(rollbackFor = BusinessException.class)
+    public JobApplicationStatusVO withdrawApplication(
+            Long applicationId, JobApplicationWithdrawReq req) {
+        Long candidateId = AuthContext.getRequiredUserId();
+        if (AuthContext.getUserType() != UserType.CANDIDATE
+                || (req.getExpectedStatus() != JobApplicationStatus.APPLIED
+                && req.getExpectedStatus() != JobApplicationStatus.REVIEWING)) {
+            throw new BusinessException(ErrorCode.JOB_APPLICATION_STATUS_INVALID);
+        }
+
+        // 撤回只允许当前候选人从 APPLIED/REVIEWING 原子推进到 WITHDRAWN。
+        OffsetDateTime updatedAt = OffsetDateTime.now();
+        boolean updated = lambdaUpdate()
+                .eq(JobApplications::getId, applicationId)
+                .eq(JobApplications::getCandidateId, candidateId)
+                .eq(JobApplications::getStatus, req.getExpectedStatus())
+                .set(JobApplications::getStatus, JobApplicationStatus.WITHDRAWN)
+                .set(JobApplications::getUpdatedBy, candidateId)
+                .set(JobApplications::getTraceId, null)
+                .set(JobApplications::getUpdatedAt, updatedAt)
+                .update();
+        if (!updated) {
+            boolean exists = lambdaQuery()
+                    .eq(JobApplications::getId, applicationId)
+                    .eq(JobApplications::getCandidateId, candidateId)
+                    .exists();
+            throw new BusinessException(exists
+                    ? ErrorCode.JOB_APPLICATION_STATUS_INVALID
+                    : ErrorCode.APPLICATION_NOT_FOUND);
+        }
+        return new JobApplicationStatusVO(
+                applicationId, JobApplicationStatus.WITHDRAWN, updatedAt);
+    }
+
+    private JobApplicationSubmitVO toSubmitVO(JobApplications application) {
+        return JobApplicationSubmitVO.builder()
+                .id(application.getId())
+                .enterpriseId(application.getEnterpriseId())
+                .jobId(application.getJobId())
+                .status(application.getStatus())
+                .createdAt(application.getCreatedAt())
+                .build();
+    }
+
+    private boolean isHrTransitionAllowed(
+            JobApplicationStatus expected, JobApplicationStatus target) {
+        return (expected == JobApplicationStatus.APPLIED
+                && (target == JobApplicationStatus.REVIEWING
+                || target == JobApplicationStatus.REJECTED))
+                || (expected == JobApplicationStatus.REVIEWING
+                && (target == JobApplicationStatus.PASSED
+                || target == JobApplicationStatus.REJECTED));
+    }
+
+    private void throwStatusConflictOrNotFound(Long enterpriseId, Long applicationId) {
+        boolean exists = lambdaQuery()
+                .eq(JobApplications::getId, applicationId)
+                .eq(JobApplications::getEnterpriseId, enterpriseId)
+                .exists();
+        throw new BusinessException(exists
+                ? ErrorCode.JOB_APPLICATION_STATUS_INVALID
+                : ErrorCode.APPLICATION_NOT_FOUND);
     }
 
 }

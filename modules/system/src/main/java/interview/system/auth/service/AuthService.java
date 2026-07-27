@@ -30,9 +30,24 @@ public interface AuthService extends IService<UserToken> {
     /**
      * 登录
      * @param loginReq 登录信息
+     * @param clientIp 服务端识别的客户端 IP
      * @return 登录结果
      */
-    LoginBO login(LoginReq loginReq);
+    LoginBO login(LoginReq loginReq, String clientIp);
+
+    /**
+     * 手机验证码登录
+     * @param loginReq 手机验证码登录信息
+     * @param clientIp 服务端识别的客户端 IP
+     * @return 登录结果
+     */
+    LoginBO loginBySms(SmsLoginReq loginReq, String clientIp);
+
+    /**
+     * 使用短信验证码重置密码
+     * @param resetReq 重置密码信息
+     */
+    void resetPassword(PasswordResetReq resetReq);
 
     /**
      * 刷新token
@@ -44,8 +59,9 @@ public interface AuthService extends IService<UserToken> {
     /**
      * 登出
      * @param logout 登出信息
+     * @param accessToken 当前请求头中的 Access Token
      */
-    void logout(LogoutReq logout);
+    void logout(LogoutReq logout, String accessToken);
 
     /**
      * 获取用户在线设备(Token)列表

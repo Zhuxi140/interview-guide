@@ -12,6 +12,7 @@ import lombok.Getter;
 @AllArgsConstructor
 public enum JobStatus {
 
+    DRAFT(2,"草稿"),
     OPEN(1,"招聘中"),
     CLOSED(0,"暂停招聘/已满");
 

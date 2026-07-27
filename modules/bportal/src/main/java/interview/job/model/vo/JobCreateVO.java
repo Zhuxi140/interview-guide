@@ -20,6 +20,8 @@ public record JobCreateVO(
         String title,
         @Schema(description = "岗位状态")
         JobStatus status,
+        @Schema(description = "并发版本号")
+        Integer version,
         @Schema(description = "发布时间")
         @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
         OffsetDateTime createdAt

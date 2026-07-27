@@ -186,7 +186,6 @@ class AuthServiceImplTest {
             req.setUsername(username);
             req.setPassword(password);
             req.setDeviceInfo(deviceInfo);
-            req.setIpAddress(ipAddress);
         }
 
         @Test
@@ -201,7 +200,7 @@ class AuthServiceImplTest {
                 mockEnterpriseContext_noEnterprise();
                 mockRbacContext();
 
-                LoginBO result = authService.login(req);
+                LoginBO result = authService.login(req, ipAddress);
 
                 assertNotNull(result);
                 assertEquals(userId, result.userId());
@@ -213,7 +212,8 @@ class AuthServiceImplTest {
         @Test
         void login_fail_userNotFound() {
             mockCheckAndGetUserNotFound();
-            BusinessException ex = assertThrows(BusinessException.class, () -> authService.login(req));
+            BusinessException ex = assertThrows(BusinessException.class,
+                    () -> authService.login(req, ipAddress));
             assertEquals(ErrorCode.USER_NOT_FOUND.getCode(), ex.getCode());
         }
 
@@ -222,7 +222,8 @@ class AuthServiceImplTest {
             try (MockedStatic<CryptoUtil> cryptoUtil = mockStatic(CryptoUtil.class)) {
                 cryptoUtil.when(() -> CryptoUtil.checkPassword(anyString(), anyString())).thenReturn(false);
                 mockCheckAndGetUser();
-                BusinessException ex = assertThrows(BusinessException.class, () -> authService.login(req));
+                BusinessException ex = assertThrows(BusinessException.class,
+                        () -> authService.login(req, ipAddress));
                 assertEquals(ErrorCode.PASSWORD_ERROR.getCode(), ex.getCode());
             }
         }
@@ -230,7 +231,8 @@ class AuthServiceImplTest {
         @Test
         void login_fail_userFrozen() {
             mockCheckAndGetUserFrozen();
-            BusinessException ex = assertThrows(BusinessException.class, () -> authService.login(req));
+            BusinessException ex = assertThrows(BusinessException.class,
+                    () -> authService.login(req, ipAddress));
             assertEquals(ErrorCode.USER_ALREADY_FREEZE.getCode(), ex.getCode());
         }
 
@@ -278,7 +280,7 @@ class AuthServiceImplTest {
                 mockEnterpriseContext_withEnterprise(enterpriseId);
                 mockRbacContext();
 
-                LoginBO result = authService.login(req);
+                LoginBO result = authService.login(req, ipAddress);
 
                 assertNotNull(result);
                 assertEquals(userId, result.userId());
@@ -355,7 +357,6 @@ class AuthServiceImplTest {
         void setUp() {
             req = new RefreshTokenReq();
             req.setRefreshToken(refreshToken);
-            req.setAccessToken(accessToken);
             doReturn(tokenQueryWrapper).when(authService).lambdaQuery();
         }
 
@@ -369,12 +370,10 @@ class AuthServiceImplTest {
 
             when(tokenQueryWrapper.one()).thenReturn(token);
             doReturn(tokenUpdateWrapper).when(authService).lambdaUpdate();
-            LambdaQueryChainWrapper<User> userCheckQ = mockQueryWrapper();
-            when(userCheckQ.exists()).thenReturn(true);
             LambdaQueryChainWrapper<User> userFreshQ = mockQueryWrapper();
             when(userFreshQ.one()).thenReturn(User.builder()
                 .username(username).userType(UserType.CANDIDATE).riskLevel(RiskLevel.NO_RISK).build());
-            when(usersService.lambdaQuery()).thenReturn(userCheckQ, userFreshQ);
+            when(usersService.lambdaQuery()).thenReturn(userFreshQ);
             when(tokenUpdateWrapper.update()).thenReturn(true);
             doReturn(true).when(authService).save(any(UserToken.class));
 
@@ -395,18 +394,14 @@ class AuthServiceImplTest {
 
             when(permissionsMapper.getPermCodeByRoleId(anyList())).thenReturn(List.of());
 
-            Claims claims = mock(Claims.class);
-            when(claims.getExpiration()).thenReturn(new Date(System.currentTimeMillis() + 5000));
-            when(jwttUtil.parseToken(accessToken)).thenReturn(claims);
             when(jwttUtil.generatorToken(anyMap(), eq(userId))).thenReturn("new-jwt-token");
-            when(stringRedisTemplate.opsForValue()).thenReturn(valueOps);
 
             RefreshTokenVO result = authService.refreshToken(req);
 
             assertNotNull(result);
             assertNotNull(result.accessToken());
             assertNotNull(result.refreshToken());
-            verify(stringRedisTemplate).opsForValue();
+            assertEquals(1800L, result.expiresInSeconds());
         }
 
         @Test
@@ -426,7 +421,9 @@ class AuthServiceImplTest {
             when(tokenQueryWrapper.one()).thenReturn(revokedToken);
             doReturn(tokenUpdateWrapper).when(authService).lambdaUpdate();
             LambdaQueryChainWrapper<User> userCheckQ = mockQueryWrapper();
-            when(userCheckQ.exists()).thenReturn(true);
+            when(userCheckQ.one()).thenReturn(User.builder()
+                    .username(username).userType(UserType.CANDIDATE)
+                    .riskLevel(RiskLevel.NO_RISK).status(UserStatus.NORMAL).build());
             when(usersService.lambdaQuery()).thenReturn(userCheckQ);
 
             BusinessException ex = assertThrows(BusinessException.class, () -> authService.refreshToken(req));
@@ -446,7 +443,6 @@ class AuthServiceImplTest {
             AuthContext.setAuthContext(AuthContext.AuthUser.builder()
                 .userId(userId).build());
             req = new LogoutReq();
-            req.setAccessToken(accessToken);
             req.setRefreshToken(refreshToken);
             doReturn(tokenUpdateWrapper).when(authService).lambdaUpdate();
         }
@@ -458,7 +454,7 @@ class AuthServiceImplTest {
             when(jwttUtil.parseToken(accessToken)).thenReturn(claims);
             when(stringRedisTemplate.opsForValue()).thenReturn(valueOps);
 
-            authService.logout(req);
+            authService.logout(req, accessToken);
 
             verify(valueOps).set(anyString(), anyString(), anyLong(), any());
             verify(tokenUpdateWrapper).update();
@@ -582,7 +578,7 @@ class AuthServiceImplTest {
 
             assertNotNull(result);
             assertEquals("new-jwt-token", result.accessToken());
-            assertEquals(1800L, result.expiresIn());
+            assertEquals(1800L, result.expiresInSeconds());
             verify(valueOps).set(anyString(), anyString(), anyLong(), any());
         }
 

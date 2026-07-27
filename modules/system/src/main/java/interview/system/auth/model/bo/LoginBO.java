@@ -20,5 +20,5 @@ public record LoginBO(
         List<String> permissions,
         String accessToken,
         String refreshToken,
-        Long expiresIn
+        Long expiresInSeconds
 ) { }
