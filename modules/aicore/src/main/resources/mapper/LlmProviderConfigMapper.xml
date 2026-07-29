@@ -1,5 +1,113 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="interview.ai.providerconfig.mapper.LlmProviderConfigMapper">
+<mapper namespace="interview.ai.config.mapper.LlmProviderConfigMapper">
 
+    <sql id="providerColumns">
+        lpc.id,
+        lpc.base_url,
+        lpc.api_key_ciphertext,
+        lpc.model,
+        lpc.model_type,
+        lpc.enabled,
+        lpc.version,
+        lpc.created_at,
+        lpc.is_deleted,
+        lpc.updated_by,
+        lpc.trace_id,
+        lpc.updated_at
+    </sql>
+
+    <select id="selectByIdIncludingDeleted"
+            resultType="interview.ai.config.model.entity.LlmProviderConfig">
+        SELECT
+            <include refid="providerColumns"/>
+        FROM llm_provider_config lpc
+        WHERE lpc.id = #{providerId}
+    </select>
+
+    <select id="lockByIdIncludingDeleted"
+            resultType="interview.ai.config.model.entity.LlmProviderConfig">
+        SELECT
+            <include refid="providerColumns"/>
+        FROM llm_provider_config lpc
+        WHERE lpc.id = #{providerId}
+        FOR UPDATE
+    </select>
+
+    <select id="lockProvidersByIds"
+            resultType="interview.ai.config.model.entity.LlmProviderConfig">
+        SELECT
+            <include refid="providerColumns"/>
+        FROM llm_provider_config lpc
+        WHERE lpc.id IN
+        <foreach collection="providerIds" item="providerId" open="(" separator="," close=")">
+            #{providerId}
+        </foreach>
+        ORDER BY lpc.id
+        FOR UPDATE
+    </select>
+
+    <update id="restoreDeletedProvider">
+        UPDATE llm_provider_config
+        SET base_url = #{provider.baseUrl},
+            api_key_ciphertext = #{provider.apiKeyCiphertext},
+            model = #{provider.model},
+            model_type = #{provider.modelType},
+            enabled = #{provider.enabled},
+            is_deleted = FALSE,
+            version = version + 1,
+            updated_by = #{provider.updatedBy},
+            trace_id = #{provider.traceId},
+            updated_at = #{provider.updatedAt}
+        WHERE id = #{provider.id}
+          AND is_deleted = TRUE
+          AND version = #{expectedVersion}
+    </update>
+
+    <update id="updateProviderByVersion">
+        UPDATE llm_provider_config
+        <set>
+            <if test="provider.baseUrl != null">
+                base_url = #{provider.baseUrl},
+            </if>
+            <if test="provider.apiKeyCiphertext != null">
+                api_key_ciphertext = #{provider.apiKeyCiphertext},
+            </if>
+            <if test="provider.model != null">
+                model = #{provider.model},
+            </if>
+            version = version + 1,
+            updated_by = #{provider.updatedBy},
+            trace_id = #{provider.traceId},
+            updated_at = #{provider.updatedAt}
+        </set>
+        WHERE id = #{provider.id}
+          AND is_deleted = FALSE
+          AND version = #{expectedVersion}
+    </update>
+
+    <update id="updateProviderStatusByVersion">
+        UPDATE llm_provider_config
+        SET enabled = #{provider.enabled},
+            version = version + 1,
+            updated_by = #{provider.updatedBy},
+            trace_id = #{provider.traceId},
+            updated_at = #{provider.updatedAt}
+        WHERE id = #{provider.id}
+          AND is_deleted = FALSE
+          AND version = #{expectedVersion}
+    </update>
+
+    <update id="deleteProviderByVersion">
+        UPDATE llm_provider_config
+        SET enabled = FALSE,
+            is_deleted = TRUE,
+            version = version + 1,
+            updated_by = #{provider.updatedBy},
+            trace_id = #{provider.traceId},
+            updated_at = #{provider.updatedAt}
+        WHERE id = #{provider.id}
+          AND is_deleted = FALSE
+          AND version = #{expectedVersion}
+    </update>
 </mapper>

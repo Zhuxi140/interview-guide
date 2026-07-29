@@ -68,8 +68,15 @@ public interface Perm {
         String PROVIDER_STATUS = "admin:llm:provider:status";
         String PROVIDER_DELETE = "admin:llm:provider:delete";
         String PROVIDER_TEST = "admin:llm:provider:test";
-        String SETTING_DETAIL = "admin:llm:setting:detail";
-        String SETTING_UPDATE = "admin:llm:setting:update";
+        String SCENE_LIST = "admin:llm:scene:list";
+        String SCENE_DETAIL = "admin:llm:scene:detail";
+        String SCENE_UPDATE = "admin:llm:scene:update";
+        String SCENE_STATUS = "admin:llm:scene:status";
+    }
+
+    interface AdminAi {
+        String ROUTE_LIST = "admin:ai:route:list";
+        String ROUTE_UPDATE = "admin:ai:route:update";
     }
 
     interface InterviewTemplate {

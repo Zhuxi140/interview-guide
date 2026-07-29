@@ -5,6 +5,7 @@ import interview.api.infra.LocalMessageApi;
 import interview.api.infra.dto.MessageDTO;
 import interview.common.enums.ErrorCode;
 import interview.common.exception.BusinessException;
+import interview.common.util.TraceUtil;
 import interview.resume.mapper.ResumesMapper;
 import interview.resume.message.ResumeCleanupMessageFactory;
 import interview.resume.model.entity.Resumes;
@@ -49,7 +50,7 @@ public class ResumeTxService {
         Resumes update = new Resumes();
         update.setAnalyzeStatus(AnalyzeStatus.UPLOAD_FAILED);
         update.setUpdatedBy(current.getUserId());
-        update.setTraceId(null);
+        update.setTraceId(TraceUtil.getTraceId());
         update.setUpdatedAt(OffsetDateTime.now());
         boolean updated = resumesMapper.update(update, Wrappers.lambdaUpdate(Resumes.class)
                 .eq(Resumes::getId, resumeId)
@@ -71,7 +72,7 @@ public class ResumeTxService {
         deleteUpdate.setIsDeleted(true);
         deleteUpdate.setCleanupMessageId(cleanupMessageId);
         deleteUpdate.setUpdatedBy(current.getUserId());
-        deleteUpdate.setTraceId(null);
+        deleteUpdate.setTraceId(TraceUtil.getTraceId());
         deleteUpdate.setUpdatedAt(OffsetDateTime.now());
         if (resumesMapper.updateById(deleteUpdate) != 1) {
             throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED);
@@ -103,7 +104,7 @@ public class ResumeTxService {
         Resumes update = new Resumes();
         update.setAnalyzeStatus(AnalyzeStatus.UPLOAD_FAILED);
         update.setUpdatedBy(userId);
-        update.setTraceId(null);
+        update.setTraceId(TraceUtil.getTraceId());
         update.setUpdatedAt(now);
         boolean updated = resumesMapper.update(update, Wrappers.lambdaUpdate(Resumes.class)
                 .eq(Resumes::getId, resumeId)
@@ -128,7 +129,7 @@ public class ResumeTxService {
         deleteUpdate.setIsDeleted(true);
         deleteUpdate.setCleanupMessageId(cleanupMessageId);
         deleteUpdate.setUpdatedBy(userId);
-        deleteUpdate.setTraceId(null);
+        deleteUpdate.setTraceId(TraceUtil.getTraceId());
         deleteUpdate.setUpdatedAt(now);
         if (resumesMapper.updateById(deleteUpdate) != 1) {
             throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED);

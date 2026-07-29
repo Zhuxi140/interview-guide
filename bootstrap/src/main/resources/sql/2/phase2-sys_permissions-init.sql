@@ -1,6 +1,6 @@
 -- 第二阶段：sys_permissions + sys_role_permissions 初始化
 -- sys_role_permissions 无 id 字段，主键为 (role_id, permission_id)。
--- 本阶段占用 401-439；425 为已下线的任意消息状态修改权限。
+-- 本阶段占用 401-443；425 为已下线的任意消息状态修改权限。
 
 BEGIN;
 
@@ -72,10 +72,18 @@ INSERT INTO sys_permissions (id, perm_code, perm_type, api_path, status) VALUES
  'API', '/api/v1/admin/llm/providers/*', 1),
 (437, 'admin:llm:provider:test',
  'API', '/api/v1/admin/llm/providers/*/test-connection', 1),
-(438, 'admin:llm:setting:detail',
- 'API', '/api/v1/admin/llm/settings', 1),
-(439, 'admin:llm:setting:update',
- 'API', '/api/v1/admin/llm/settings', 1)
+(438, 'admin:ai:route:list',
+ 'API', '/api/v1/admin/ai/routes', 1),
+(439, 'admin:ai:route:update',
+ 'API', '/api/v1/admin/ai/routes/*', 1),
+(440, 'admin:llm:scene:list',
+ 'API', '/api/v1/admin/llm/scenes', 1),
+(441, 'admin:llm:scene:detail',
+ 'API', '/api/v1/admin/llm/scenes/*', 1),
+(442, 'admin:llm:scene:update',
+ 'API', '/api/v1/admin/llm/scenes/*', 1),
+(443, 'admin:llm:scene:status',
+ 'API', '/api/v1/admin/llm/scenes/*/status', 1)
 ON CONFLICT (id) DO UPDATE SET
     perm_code = EXCLUDED.perm_code,
     perm_type = EXCLUDED.perm_type,
@@ -84,9 +92,9 @@ ON CONFLICT (id) DO UPDATE SET
 
 -- 重建本阶段角色授权，清除旧脚本遗留的越权关系。
 DELETE FROM sys_role_permissions
-WHERE permission_id BETWEEN 401 AND 439;
+WHERE permission_id BETWEEN 401 AND 443;
 
--- SUPER_ADMIN：拥有全部 26 个第二阶段权限。
+-- SUPER_ADMIN：拥有全部 30 个第二阶段权限。
 INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
 (1001, 401, NOW()), (1001, 402, NOW()), (1001, 403, NOW()),
 (1001, 404, NOW()), (1001, 405, NOW()), (1001, 406, NOW()),
@@ -97,7 +105,9 @@ INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
 (1001, 424, NOW()),
 (1001, 431, NOW()), (1001, 432, NOW()), (1001, 433, NOW()),
 (1001, 434, NOW()), (1001, 435, NOW()), (1001, 436, NOW()),
-(1001, 437, NOW()), (1001, 438, NOW()), (1001, 439, NOW())
+(1001, 437, NOW()), (1001, 438, NOW()), (1001, 439, NOW()),
+(1001, 440, NOW()), (1001, 441, NOW()), (1001, 442, NOW()),
+(1001, 443, NOW())
 ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 -- PLATFORM_OPS：本地消息运维、Provider 脱敏查询和连接测试。
@@ -105,7 +115,7 @@ INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
 (1003, 421, NOW()), (1003, 422, NOW()), (1003, 423, NOW()),
 (1003, 424, NOW()),
 (1003, 432, NOW()), (1003, 433, NOW()), (1003, 437, NOW()),
-(1003, 438, NOW())
+(1003, 438, NOW()), (1003, 440, NOW()), (1003, 441, NOW())
 ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 -- 企业招聘角色：只访问本企业的投递资源，仍需接口层校验 enterpriseId。

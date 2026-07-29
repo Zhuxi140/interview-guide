@@ -6,6 +6,7 @@
 --       主键由应用层雪花算法生成，DDL 仅声明 BIGINT NOT NULL
 -- ============================================================
 
+BEGIN;
 
 -- ==================== 1. resumes ====================
 CREATE TABLE IF NOT EXISTS resumes (
@@ -61,11 +62,14 @@ CREATE TABLE IF NOT EXISTS resume_analyses (
     overall_score   INT,
     strengths_json  JSONB,
     suggestions_json JSONB,
-    analyzed_at     TIMESTAMPTZ     NOT NULL,
-    is_deleted      BOOLEAN         DEFAULT FALSE,
+    llm_config_snapshot JSONB        NOT NULL,
+    analyzed_at     TIMESTAMPTZ,
+    is_deleted      BOOLEAN         NOT NULL DEFAULT FALSE,
     trace_id        VARCHAR(128),
-    created_at      TIMESTAMPTZ     NOT NULL,
-    PRIMARY KEY (id)
+    created_at      TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    CONSTRAINT chk_resume_analysis_llm_snapshot
+        CHECK (jsonb_typeof(llm_config_snapshot) = 'object')
 );
 
 COMMENT ON TABLE resume_analyses IS '简历 AI 分析结果表';
@@ -74,7 +78,8 @@ COMMENT ON COLUMN resume_analyses.resume_id IS '[逻辑外键]→resumes';
 COMMENT ON COLUMN resume_analyses.overall_score IS 'AI 综合评分 (0-100)';
 COMMENT ON COLUMN resume_analyses.strengths_json IS '优点列表 (JSON)';
 COMMENT ON COLUMN resume_analyses.suggestions_json IS '改进建议 (JSON)';
-COMMENT ON COLUMN resume_analyses.analyzed_at IS '评测时间';
+COMMENT ON COLUMN resume_analyses.llm_config_snapshot IS '任务创建时固化的 LLM 场景、Provider、模型、参数及版本快照，不含密钥';
+COMMENT ON COLUMN resume_analyses.analyzed_at IS '分析完成时间；任务待执行或处理中为空';
 COMMENT ON COLUMN resume_analyses.is_deleted IS '逻辑删除';
 COMMENT ON COLUMN resume_analyses.trace_id IS '调用链 ID（追溯大模型响应）';
 COMMENT ON COLUMN resume_analyses.created_at IS '创建时间';
@@ -232,35 +237,167 @@ CREATE TABLE IF NOT EXISTS llm_provider_config (
     base_url            VARCHAR(512)    NOT NULL,
     api_key_ciphertext  TEXT            NOT NULL,
     model               VARCHAR(128)    NOT NULL,
-    enabled             BOOLEAN         NOT NULL,
-    created_at          TIMESTAMPTZ     NOT NULL,
-    is_deleted          BOOLEAN         DEFAULT FALSE,
-    PRIMARY KEY (id)
+    model_type          VARCHAR(32)     NOT NULL,
+    enabled             BOOLEAN         NOT NULL DEFAULT FALSE,
+    version             INT             NOT NULL DEFAULT 0,
+    created_at          TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    is_deleted          BOOLEAN         NOT NULL DEFAULT FALSE,
+    updated_by          BIGINT,
+    trace_id            VARCHAR(128),
+    updated_at          TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    CONSTRAINT chk_llm_provider_version CHECK (version >= 0),
+    CONSTRAINT chk_llm_provider_model_type
+        CHECK (model_type IN ('CHAT', 'EMBEDDING', 'ASR', 'TTS'))
 );
 
 COMMENT ON TABLE llm_provider_config IS '大模型路由密钥表';
-COMMENT ON COLUMN llm_provider_config.id IS '提供商 ID (如 dashscope, openai)';
+COMMENT ON COLUMN llm_provider_config.id IS '可路由配置 ID，如 dashscope-chat、openai-embedding';
 COMMENT ON COLUMN llm_provider_config.base_url IS 'API 网关地址';
-COMMENT ON COLUMN llm_provider_config.api_key_ciphertext IS 'AES 加密存储的 API Key';
-COMMENT ON COLUMN llm_provider_config.model IS '主力对话模型名';
+COMMENT ON COLUMN llm_provider_config.api_key_ciphertext IS 'AES-GCM 密文信封，包含格式版本、密钥 ID、随机 IV、密文和认证标签';
+COMMENT ON COLUMN llm_provider_config.model IS '当前路由使用的模型名';
+COMMENT ON COLUMN llm_provider_config.model_type IS '模型能力类型：CHAT / EMBEDDING / ASR / TTS';
 COMMENT ON COLUMN llm_provider_config.enabled IS '路由开关';
+COMMENT ON COLUMN llm_provider_config.version IS '管理端 CAS 版本';
 COMMENT ON COLUMN llm_provider_config.created_at IS '创建时间';
 COMMENT ON COLUMN llm_provider_config.is_deleted IS '逻辑删除';
+COMMENT ON COLUMN llm_provider_config.updated_by IS '[逻辑外键]→sys_users，最后修改人';
+COMMENT ON COLUMN llm_provider_config.trace_id IS '最后一次修改的调用链 ID';
+COMMENT ON COLUMN llm_provider_config.updated_at IS '最后更新时间';
 
 
--- ==================== 7. llm_global_setting ====================
-CREATE TABLE IF NOT EXISTS llm_global_setting (
-    id                          BIGINT          NOT NULL,
-    default_chat_provider_id    VARCHAR(64),
-    default_embedding_provider_id VARCHAR(64),
-    created_at                  TIMESTAMPTZ     NOT NULL,
-    updated_at                  TIMESTAMPTZ,
-    PRIMARY KEY (id)
+-- ==================== 8. ai_global_route ====================
+CREATE TABLE IF NOT EXISTS ai_global_route (
+    model_type     VARCHAR(32)     NOT NULL,
+    provider_id    VARCHAR(64),
+    version        INT             NOT NULL DEFAULT 0,
+    created_at     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by     BIGINT,
+    trace_id       VARCHAR(128),
+    updated_at     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (model_type),
+    CONSTRAINT chk_ai_global_route_model_type
+        CHECK (model_type IN ('CHAT', 'EMBEDDING', 'ASR', 'TTS')),
+    CONSTRAINT chk_ai_global_route_version CHECK (version >= 0)
 );
 
-COMMENT ON TABLE llm_global_setting IS 'LLM 全局单例配置表';
-COMMENT ON COLUMN llm_global_setting.id IS '全局单例主键，固定为 1';
-COMMENT ON COLUMN llm_global_setting.default_chat_provider_id IS '[逻辑外键]→llm_provider_config, 默认对话模型提供商';
-COMMENT ON COLUMN llm_global_setting.default_embedding_provider_id IS '[逻辑外键]→llm_provider_config, 默认 Embedding 模型提供商';
-COMMENT ON COLUMN llm_global_setting.created_at IS '创建时间';
-COMMENT ON COLUMN llm_global_setting.updated_at IS '更新时间';
+COMMENT ON TABLE ai_global_route IS '按模型能力划分的 AI 全局默认路由表';
+COMMENT ON COLUMN ai_global_route.model_type IS '模型能力类型，每种类型只有一个默认路由槽位';
+COMMENT ON COLUMN ai_global_route.provider_id IS '[逻辑外键]→llm_provider_config；为空表示尚未配置';
+COMMENT ON COLUMN ai_global_route.version IS '该模型类型默认路由的管理端 CAS 版本';
+COMMENT ON COLUMN ai_global_route.created_at IS '创建时间';
+COMMENT ON COLUMN ai_global_route.updated_by IS '[逻辑外键]→sys_users，最后修改人';
+COMMENT ON COLUMN ai_global_route.trace_id IS '最后一次修改的调用链 ID';
+COMMENT ON COLUMN ai_global_route.updated_at IS '最后更新时间';
+
+INSERT INTO ai_global_route (model_type, provider_id)
+VALUES
+    ('CHAT', NULL),
+    ('EMBEDDING', NULL),
+    ('ASR', NULL),
+    ('TTS', NULL)
+ON CONFLICT (model_type) DO NOTHING;
+
+
+-- ==================== 9. llm_scene_config ====================
+CREATE TABLE IF NOT EXISTS llm_scene_config (
+    scene_code          VARCHAR(64)     NOT NULL,
+    model_type          VARCHAR(16)     NOT NULL,
+    provider_id         VARCHAR(64),
+    temperature         NUMERIC(4,3),
+    top_p               NUMERIC(4,3),
+    max_input_tokens    INT             NOT NULL,
+    max_output_tokens   INT             NOT NULL,
+    timeout_seconds     INT             NOT NULL DEFAULT 60,
+    prompt_version      VARCHAR(64)     NOT NULL,
+    extra_options       JSONB           NOT NULL DEFAULT '{}',
+    enabled             BOOLEAN         NOT NULL DEFAULT TRUE,
+    version             INT             NOT NULL DEFAULT 0,
+    created_at          TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by          BIGINT,
+    trace_id            VARCHAR(128),
+    updated_at          TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (scene_code),
+    CONSTRAINT chk_scene_model_type CHECK (model_type IN ('CHAT', 'EMBEDDING')),
+    CONSTRAINT chk_scene_temperature CHECK (temperature IS NULL OR (temperature >= 0 AND temperature <= 2)),
+    CONSTRAINT chk_scene_top_p CHECK (top_p IS NULL OR (top_p > 0 AND top_p <= 1)),
+    CONSTRAINT chk_scene_max_input_tokens CHECK (max_input_tokens BETWEEN 256 AND 1000000),
+    CONSTRAINT chk_scene_max_output_tokens CHECK (max_output_tokens BETWEEN 1 AND 32768),
+    CONSTRAINT chk_scene_timeout CHECK (timeout_seconds BETWEEN 5 AND 180),
+    CONSTRAINT chk_scene_version CHECK (version >= 0),
+    CONSTRAINT chk_scene_extra_options CHECK (jsonb_typeof(extra_options) = 'object')
+);
+
+COMMENT ON TABLE llm_scene_config IS 'AI 场景执行参数表';
+COMMENT ON COLUMN llm_scene_config.scene_code IS '场景编码，如 RESUME_ANALYSIS、JOB_RESUME_MATCHING';
+COMMENT ON COLUMN llm_scene_config.model_type IS 'CHAT / EMBEDDING；决定未指定 Provider 时使用哪类全局默认路由';
+COMMENT ON COLUMN llm_scene_config.provider_id IS '[逻辑外键]→llm_provider_config；为空时按 model_type 使用 ai_global_route';
+COMMENT ON COLUMN llm_scene_config.temperature IS '采样温度；为空时由模型适配器采用代码默认值或不发送该参数';
+COMMENT ON COLUMN llm_scene_config.top_p IS '核采样参数；为空时由模型适配器采用代码默认值或不发送该参数';
+COMMENT ON COLUMN llm_scene_config.max_input_tokens IS '输入上下文预算，超出后由场景策略裁剪或拒绝';
+COMMENT ON COLUMN llm_scene_config.max_output_tokens IS '最大输出 Token 数；适配器映射为供应商对应字段';
+COMMENT ON COLUMN llm_scene_config.timeout_seconds IS '单次模型调用超时，不代表业务任务总超时';
+COMMENT ON COLUMN llm_scene_config.prompt_version IS '提示词模板版本，如 resume-analysis-v1';
+COMMENT ON COLUMN llm_scene_config.extra_options IS '经服务端白名单校验的供应商特有参数，禁止透传任意客户端参数';
+COMMENT ON COLUMN llm_scene_config.enabled IS '场景开关；关闭后拒绝创建新的该场景 AI 任务';
+COMMENT ON COLUMN llm_scene_config.version IS '管理端更新及启停使用的 CAS 版本';
+COMMENT ON COLUMN llm_scene_config.created_at IS '创建时间';
+COMMENT ON COLUMN llm_scene_config.updated_by IS '[逻辑外键]→sys_users，最后修改人';
+COMMENT ON COLUMN llm_scene_config.trace_id IS '最后一次修改的调用链 ID';
+COMMENT ON COLUMN llm_scene_config.updated_at IS '最后更新时间';
+
+CREATE INDEX IF NOT EXISTS idx_llm_scene_provider ON llm_scene_config (provider_id);
+CREATE INDEX IF NOT EXISTS idx_llm_scene_type_enabled ON llm_scene_config (model_type, enabled);
+
+-- 第二阶段仅初始化当前已进入建设范围的场景；后续阶段在各自脚本中追加场景。
+INSERT INTO llm_scene_config (
+    scene_code,
+    model_type,
+    provider_id,
+    temperature,
+    top_p,
+    max_input_tokens,
+    max_output_tokens,
+    timeout_seconds,
+    prompt_version,
+    extra_options,
+    enabled,
+    version,
+    created_at,
+    updated_at
+) VALUES
+(
+    'RESUME_ANALYSIS',
+    'CHAT',
+    NULL,
+    0.200,
+    0.900,
+    16000,
+    2000,
+    60,
+    'resume-analysis-v1',
+    '{}'::jsonb,
+    TRUE,
+    0,
+    CURRENT_TIMESTAMP,
+    CURRENT_TIMESTAMP
+),
+(
+    'JOB_RESUME_MATCHING',
+    'CHAT',
+    NULL,
+    0.200,
+    0.900,
+    16000,
+    1000,
+    60,
+    'job-resume-matching-v1',
+    '{}'::jsonb,
+    TRUE,
+    0,
+    CURRENT_TIMESTAMP,
+    CURRENT_TIMESTAMP
+)
+ON CONFLICT (scene_code) DO NOTHING;
+
+COMMIT;

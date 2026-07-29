@@ -250,7 +250,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     experience_req  SMALLINT,
     education_req   SMALLINT,
     skills_json     JSONB,
-    status          SMALLINT        DEFAULT 1,
+    status          SMALLINT        NOT NULL DEFAULT 2,
+    version         INT             NOT NULL DEFAULT 0,
     created_at      TIMESTAMPTZ     NOT NULL,
     is_deleted      BOOLEAN         DEFAULT FALSE,
     updated_by      BIGINT,
@@ -340,11 +341,14 @@ CREATE TABLE IF NOT EXISTS resume_analyses (
     overall_score   INT,
     strengths_json  JSONB,
     suggestions_json JSONB,
-    analyzed_at     TIMESTAMPTZ     NOT NULL,
-    is_deleted      BOOLEAN         DEFAULT FALSE,
+    llm_config_snapshot JSONB        NOT NULL,
+    analyzed_at     TIMESTAMPTZ,
+    is_deleted      BOOLEAN         NOT NULL DEFAULT FALSE,
     trace_id        VARCHAR(128),
-    created_at      TIMESTAMPTZ     NOT NULL,
-    PRIMARY KEY (id)
+    created_at      TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    CONSTRAINT chk_resume_analysis_llm_snapshot
+        CHECK (jsonb_typeof(llm_config_snapshot) = 'object')
 );
 
 COMMENT ON TABLE resume_analyses IS '简历 AI 分析结果表';
@@ -353,7 +357,8 @@ COMMENT ON COLUMN resume_analyses.resume_id IS '[逻辑外键]→resumes';
 COMMENT ON COLUMN resume_analyses.overall_score IS 'AI 综合评分 (0-100)';
 COMMENT ON COLUMN resume_analyses.strengths_json IS '优点列表 (JSON)';
 COMMENT ON COLUMN resume_analyses.suggestions_json IS '改进建议 (JSON)';
-COMMENT ON COLUMN resume_analyses.analyzed_at IS '评测时间';
+COMMENT ON COLUMN resume_analyses.llm_config_snapshot IS '任务创建时固化的 LLM 场景、Provider、模型、参数及版本快照，不含密钥';
+COMMENT ON COLUMN resume_analyses.analyzed_at IS '分析完成时间；任务待执行或处理中为空';
 COMMENT ON COLUMN resume_analyses.is_deleted IS '逻辑删除';
 COMMENT ON COLUMN resume_analyses.trace_id IS '调用链 ID（追溯大模型响应）';
 COMMENT ON COLUMN resume_analyses.created_at IS '创建时间';
@@ -510,38 +515,143 @@ CREATE TABLE IF NOT EXISTS llm_provider_config (
     base_url            VARCHAR(512)    NOT NULL,
     api_key_ciphertext  TEXT            NOT NULL,
     model               VARCHAR(128)    NOT NULL,
-    enabled             BOOLEAN         NOT NULL,
-    created_at          TIMESTAMPTZ     NOT NULL,
-    is_deleted          BOOLEAN         DEFAULT FALSE,
-    PRIMARY KEY (id)
+    model_type          VARCHAR(32)     NOT NULL,
+    enabled             BOOLEAN         NOT NULL DEFAULT FALSE,
+    version             INT             NOT NULL DEFAULT 0,
+    created_at          TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    is_deleted          BOOLEAN         NOT NULL DEFAULT FALSE,
+    updated_by          BIGINT,
+    trace_id            VARCHAR(128),
+    updated_at          TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    CONSTRAINT chk_llm_provider_version CHECK (version >= 0),
+    CONSTRAINT chk_llm_provider_model_type
+        CHECK (model_type IN ('CHAT', 'EMBEDDING', 'ASR', 'TTS'))
 );
 
 COMMENT ON TABLE llm_provider_config IS '大模型路由密钥表';
-COMMENT ON COLUMN llm_provider_config.id IS '提供商 ID (如 dashscope, openai)';
+COMMENT ON COLUMN llm_provider_config.id IS '可路由配置 ID，如 dashscope-chat、openai-embedding';
 COMMENT ON COLUMN llm_provider_config.base_url IS 'API 网关地址';
-COMMENT ON COLUMN llm_provider_config.api_key_ciphertext IS 'AES 加密存储的 API Key';
-COMMENT ON COLUMN llm_provider_config.model IS '主力对话模型名';
+COMMENT ON COLUMN llm_provider_config.api_key_ciphertext IS 'AES-GCM 密文信封，包含格式版本、密钥 ID、随机 IV、密文和认证标签';
+COMMENT ON COLUMN llm_provider_config.model IS '当前路由使用的模型名';
+COMMENT ON COLUMN llm_provider_config.model_type IS '模型能力类型：CHAT / EMBEDDING / ASR / TTS';
 COMMENT ON COLUMN llm_provider_config.enabled IS '路由开关';
+COMMENT ON COLUMN llm_provider_config.version IS '管理端 CAS 版本';
 COMMENT ON COLUMN llm_provider_config.created_at IS '创建时间';
 COMMENT ON COLUMN llm_provider_config.is_deleted IS '逻辑删除';
+COMMENT ON COLUMN llm_provider_config.updated_by IS '[逻辑外键]→sys_users，最后修改人';
+COMMENT ON COLUMN llm_provider_config.trace_id IS '最后一次修改的调用链 ID';
+COMMENT ON COLUMN llm_provider_config.updated_at IS '最后更新时间';
 
 
--- ==================== 17. llm_global_setting ====================
-CREATE TABLE IF NOT EXISTS llm_global_setting (
-    id                          BIGINT          NOT NULL,
-    default_chat_provider_id    VARCHAR(64),
-    default_embedding_provider_id VARCHAR(64),
-    created_at                  TIMESTAMPTZ     NOT NULL,
-    updated_at                  TIMESTAMPTZ,
-    PRIMARY KEY (id)
+-- ==================== 17. ai_global_route ====================
+CREATE TABLE IF NOT EXISTS ai_global_route (
+    model_type     VARCHAR(32)     NOT NULL,
+    provider_id    VARCHAR(64),
+    version        INT             NOT NULL DEFAULT 0,
+    created_at     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by     BIGINT,
+    trace_id       VARCHAR(128),
+    updated_at     TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (model_type),
+    CONSTRAINT chk_ai_global_route_model_type
+        CHECK (model_type IN ('CHAT', 'EMBEDDING', 'ASR', 'TTS')),
+    CONSTRAINT chk_ai_global_route_version CHECK (version >= 0)
 );
 
-COMMENT ON TABLE llm_global_setting IS 'LLM 全局单例配置表';
-COMMENT ON COLUMN llm_global_setting.id IS '全局单例主键，固定为 1';
-COMMENT ON COLUMN llm_global_setting.default_chat_provider_id IS '[逻辑外键]→llm_provider_config, 默认对话模型提供商';
-COMMENT ON COLUMN llm_global_setting.default_embedding_provider_id IS '[逻辑外键]→llm_provider_config, 默认 Embedding 模型提供商';
-COMMENT ON COLUMN llm_global_setting.created_at IS '创建时间';
-COMMENT ON COLUMN llm_global_setting.updated_at IS '更新时间';
+COMMENT ON TABLE ai_global_route IS '按模型能力划分的 AI 全局默认路由表';
+COMMENT ON COLUMN ai_global_route.model_type IS '模型能力类型，每种类型只有一个默认路由槽位';
+COMMENT ON COLUMN ai_global_route.provider_id IS '[逻辑外键]→llm_provider_config；为空表示尚未配置';
+COMMENT ON COLUMN ai_global_route.version IS '该模型类型默认路由的管理端 CAS 版本';
+COMMENT ON COLUMN ai_global_route.created_at IS '创建时间';
+COMMENT ON COLUMN ai_global_route.updated_by IS '[逻辑外键]→sys_users，最后修改人';
+COMMENT ON COLUMN ai_global_route.trace_id IS '最后一次修改的调用链 ID';
+COMMENT ON COLUMN ai_global_route.updated_at IS '最后更新时间';
+
+INSERT INTO ai_global_route (model_type, provider_id)
+VALUES
+    ('CHAT', NULL),
+    ('EMBEDDING', NULL),
+    ('ASR', NULL),
+    ('TTS', NULL)
+ON CONFLICT (model_type) DO NOTHING;
+
+
+-- ==================== 18. llm_scene_config ====================
+CREATE TABLE IF NOT EXISTS llm_scene_config (
+    scene_code          VARCHAR(64)     NOT NULL,
+    model_type          VARCHAR(16)     NOT NULL,
+    provider_id         VARCHAR(64),
+    temperature         NUMERIC(4,3),
+    top_p               NUMERIC(4,3),
+    max_input_tokens    INT             NOT NULL,
+    max_output_tokens   INT             NOT NULL,
+    timeout_seconds     INT             NOT NULL DEFAULT 60,
+    prompt_version      VARCHAR(64)     NOT NULL,
+    extra_options       JSONB           NOT NULL DEFAULT '{}'::jsonb,
+    enabled             BOOLEAN         NOT NULL DEFAULT TRUE,
+    version             INT             NOT NULL DEFAULT 0,
+    created_at          TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by          BIGINT,
+    trace_id            VARCHAR(128),
+    updated_at          TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (scene_code),
+    CONSTRAINT chk_scene_model_type CHECK (model_type IN ('CHAT', 'EMBEDDING')),
+    CONSTRAINT chk_scene_temperature
+        CHECK (temperature IS NULL OR (temperature >= 0 AND temperature <= 2)),
+    CONSTRAINT chk_scene_top_p
+        CHECK (top_p IS NULL OR (top_p > 0 AND top_p <= 1)),
+    CONSTRAINT chk_scene_max_input_tokens
+        CHECK (max_input_tokens BETWEEN 256 AND 1000000),
+    CONSTRAINT chk_scene_max_output_tokens
+        CHECK (max_output_tokens BETWEEN 1 AND 32768),
+    CONSTRAINT chk_scene_timeout CHECK (timeout_seconds BETWEEN 5 AND 180),
+    CONSTRAINT chk_scene_version CHECK (version >= 0),
+    CONSTRAINT chk_scene_extra_options
+        CHECK (jsonb_typeof(extra_options) = 'object')
+);
+
+CREATE INDEX IF NOT EXISTS idx_llm_scene_provider
+    ON llm_scene_config (provider_id);
+CREATE INDEX IF NOT EXISTS idx_llm_scene_type_enabled
+    ON llm_scene_config (model_type, enabled);
+
+COMMENT ON TABLE llm_scene_config IS 'AI 场景执行参数表';
+COMMENT ON COLUMN llm_scene_config.scene_code IS '代码预定义的 AI 业务场景编码';
+COMMENT ON COLUMN llm_scene_config.model_type IS 'CHAT / EMBEDDING';
+COMMENT ON COLUMN llm_scene_config.provider_id IS
+    '[逻辑外键]→llm_provider_config；为空时按 model_type 使用 ai_global_route';
+COMMENT ON COLUMN llm_scene_config.extra_options IS
+    '仅允许服务端白名单中的供应商特有参数';
+COMMENT ON COLUMN llm_scene_config.version IS '管理端 CAS 版本';
+
+INSERT INTO llm_scene_config (
+    scene_code,
+    model_type,
+    provider_id,
+    temperature,
+    top_p,
+    max_input_tokens,
+    max_output_tokens,
+    timeout_seconds,
+    prompt_version,
+    extra_options,
+    enabled,
+    version,
+    created_at,
+    updated_at
+) VALUES
+(
+    'RESUME_ANALYSIS', 'CHAT', NULL, 0.200, 0.900,
+    16000, 2000, 60, 'resume-analysis-v1', '{}'::jsonb,
+    TRUE, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+),
+(
+    'JOB_RESUME_MATCHING', 'CHAT', NULL, 0.200, 0.900,
+    16000, 1000, 60, 'job-resume-matching-v1', '{}'::jsonb,
+    TRUE, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+)
+ON CONFLICT (scene_code) DO NOTHING;
 
 
 -- ============================================================
@@ -582,7 +692,7 @@ ON CONFLICT (id) DO UPDATE SET
 -- ============================================================
 -- 种子数据：sys_permissions + sys_role_permissions
 -- Phase 1: 企业管理 / 团队 / 岗位 / 角色查阅 / 用户角色关联
--- Phase 2: 简历 / 投递 / 本地消息运维
+-- Phase 2: 简历 / 投递 / 本地消息运维 / LLM 配置
 -- ============================================================
 
 -- ===== sys_permissions (Phase 1 + Phase 2 合并) =====
@@ -626,19 +736,37 @@ INSERT INTO sys_permissions (id, perm_code, perm_type, api_path, status) VALUES
 (404, 'resume:delete',         'API', '/api/v1/resumes/*', 1),
 (405, 'resume:analyze',        'API', '/api/v1/resumes/*/analyze', 1),
 (406, 'resume:analysis-result','API', '/api/v1/resumes/*/analysis', 1),
+(407, 'resume:download',        'API', '/api/v1/resumes/*/download', 1),
 
 -- 2.2 投递与初筛
-(411, 'application:apply',           'API', '/api/v1/candidate/jobs/*/apply', 1),
+(411, 'application:apply',           'API', '/api/v1/jobs/*/applications', 1),
 (412, 'application:list',            'API', '/api/v1/enterprises/*/jobs/*/applications', 1),
 (413, 'application:detail',          'API', '/api/v1/enterprises/*/applications/*', 1),
 (414, 'application:update-status',   'API', '/api/v1/enterprises/*/applications/*/status', 1),
 (415, 'candidate:applications',      'API', '/api/v1/candidate/applications', 1),
+(416, 'candidate:application:withdraw',
+ 'API', '/api/v1/candidate/applications/*/withdraw', 1),
 
 -- 2.5 本地消息管理
 (421, 'ops:local-message:page',        'API', '/api/v1/admin/local-messages', 1),
 (422, 'ops:local-message:detail',      'API', '/api/v1/admin/local-messages/*', 1),
 (423, 'ops:local-message:retry',       'API', '/api/v1/admin/local-messages/*/retry', 1),
-(424, 'ops:local-message:batch-retry', 'API', '/api/v1/admin/local-messages/batch-retry', 1)
+(424, 'ops:local-message:batch-retry', 'API', '/api/v1/admin/local-messages/batch-retry', 1),
+
+-- 2.4 大模型 Provider、全局路由与场景配置
+(431, 'admin:llm:provider:create', 'API', '/api/v1/admin/llm/providers', 1),
+(432, 'admin:llm:provider:list', 'API', '/api/v1/admin/llm/providers', 1),
+(433, 'admin:llm:provider:detail', 'API', '/api/v1/admin/llm/providers/*', 1),
+(434, 'admin:llm:provider:update', 'API', '/api/v1/admin/llm/providers/*', 1),
+(435, 'admin:llm:provider:status', 'API', '/api/v1/admin/llm/providers/*/status', 1),
+(436, 'admin:llm:provider:delete', 'API', '/api/v1/admin/llm/providers/*', 1),
+(437, 'admin:llm:provider:test', 'API', '/api/v1/admin/llm/providers/*/test-connection', 1),
+(438, 'admin:ai:route:list', 'API', '/api/v1/admin/ai/routes', 1),
+(439, 'admin:ai:route:update', 'API', '/api/v1/admin/ai/routes/*', 1),
+(440, 'admin:llm:scene:list', 'API', '/api/v1/admin/llm/scenes', 1),
+(441, 'admin:llm:scene:detail', 'API', '/api/v1/admin/llm/scenes/*', 1),
+(442, 'admin:llm:scene:update', 'API', '/api/v1/admin/llm/scenes/*', 1),
+(443, 'admin:llm:scene:status', 'API', '/api/v1/admin/llm/scenes/*/status', 1)
 ON CONFLICT (id) DO UPDATE SET
     perm_code = EXCLUDED.perm_code,
     perm_type = EXCLUDED.perm_type,
@@ -648,16 +776,18 @@ ON CONFLICT (id) DO UPDATE SET
 
 -- ===== sys_role_permissions =====
 
--- SUPER_ADMIN (1001) — 全部 36 个权限
+-- SUPER_ADMIN (1001) — Phase 1 与 Phase 2 全部 51 个权限
 INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
 (1001, 101, NOW()), (1001, 102, NOW()), (1001, 103, NOW()), (1001, 104, NOW()), (1001, 105, NOW()), (1001, 106, NOW()),
 (1001, 111, NOW()), (1001, 112, NOW()), (1001, 113, NOW()), (1001, 114, NOW()),
 (1001, 203, NOW()), (1001, 204, NOW()),
 (1001, 221, NOW()), (1001, 222, NOW()), (1001, 223, NOW()),
 (1001, 301, NOW()), (1001, 302, NOW()), (1001, 303, NOW()), (1001, 304, NOW()), (1001, 305, NOW()), (1001, 306, NOW()),
-(1001, 401, NOW()), (1001, 402, NOW()), (1001, 403, NOW()), (1001, 404, NOW()), (1001, 405, NOW()), (1001, 406, NOW()),
-(1001, 411, NOW()), (1001, 412, NOW()), (1001, 413, NOW()), (1001, 414, NOW()), (1001, 415, NOW()),
-(1001, 421, NOW()), (1001, 422, NOW()), (1001, 423, NOW()), (1001, 424, NOW())
+(1001, 401, NOW()), (1001, 402, NOW()), (1001, 403, NOW()), (1001, 404, NOW()), (1001, 405, NOW()), (1001, 406, NOW()), (1001, 407, NOW()),
+(1001, 411, NOW()), (1001, 412, NOW()), (1001, 413, NOW()), (1001, 414, NOW()), (1001, 415, NOW()), (1001, 416, NOW()),
+(1001, 421, NOW()), (1001, 422, NOW()), (1001, 423, NOW()), (1001, 424, NOW()),
+(1001, 431, NOW()), (1001, 432, NOW()), (1001, 433, NOW()), (1001, 434, NOW()), (1001, 435, NOW()), (1001, 436, NOW()),
+(1001, 437, NOW()), (1001, 438, NOW()), (1001, 439, NOW()), (1001, 440, NOW()), (1001, 441, NOW()), (1001, 442, NOW()), (1001, 443, NOW())
 ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 -- FINANCE_ADMIN (1002) — 企业查看 + 简历查看
@@ -666,9 +796,11 @@ INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
 (1002, 402, NOW()), (1002, 403, NOW())
 ON CONFLICT (role_id, permission_id) DO NOTHING;
 
--- PLATFORM_OPS (1003) — 仅本地消息运维 4 条
+-- PLATFORM_OPS (1003) — 本地消息运维与只读 LLM 配置检查
 INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
-(1003, 421, NOW()), (1003, 422, NOW()), (1003, 423, NOW()), (1003, 424, NOW())
+(1003, 421, NOW()), (1003, 422, NOW()), (1003, 423, NOW()), (1003, 424, NOW()),
+(1003, 432, NOW()), (1003, 433, NOW()), (1003, 437, NOW()),
+(1003, 438, NOW()), (1003, 440, NOW()), (1003, 441, NOW())
 ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 -- ENTERPRISE_OWNER (2001) — 企业/团队/岗位/简历/投递（无 Admin 和 ops）
@@ -711,7 +843,10 @@ INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
 (2005, 412, NOW()), (2005, 413, NOW())
 ON CONFLICT (role_id, permission_id) DO NOTHING;
 
--- CANDIDATE (3001) — 投递简历 + 查看我的投递
+-- CANDIDATE (3001) — 管理本人简历、投递岗位、查看并撤回本人投递
 INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
-(3001, 411, NOW()), (3001, 415, NOW())
+(3001, 401, NOW()), (3001, 402, NOW()), (3001, 403, NOW()),
+(3001, 404, NOW()), (3001, 405, NOW()), (3001, 406, NOW()),
+(3001, 407, NOW()),
+(3001, 411, NOW()), (3001, 415, NOW()), (3001, 416, NOW())
 ON CONFLICT (role_id, permission_id) DO NOTHING;

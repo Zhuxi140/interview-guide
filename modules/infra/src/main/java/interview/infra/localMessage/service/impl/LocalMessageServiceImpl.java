@@ -9,6 +9,7 @@ import interview.common.enums.ErrorCode;
 import interview.common.enums.MsgPriority;
 import interview.common.enums.MsgStatus;
 import interview.common.exception.BusinessException;
+import interview.common.util.TraceUtil;
 import interview.infra.localMessage.mapper.LocalMessageMapper;
 import interview.infra.localMessage.model.entity.LocalMessage;
 import interview.infra.localMessage.model.req.LocalMessagePageReq;
@@ -64,7 +65,7 @@ public class LocalMessageServiceImpl extends ServiceImpl<LocalMessageMapper, Loc
         update.setLastError(null);
         update.setLeaseOwner(null);
         update.setLeaseUntil(null);
-        update.setTraceId(null);
+        update.setTraceId(TraceUtil.getTraceId());
         update.setUpdatedAt(OffsetDateTime.now());
 
         boolean updated = update(update, Wrappers.lambdaUpdate(LocalMessage.class)
@@ -137,7 +138,7 @@ public class LocalMessageServiceImpl extends ServiceImpl<LocalMessageMapper, Loc
         update.setLastError(conciseError(lastError));
         update.setLeaseOwner(null);
         update.setLeaseUntil(null);
-        update.setTraceId(null);
+        update.setTraceId(TraceUtil.getTraceId());
         update.setUpdatedAt(OffsetDateTime.now());
         return updateOwned(lease, update);
     }
@@ -149,7 +150,7 @@ public class LocalMessageServiceImpl extends ServiceImpl<LocalMessageMapper, Loc
         update.setLastError(reason);
         update.setLeaseOwner(null);
         update.setLeaseUntil(null);
-        update.setTraceId(null);
+        update.setTraceId(TraceUtil.getTraceId());
         update.setUpdatedAt(OffsetDateTime.now());
         return update;
     }

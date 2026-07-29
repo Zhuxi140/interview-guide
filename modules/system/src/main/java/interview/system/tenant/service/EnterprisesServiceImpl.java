@@ -363,8 +363,7 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
                 .eq(Enterprise::getId, enterpriseId)
                 .set(Enterprise::getIsDeleted, true)
                 .set(Enterprise::getUpdatedAt, OffsetDateTime.now())
-                .set(Enterprise::getTraceId, null)
-                // TODO: traceId完善后，要传入
+                .set(Enterprise::getTraceId, TraceUtil.getTraceId())
                 .update();
 
         if (!updated) {
@@ -377,8 +376,7 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
                 .set(EnterpriseTeamMember::getIsDeleted, true)
                 .set(EnterpriseTeamMember::getUpdatedBy, deleteUserId)
                 .set(EnterpriseTeamMember::getUpdatedAt, OffsetDateTime.now())
-                .set(EnterpriseTeamMember::getTraceId, null)
-                // TODO: traceId完善后，要传入
+                .set(EnterpriseTeamMember::getTraceId, TraceUtil.getTraceId())
                 .update();
         if (!membersUpdated) {
             log.error("级联删除企业成员未影响任何记录: enterpriseId [{}]", enterpriseId);

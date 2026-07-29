@@ -8,6 +8,7 @@ import interview.common.enums.ErrorCode;
 import interview.common.enums.RoleScope;
 import interview.common.enums.SelectOrder;
 import interview.common.exception.BusinessException;
+import interview.common.util.TraceUtil;
 import interview.framework.context.AuthContext;
 import interview.system.tenant.model.enums.EnterpriseStatus;
 import interview.system.rbac.model.entity.Role;
@@ -177,8 +178,7 @@ public class EnterpriseTeamMembersServiceImpl extends ServiceImpl<EnterpriseTeam
                 .set(EnterpriseTeamMember::getRoleId, req.getRoleId())
                 .set(EnterpriseTeamMember::getUpdatedBy, userId)
                 .set(EnterpriseTeamMember::getUpdatedAt, OffsetDateTime.now())
-                .set(EnterpriseTeamMember::getTraceId, null)
-                // TODO: traceId完善后，要传入
+                .set(EnterpriseTeamMember::getTraceId, TraceUtil.getTraceId())
                 .update();
 
         if (!updated) {
@@ -226,8 +226,7 @@ public class EnterpriseTeamMembersServiceImpl extends ServiceImpl<EnterpriseTeam
                 .set(EnterpriseTeamMember::getIsDeleted,true)
                 .set(EnterpriseTeamMember::getUpdatedBy, deleteUserId)
                 .set(EnterpriseTeamMember::getUpdatedAt, OffsetDateTime.now())
-                .set(EnterpriseTeamMember::getTraceId, null)
-                // TODO: traceId完善后，要传入
+                .set(EnterpriseTeamMember::getTraceId, TraceUtil.getTraceId())
                 .update();
 
         if (!deleted) {

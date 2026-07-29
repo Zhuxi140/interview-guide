@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="interview.ai.config.mapper.AiGlobalRouteMapper">
+
+    <sql id="routeColumns">
+        agr.model_type,
+        agr.provider_id,
+        agr.version,
+        agr.created_at,
+        agr.updated_by,
+        agr.trace_id,
+        agr.updated_at
+    </sql>
+
+    <select id="lockByModelType"
+            resultType="interview.ai.config.model.entity.AiGlobalRoute">
+        SELECT
+            <include refid="routeColumns"/>
+        FROM ai_global_route agr
+        WHERE agr.model_type = #{modelType}
+        FOR UPDATE
+    </select>
+
+    <select id="lockAll"
+            resultType="interview.ai.config.model.entity.AiGlobalRoute">
+        SELECT
+            <include refid="routeColumns"/>
+        FROM ai_global_route agr
+        ORDER BY agr.model_type
+        FOR UPDATE
+    </select>
+
+    <update id="updateRouteByVersion">
+        UPDATE ai_global_route
+        SET provider_id = #{route.providerId},
+            version = version + 1,
+            updated_by = #{route.updatedBy},
+            trace_id = #{route.traceId},
+            updated_at = #{route.updatedAt}
+        WHERE model_type = #{route.modelType}
+          AND version = #{expectedVersion}
+    </update>
+</mapper>

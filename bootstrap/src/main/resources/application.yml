@@ -95,3 +95,8 @@ security:
   # TODO: 上线后需更换为极其复杂的随机字符串 且需存储到环境变量或密钥管理服务中
   sm4Key: e14b2b2b1a9f5d3d3a4c5e6f7a8b9c0d
   aesKey: 8a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d
+  secret-cipher:
+    # 新密文只使用 active-key-id；旧密钥继续保留在 keys 中用于解密和轮换。
+    active-key-id: ${LLM_SECRET_ACTIVE_KEY_ID:v1}
+    keys:
+      v1: ${LLM_SECRET_KEY_V1:${security.aesKey}}

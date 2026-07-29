@@ -5,6 +5,7 @@ import interview.api.infra.LocalMessageApi;
 import interview.api.infra.dto.MessageDTO;
 import interview.common.enums.MsgPriority;
 import interview.common.enums.MsgStatus;
+import interview.common.util.TraceUtil;
 import interview.infra.localMessage.model.entity.LocalMessage;
 import interview.infra.localMessage.service.LocalMessageService;
 import lombok.RequiredArgsConstructor;
@@ -43,7 +44,7 @@ public class MsgApiImpl implements LocalMessageApi {
         update.setStatus(MsgStatus.IGNORED);
         update.setNextRetryAt(null);
         update.setLastError("业务处理成功，取消上传补偿");
-        update.setTraceId(null);
+        update.setTraceId(TraceUtil.getTraceId());
         update.setUpdatedAt(OffsetDateTime.now());
         return localMessageService.update(update, Wrappers.lambdaUpdate(LocalMessage.class)
                 .eq(LocalMessage::getId, messageId)
@@ -56,7 +57,7 @@ public class MsgApiImpl implements LocalMessageApi {
         // 上传失败后只允许提前尚未领取消息的执行时间。
         LocalMessage update = new LocalMessage();
         update.setNextRetryAt(executeAt);
-        update.setTraceId(null);
+        update.setTraceId(TraceUtil.getTraceId());
         update.setUpdatedAt(OffsetDateTime.now());
         return localMessageService.update(update, Wrappers.lambdaUpdate(LocalMessage.class)
                 .eq(LocalMessage::getId, messageId)
@@ -89,7 +90,7 @@ public class MsgApiImpl implements LocalMessageApi {
             update.setLastError(message.getLastError());
             update.setLeaseOwner(null);
             update.setLeaseUntil(null);
-            update.setTraceId(null);
+            update.setTraceId(TraceUtil.getTraceId());
             update.setUpdatedAt(OffsetDateTime.now());
             localMessageService.update(update, Wrappers.lambdaUpdate(LocalMessage.class)
                     .eq(LocalMessage::getId, existing.getId())

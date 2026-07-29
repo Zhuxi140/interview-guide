@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="interview.ai.config.mapper.LlmSceneConfigMapper">
+
+    <sql id="sceneColumns">
+        lsc.scene_code,
+        lsc.model_type,
+        lsc.provider_id,
+        lsc.temperature,
+        lsc.top_p,
+        lsc.max_input_tokens,
+        lsc.max_output_tokens,
+        lsc.timeout_seconds,
+        lsc.prompt_version,
+        lsc.extra_options,
+        lsc.enabled,
+        lsc.version,
+        lsc.created_at,
+        lsc.updated_by,
+        lsc.trace_id,
+        lsc.updated_at
+    </sql>
+
+    <select id="lockBySceneCode"
+            resultType="interview.ai.config.model.entity.LlmSceneConfig">
+        SELECT
+            <include refid="sceneColumns"/>
+        FROM llm_scene_config lsc
+        WHERE lsc.scene_code = #{sceneCode}
+        FOR UPDATE
+    </select>
+
+    <select id="lockEnabledScenesByProviderId"
+            resultType="interview.ai.config.model.entity.LlmSceneConfig">
+        SELECT
+            <include refid="sceneColumns"/>
+        FROM llm_scene_config lsc
+        WHERE lsc.provider_id = #{providerId}
+          AND lsc.enabled = TRUE
+        ORDER BY lsc.scene_code
+        FOR UPDATE
+    </select>
+
+    <update id="updateSceneByVersion">
+        UPDATE llm_scene_config
+        SET provider_id = #{scene.providerId,jdbcType=VARCHAR},
+            temperature = #{scene.temperature,jdbcType=NUMERIC},
+            top_p = #{scene.topP,jdbcType=NUMERIC},
+            max_input_tokens = #{scene.maxInputTokens},
+            max_output_tokens = #{scene.maxOutputTokens},
+            timeout_seconds = #{scene.timeoutSeconds},
+            prompt_version = #{scene.promptVersion},
+            extra_options = #{scene.extraOptions}::jsonb,
+            version = version + 1,
+            updated_by = #{scene.updatedBy},
+            trace_id = #{scene.traceId},
+            updated_at = #{scene.updatedAt}
+        WHERE scene_code = #{scene.sceneCode}
+          AND version = #{expectedVersion}
+    </update>
+
+    <update id="updateSceneStatusByVersion">
+        UPDATE llm_scene_config
+        SET enabled = #{scene.enabled},
+            version = version + 1,
+            updated_by = #{scene.updatedBy},
+            trace_id = #{scene.traceId},
+            updated_at = #{scene.updatedAt}
+        WHERE scene_code = #{scene.sceneCode}
+          AND version = #{expectedVersion}
+    </update>
+</mapper>

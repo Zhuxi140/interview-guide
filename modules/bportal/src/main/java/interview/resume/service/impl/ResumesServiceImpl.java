@@ -14,6 +14,7 @@ import interview.api.infra.LocalMessageApi;
 import interview.api.infra.dto.MessageDTO;
 import interview.common.enums.*;
 import interview.common.exception.BusinessException;
+import interview.common.util.TraceUtil;
 import interview.framework.context.AuthContext;
 import interview.resume.mapper.ResumesMapper;
 import interview.resume.model.entity.CandidateProfile;
@@ -168,7 +169,7 @@ public class ResumesServiceImpl extends ServiceImpl<ResumesMapper, Resumes> impl
                 update.setResumeText(resumeText);
                 update.setAnalyzeStatus(AnalyzeStatus.PENDING);
                 update.setUpdatedBy(resumes.getUserId());
-                update.setTraceId(null);
+                update.setTraceId(TraceUtil.getTraceId());
                 update.setUpdatedAt(OffsetDateTime.now());
                 boolean updated = update(update, Wrappers.lambdaUpdate(Resumes.class)
                         .eq(Resumes::getId, resumes.getId())
@@ -346,8 +347,7 @@ public class ResumesServiceImpl extends ServiceImpl<ResumesMapper, Resumes> impl
                 .eq(Resumes::getUserId, userId)
                 .set(Resumes::getIsDeleted,true)
                 .set(Resumes::getUpdatedAt, OffsetDateTime.now())
-                // TODO: traceId完善后，要传入
-                .set(Resumes::getTraceId,null)
+                .set(Resumes::getTraceId, TraceUtil.getTraceId())
                 .set(Resumes::getUpdatedBy,userId)
                 .update();
 
