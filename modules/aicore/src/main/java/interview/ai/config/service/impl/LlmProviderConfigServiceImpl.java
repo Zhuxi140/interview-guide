@@ -4,6 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import interview.ai.config.event.LLMProviderChangeEvent;
 import interview.ai.config.mapper.AiGlobalRouteMapper;
 import interview.ai.config.mapper.LlmProviderConfigMapper;
 import interview.ai.config.mapper.LlmSceneConfigMapper;
@@ -33,6 +34,8 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.retry.RetryPolicy;
 import org.springframework.core.retry.RetryTemplate;
 import org.springframework.dao.DuplicateKeyException;
@@ -66,11 +69,11 @@ public class LlmProviderConfigServiceImpl extends ServiceImpl<LlmProviderConfigM
     private static final Pattern PROVIDER_ID_PATTERN = Pattern.compile("[a-z0-9][a-z0-9._-]{0,63}");
     private static final Duration CONNECTION_TIMEOUT = Duration.ofSeconds(3);
     private static final Duration READ_TIMEOUT = Duration.ofSeconds(8);
-
     private final LlmProviderConfigMapper llmProviderConfigMapper;
     private final AiGlobalRouteMapper aiGlobalRouteMapper;
     private final LlmSceneConfigMapper llmSceneConfigMapper;
     private final SecretCipher secretCipher;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     @Transactional
@@ -144,6 +147,7 @@ public class LlmProviderConfigServiceImpl extends ServiceImpl<LlmProviderConfigM
     }
 
     @Override
+    @Cacheable(value = "llmProvider", key = "#providerId")
     public LlmProviderVO getProvider(String providerId) {
         // 纯 CRUD：只查询详情响应需要的字段，逻辑删除条件由 MyBatis-Plus 自动追加。
         String normalizedProviderId = verifyProviderId(providerId);
@@ -199,6 +203,8 @@ public class LlmProviderConfigServiceImpl extends ServiceImpl<LlmProviderConfigM
             throw new BusinessException(ErrorCode.AI_PROVIDER_VERSION_CONFLICT);
         }
 
+        // 路由缓存完成后，在事务提交后发布 Provider 配置变更事件。
+        eventPublisher.publishEvent(new LLMProviderChangeEvent(normalizedProviderId));
         return toProviderVO(requireActiveProvider(normalizedProviderId));
     }
 
@@ -234,7 +240,8 @@ public class LlmProviderConfigServiceImpl extends ServiceImpl<LlmProviderConfigM
         }
 
         LlmProviderConfig latest = requireActiveProvider(normalizedProviderId);
-        // TODO 路由缓存完成后，在事务提交后发布 Provider 配置变更事件。
+        // 路由缓存完成后，在事务提交后发布 Provider 配置变更事件。
+        eventPublisher.publishEvent(new LLMProviderChangeEvent(normalizedProviderId));
         return new LlmProviderStatusVO(
                 latest.getId(),
                 latest.getEnabled(),
@@ -267,7 +274,8 @@ public class LlmProviderConfigServiceImpl extends ServiceImpl<LlmProviderConfigM
             throw new BusinessException(ErrorCode.AI_PROVIDER_VERSION_CONFLICT);
         }
 
-        // TODO 路由缓存完成后，在事务提交后发布 Provider 删除事件。
+        // 路由缓存完成后，在事务提交后发布 Provider 删除事件。
+        eventPublisher.publishEvent(new LLMProviderChangeEvent(normalizedProviderId));
         return new LlmProviderDeleteVO(normalizedProviderId);
     }
 

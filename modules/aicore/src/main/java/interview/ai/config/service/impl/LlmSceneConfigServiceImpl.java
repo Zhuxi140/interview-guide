@@ -7,12 +7,14 @@ import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import interview.ai.config.event.LLMSceneChangeEvent;
 import interview.ai.config.mapper.AiGlobalRouteMapper;
 import interview.ai.config.mapper.LlmProviderConfigMapper;
 import interview.ai.config.mapper.LlmSceneConfigMapper;
 import interview.ai.config.model.entity.AiGlobalRoute;
 import interview.ai.config.model.entity.LlmProviderConfig;
 import interview.ai.config.model.entity.LlmSceneConfig;
+import interview.common.enums.AiSceneCode;
 import interview.ai.config.model.req.LlmSceneQueryReq;
 import interview.ai.config.model.req.LlmSceneStatusReq;
 import interview.ai.config.model.req.LlmSceneUpdateReq;
@@ -26,6 +28,8 @@ import interview.common.exception.BusinessException;
 import interview.common.util.TraceUtil;
 import interview.framework.context.AuthContext;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,22 +38,20 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
-import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
 public class LlmSceneConfigServiceImpl extends ServiceImpl<LlmSceneConfigMapper, LlmSceneConfig>
         implements LlmSceneConfigService {
 
-    private static final Pattern SCENE_CODE_PATTERN = Pattern.compile("[A-Z][A-Z0-9_]{0,63}");
     private static final BigDecimal MIN_TEMPERATURE = BigDecimal.ZERO;
     private static final BigDecimal MAX_TEMPERATURE = BigDecimal.valueOf(2);
     private static final BigDecimal MIN_TOP_P = BigDecimal.ZERO;
     private static final BigDecimal MAX_TOP_P = BigDecimal.ONE;
-
     private final LlmSceneConfigMapper llmSceneConfigMapper;
     private final AiGlobalRouteMapper aiGlobalRouteMapper;
     private final LlmProviderConfigMapper llmProviderConfigMapper;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     public LlmScenePageVO pageScenes(LlmSceneQueryReq req) {
@@ -84,26 +86,26 @@ public class LlmSceneConfigServiceImpl extends ServiceImpl<LlmSceneConfigMapper,
     }
 
     @Override
-    public LlmSceneVO getScene(String sceneCode) {
-        // 纯 CRUD：按规范化场景编码查询完整配置。
-        return toSceneVO(requireScene(normalizeSceneCode(sceneCode)));
+    @Cacheable(value = "llmScene",key = "#sceneCode")
+    public LlmSceneVO getScene(AiSceneCode sceneCode) {
+        // 按场景编码查询完整配置。
+        return toSceneVO(requireScene(sceneCode));
     }
 
     @Override
     @Transactional
-    public LlmSceneVO updateScene(String sceneCode, LlmSceneUpdateReq req) {
-        String normalizedSceneCode = normalizeSceneCode(sceneCode);
+    public LlmSceneVO updateScene(AiSceneCode sceneCode, LlmSceneUpdateReq req) {
         String providerId = normalizeOptionalProviderId(req.getProviderId());
         String promptVersion = normalizePromptVersion(req.getPromptVersion());
         String extraOptions = normalizeExtraOptions(req.getExtraOptions());
         validateSceneParameters(req);
 
         // 使用默认路由时先读取不可变模型类型，再按默认路由、场景、Provider 的顺序加锁。
-        LlmSceneConfig snapshot = requireScene(normalizedSceneCode);
+        LlmSceneConfig snapshot = requireScene(sceneCode);
         AiGlobalRoute route = providerId == null
                 ? requireLockedGlobalRoute(snapshot.getModelType())
                 : null;
-        LlmSceneConfig current = requireLockedScene(normalizedSceneCode);
+        LlmSceneConfig current = requireLockedScene(sceneCode);
         requireExpectedVersion(current, req.getExpectedVersion());
 
         // 锁定并校验场景最终使用的 Provider。
@@ -113,7 +115,7 @@ public class LlmSceneConfigServiceImpl extends ServiceImpl<LlmSceneConfigMapper,
         requireLockedEnabledProvider(resolvedProviderId, current.getModelType());
 
         // 全量更新可编辑参数，XML 负责 CAS、版本递增和审计字段写入。
-        LlmSceneConfig update = auditedScene(normalizedSceneCode);
+        LlmSceneConfig update = auditedScene(sceneCode);
         update.setProviderId(providerId);
         update.setTemperature(req.getTemperature());
         update.setTopP(req.getTopP());
@@ -127,17 +129,17 @@ public class LlmSceneConfigServiceImpl extends ServiceImpl<LlmSceneConfigMapper,
             throw new BusinessException(ErrorCode.AI_SCENE_VERSION_CONFLICT);
         }
 
-        // TODO 路由缓存完成后，在事务提交后发布场景配置变更事件。
-        return toSceneVO(requireScene(normalizedSceneCode));
+        //   路由缓存完成后，在事务提交后发布场景配置变更事件。
+        eventPublisher.publishEvent(new LLMSceneChangeEvent(sceneCode));
+        return toSceneVO(requireScene(sceneCode));
     }
 
     @Override
     @Transactional
-    public LlmSceneStatusVO updateSceneStatus(String sceneCode, LlmSceneStatusReq req) {
-        String normalizedSceneCode = normalizeSceneCode(sceneCode);
+    public LlmSceneStatusVO updateSceneStatus(AiSceneCode sceneCode, LlmSceneStatusReq req) {
 
         // 先读取路由类型；仅启用全局路由场景时需要提前锁定全局设置。
-        LlmSceneConfig snapshot = requireScene(normalizedSceneCode);
+        LlmSceneConfig snapshot = requireScene(sceneCode);
         requireExpectedVersion(snapshot, req.getExpectedVersion());
         boolean needsGlobalSetting = Boolean.TRUE.equals(req.getEnabled())
                 && StrUtil.isBlank(snapshot.getProviderId());
@@ -145,7 +147,7 @@ public class LlmSceneConfigServiceImpl extends ServiceImpl<LlmSceneConfigMapper,
                 ? requireLockedGlobalRoute(snapshot.getModelType())
                 : null;
 
-        LlmSceneConfig current = requireLockedScene(normalizedSceneCode);
+        LlmSceneConfig current = requireLockedScene(sceneCode);
         requireExpectedVersion(current, req.getExpectedVersion());
 
         // 启用前确认最终路由可用；停用不依赖 Provider 当前状态。
@@ -159,15 +161,16 @@ public class LlmSceneConfigServiceImpl extends ServiceImpl<LlmSceneConfigMapper,
             return toSceneStatusVO(current);
         }
 
-        LlmSceneConfig update = auditedScene(normalizedSceneCode);
+        LlmSceneConfig update = auditedScene(sceneCode);
         update.setEnabled(req.getEnabled());
         int affected = llmSceneConfigMapper.updateSceneStatusByVersion(update, req.getExpectedVersion());
         if (affected != 1) {
             throw new BusinessException(ErrorCode.AI_SCENE_VERSION_CONFLICT);
         }
 
-        LlmSceneConfig latest = requireScene(normalizedSceneCode);
-        // TODO 路由缓存完成后，在事务提交后发布场景启停事件。
+        LlmSceneConfig latest = requireScene(sceneCode);
+        //   路由缓存完成后，在事务提交后发布场景启停事件。
+        eventPublisher.publishEvent(new LLMSceneChangeEvent(sceneCode));
         return toSceneStatusVO(latest);
     }
 
@@ -222,7 +225,7 @@ public class LlmSceneConfigServiceImpl extends ServiceImpl<LlmSceneConfigMapper,
     /**
      * 查询场景，不存在时抛出统一业务异常。
      */
-    private LlmSceneConfig requireScene(String sceneCode) {
+    private LlmSceneConfig requireScene(AiSceneCode sceneCode) {
         LlmSceneConfig scene = llmSceneConfigMapper.selectById(sceneCode);
         if (scene == null) {
             throw new BusinessException(ErrorCode.AI_SCENE_NOT_FOUND);
@@ -233,8 +236,8 @@ public class LlmSceneConfigServiceImpl extends ServiceImpl<LlmSceneConfigMapper,
     /**
      * 锁定场景，不存在时抛出统一业务异常。
      */
-    private LlmSceneConfig requireLockedScene(String sceneCode) {
-        LlmSceneConfig scene = llmSceneConfigMapper.lockBySceneCode(sceneCode);
+    private LlmSceneConfig requireLockedScene(AiSceneCode sceneCode) {
+        LlmSceneConfig scene = llmSceneConfigMapper.lockBySceneCode(sceneCode.name());
         if (scene == null) {
             throw new BusinessException(ErrorCode.AI_SCENE_NOT_FOUND);
         }
@@ -317,20 +320,6 @@ public class LlmSceneConfigServiceImpl extends ServiceImpl<LlmSceneConfigMapper,
     }
 
     /**
-     * 规范化场景编码。
-     */
-    private String normalizeSceneCode(String sceneCode) {
-        if (StrUtil.isBlank(sceneCode)) {
-            throw new BusinessException(ErrorCode.PARAM_VALID_ERROR, "场景编码不能为空");
-        }
-        String normalizedSceneCode = sceneCode.trim().toUpperCase(Locale.ROOT);
-        if (!SCENE_CODE_PATTERN.matcher(normalizedSceneCode).matches()) {
-            throw new BusinessException(ErrorCode.PARAM_VALID_ERROR, "场景编码格式不合法");
-        }
-        return normalizedSceneCode;
-    }
-
-    /**
      * 规范化可选 Provider ID。
      */
     private String normalizeOptionalProviderId(String providerId) {
@@ -368,7 +357,7 @@ public class LlmSceneConfigServiceImpl extends ServiceImpl<LlmSceneConfigMapper,
         }
     }
 
-    private LlmSceneConfig auditedScene(String sceneCode) {
+    private LlmSceneConfig auditedScene(AiSceneCode sceneCode) {
         return LlmSceneConfig.builder()
                 .sceneCode(sceneCode)
                 .updatedBy(AuthContext.getUserIdOrNull())

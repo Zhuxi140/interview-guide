@@ -1,5 +1,6 @@
 package interview.ai.config.model.vo;
 
+import interview.common.enums.AiSceneCode;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 
@@ -10,7 +11,7 @@ import java.time.OffsetDateTime;
 public record LlmSceneStatusVO(
 
         @Schema(description = "场景编码", example = "RESUME_ANALYSIS")
-        String sceneCode,
+        AiSceneCode sceneCode,
 
         @Schema(description = "场景开关")
         Boolean enabled,

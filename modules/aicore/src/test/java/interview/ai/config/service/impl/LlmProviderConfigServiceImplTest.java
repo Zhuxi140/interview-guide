@@ -25,6 +25,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.OffsetDateTime;
@@ -54,6 +55,9 @@ class LlmProviderConfigServiceImplTest {
     @Mock
     private SecretCipher secretCipher;
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     private LlmProviderConfigServiceImpl service;
 
     @BeforeAll
@@ -71,7 +75,8 @@ class LlmProviderConfigServiceImplTest {
                 providerMapper,
                 routeMapper,
                 sceneMapper,
-                secretCipher
+                secretCipher,
+                eventPublisher
         );
         ReflectionTestUtils.setField(service, "baseMapper", providerMapper);
     }

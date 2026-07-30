@@ -3,6 +3,7 @@ package interview.ai.config.service.impl;
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import interview.ai.config.event.LLMGlobalRouteChangeEvent;
 import interview.ai.config.mapper.AiGlobalRouteMapper;
 import interview.ai.config.mapper.LlmProviderConfigMapper;
 import interview.ai.config.model.entity.AiGlobalRoute;
@@ -17,6 +18,8 @@ import interview.common.exception.BusinessException;
 import interview.common.util.TraceUtil;
 import interview.framework.context.AuthContext;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,15 +30,15 @@ import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
-public class AiGlobalRouteServiceImpl
-        extends ServiceImpl<AiGlobalRouteMapper, AiGlobalRoute>
+public class AiGlobalRouteServiceImpl extends ServiceImpl<AiGlobalRouteMapper, AiGlobalRoute>
         implements AiGlobalRouteService {
 
     private static final Pattern PROVIDER_ID_PATTERN = Pattern.compile("[a-z0-9][a-z0-9._-]{0,63}");
-
     private final LlmProviderConfigMapper llmProviderConfigMapper;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
+    @Cacheable(value = "llmGlobalRoute", key = "'ListGlobalRoute'")
     public AiGlobalRouteListVO listRoutes() {
         // 纯 CRUD：全局路由是固定的小表，按模型类型稳定返回。
         return new AiGlobalRouteListVO(
@@ -76,7 +79,7 @@ public class AiGlobalRouteServiceImpl
         AiGlobalRoute update = AiGlobalRoute.builder()
                 .modelType(modelType)
                 .providerId(providerId)
-                .updatedBy(AuthContext.getUserIdOrNull())
+                .updatedBy(AuthContext.getRequiredUserId())
                 .traceId(TraceUtil.getTraceId())
                 .updatedAt(OffsetDateTime.now())
                 .build();
@@ -85,7 +88,8 @@ public class AiGlobalRouteServiceImpl
             throw new BusinessException(ErrorCode.AI_GLOBAL_ROUTE_VERSION_CONFLICT);
         }
 
-        // TODO 路由缓存完成后，在事务提交后发布全局路由变更事件。
+        //路由缓存完成后，在事务提交后发布全局路由变更事件。
+        eventPublisher.publishEvent(new LLMGlobalRouteChangeEvent(this));
         AiGlobalRoute latest = baseMapper.selectById(modelType);
         if (latest == null) {
             throw new BusinessException(ErrorCode.AI_GLOBAL_ROUTE_NOT_FOUND);

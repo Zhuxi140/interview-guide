@@ -218,7 +218,7 @@ public enum ErrorCode {
     AI_SCENE_NOT_FOUND(120018, "AI 场景不存在"),
     AI_SCENE_VERSION_CONFLICT(120019, "AI 场景配置版本冲突，请刷新后重试"),
     AI_SCENE_PARAM_UNSUPPORTED(120020, "AI 场景参数或模型能力不支持"),
-    AI_PROVIDER_TYPE_MISMATCH(120021, "AI Provider 模型类型与路由不匹配"),
+    AI_PROVIDER_TYPE_MISMATCH(120021, "AI Provider 模型类型与路由或场景配置不匹配"),
     AI_PROVIDER_TEST_UNSUPPORTED(120022, "当前模型类型暂不支持连接测试"),
 
     // ------------ 13xxx Spark 离线任务错误码 ------------

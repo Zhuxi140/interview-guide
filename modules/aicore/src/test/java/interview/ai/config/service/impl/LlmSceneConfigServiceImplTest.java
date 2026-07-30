@@ -1,5 +1,6 @@
 package interview.ai.config.service.impl;
 
+import interview.ai.config.Listener.LLMSceneChangedListener;
 import interview.ai.config.mapper.AiGlobalRouteMapper;
 import interview.ai.config.mapper.LlmProviderConfigMapper;
 import interview.ai.config.mapper.LlmSceneConfigMapper;
@@ -19,6 +20,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -45,11 +47,14 @@ class LlmSceneConfigServiceImplTest {
     @Mock
     private LlmProviderConfigMapper providerMapper;
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     private LlmSceneConfigServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new LlmSceneConfigServiceImpl(sceneMapper, routeMapper, providerMapper);
+        service = new LlmSceneConfigServiceImpl(sceneMapper, routeMapper, providerMapper,eventPublisher);
     }
 
     @Test

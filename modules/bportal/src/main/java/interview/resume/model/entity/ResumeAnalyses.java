@@ -61,6 +61,12 @@ public class ResumeAnalyses implements Serializable {
     private String suggestionsJson;
 
     /**
+     * LLM 配置快照 (JSON)
+     */
+    @TableField(typeHandler = JsonbStringTypeHandler.class)
+    private String llmConfigSnapshot;
+
+    /**
      * 评测时间
      */
     private OffsetDateTime analyzedAt;

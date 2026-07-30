@@ -1,6 +1,7 @@
 package interview.ai.config.model.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import interview.common.enums.AiSceneCode;
 import interview.common.enums.AiModelType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -21,7 +22,7 @@ public class LlmSceneConfig implements Serializable {
     private static final long serialVersionUID = 1L;
 
     @TableId(value = "scene_code", type = IdType.INPUT)
-    private String sceneCode;
+    private AiSceneCode sceneCode;
 
     private AiModelType modelType;
 

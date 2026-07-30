@@ -1,5 +1,6 @@
 package interview.ai.config.controller;
 
+import interview.common.enums.AiSceneCode;
 import interview.common.annonate.RequirePermission;
 import interview.common.constant.ApiVersion;
 import interview.common.constant.Perm;
@@ -51,7 +52,7 @@ public class LlmSceneController {
     )
     @GetMapping("/{sceneCode}")
     public Result<LlmSceneVO> getScene(@PathVariable String sceneCode) {
-        return Result.success(llmSceneConfigService.getScene(sceneCode));
+        return Result.success(llmSceneConfigService.getScene(AiSceneCode.valueOf(sceneCode.toUpperCase())));
     }
 
     @Operation(summary = "更新 AI 场景执行参数（CAS 乐观锁）")
@@ -63,7 +64,7 @@ public class LlmSceneController {
     public Result<LlmSceneVO> updateScene(
             @PathVariable String sceneCode,
             @Valid @RequestBody LlmSceneUpdateReq req) {
-        return Result.success(llmSceneConfigService.updateScene(sceneCode, req));
+        return Result.success(llmSceneConfigService.updateScene(AiSceneCode.valueOf(sceneCode.toUpperCase()), req));
     }
 
     @Operation(summary = "启停 AI 场景（CAS 乐观锁）")
@@ -75,6 +76,6 @@ public class LlmSceneController {
     public Result<LlmSceneStatusVO> updateSceneStatus(
             @PathVariable String sceneCode,
             @Valid @RequestBody LlmSceneStatusReq req) {
-        return Result.success(llmSceneConfigService.updateSceneStatus(sceneCode, req));
+        return Result.success(llmSceneConfigService.updateSceneStatus(AiSceneCode.valueOf(sceneCode.toUpperCase()), req));
     }
 }

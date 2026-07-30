@@ -2,6 +2,7 @@ package interview.ai.config.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import interview.ai.config.model.entity.LlmSceneConfig;
+import interview.common.enums.AiSceneCode;
 import interview.ai.config.model.req.LlmSceneQueryReq;
 import interview.ai.config.model.req.LlmSceneStatusReq;
 import interview.ai.config.model.req.LlmSceneUpdateReq;
@@ -23,7 +24,7 @@ public interface LlmSceneConfigService extends IService<LlmSceneConfig> {
      * @param sceneCode 场景编码
      * @return 场景执行参数
      */
-    LlmSceneVO getScene(String sceneCode);
+    LlmSceneVO getScene(AiSceneCode sceneCode);
 
     /**
      * 更新 AI 场景执行参数（CAS 乐观锁）。
@@ -31,7 +32,7 @@ public interface LlmSceneConfigService extends IService<LlmSceneConfig> {
      * @param req 更新请求
      * @return 更新后的场景执行参数
      */
-    LlmSceneVO updateScene(String sceneCode, LlmSceneUpdateReq req);
+    LlmSceneVO updateScene(AiSceneCode sceneCode, LlmSceneUpdateReq req);
 
     /**
      * 启停 AI 场景（CAS 乐观锁）。
@@ -39,5 +40,5 @@ public interface LlmSceneConfigService extends IService<LlmSceneConfig> {
      * @param req 启停请求
      * @return 启停结果
      */
-    LlmSceneStatusVO updateSceneStatus(String sceneCode, LlmSceneStatusReq req);
+    LlmSceneStatusVO updateSceneStatus(AiSceneCode sceneCode, LlmSceneStatusReq req);
 }

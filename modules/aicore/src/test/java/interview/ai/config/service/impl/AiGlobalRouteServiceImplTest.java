@@ -2,6 +2,7 @@ package interview.ai.config.service.impl;
 
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
+import interview.ai.config.Listener.LLMGlobalRouteChangeListener;
 import interview.ai.config.mapper.AiGlobalRouteMapper;
 import interview.ai.config.mapper.LlmProviderConfigMapper;
 import interview.ai.config.model.entity.AiGlobalRoute;
@@ -17,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.OffsetDateTime;
@@ -39,6 +41,9 @@ class AiGlobalRouteServiceImplTest {
     @Mock
     private LlmProviderConfigMapper providerMapper;
 
+    @Mock
+    private ApplicationEventPublisher listener;
+
     private AiGlobalRouteServiceImpl service;
 
     @BeforeAll
@@ -51,7 +56,7 @@ class AiGlobalRouteServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new AiGlobalRouteServiceImpl(providerMapper);
+        service = new AiGlobalRouteServiceImpl(providerMapper, listener);
         ReflectionTestUtils.setField(service, "baseMapper", routeMapper);
     }
 
