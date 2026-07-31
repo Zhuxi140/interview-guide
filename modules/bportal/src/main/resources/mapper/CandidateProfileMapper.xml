@@ -2,4 +2,107 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="interview.resume.mapper.CandidateProfileMapper">
 
+    <resultMap id="candidateProfileExecutionMap"
+               type="interview.resume.model.bo.CandidateProfileExecutionBO">
+        <constructor>
+            <arg column="profile_id" javaType="java.lang.Long"/>
+            <arg column="resume_id" javaType="java.lang.Long"/>
+            <arg column="candidate_id" javaType="java.lang.Long"/>
+            <arg column="resume_text" javaType="java.lang.String"/>
+            <arg column="attempt_count" javaType="java.lang.Integer"/>
+        </constructor>
+    </resultMap>
+
+    <select id="claimProfile" resultMap="candidateProfileExecutionMap"
+            affectData="true">
+        UPDATE candidate_ai_profiles AS cp
+        SET status = 'PROCESSING',
+            attempt_count = cp.attempt_count + 1,
+            deadline_at = #{deadline},
+            trace_id = #{traceId},
+            updated_at = #{now}
+        FROM resumes AS r
+        WHERE cp.id = #{profileId}
+          AND cp.resume_id = #{resumeId}
+          AND cp.candidate_id = #{candidateId}
+          AND cp.resume_id = r.id
+          AND r.user_id = #{candidateId}
+          AND cp.is_deleted = FALSE
+          AND r.is_deleted = FALSE
+          AND cp.attempt_count &lt; #{maxAttempts}
+          AND (
+              cp.status = 'PENDING'
+              OR (
+                  cp.status = 'PROCESSING'
+                  AND (cp.deadline_at IS NULL OR cp.deadline_at &lt;= #{now})
+              )
+          )
+        RETURNING cp.id AS profile_id,
+                  cp.resume_id,
+                  cp.candidate_id,
+                  r.resume_text,
+                  cp.attempt_count
+    </select>
+
+    <update id="completeProfile">
+        UPDATE candidate_ai_profiles
+        SET status = 'COMPLETED',
+            summary_json = CAST(#{summaryJson} AS JSONB),
+            llm_config_snapshot = CAST(#{snapshotJson} AS JSONB),
+            deadline_at = NULL,
+            failure_reason = NULL,
+            analyzed_at = #{now},
+            trace_id = #{traceId},
+            updated_at = #{now}
+        WHERE id = #{profileId}
+          AND attempt_count = #{attemptCount}
+          AND status = 'PROCESSING'
+          AND is_deleted = FALSE
+    </update>
+
+    <update id="releaseProfileForRetry">
+        UPDATE candidate_ai_profiles
+        SET status = 'PENDING',
+            deadline_at = NULL,
+            failure_reason = #{failureReason},
+            trace_id = #{traceId},
+            updated_at = #{now}
+        WHERE id = #{profileId}
+          AND attempt_count = #{attemptCount}
+          AND status = 'PROCESSING'
+          AND is_deleted = FALSE
+    </update>
+
+    <update id="failProfile">
+        UPDATE candidate_ai_profiles
+        SET status = 'FAILED',
+            deadline_at = NULL,
+            failure_reason = #{failureReason},
+            trace_id = #{traceId},
+            updated_at = #{now}
+        WHERE id = #{profileId}
+          AND attempt_count = #{attemptCount}
+          AND status = 'PROCESSING'
+          AND is_deleted = FALSE
+    </update>
+
+    <update id="failExhaustedProfile">
+        UPDATE candidate_ai_profiles
+        SET status = 'FAILED',
+            deadline_at = NULL,
+            failure_reason = #{failureReason},
+            trace_id = #{traceId},
+            updated_at = #{now}
+        WHERE id = #{profileId}
+          AND attempt_count &gt;= #{maxAttempts}
+          AND is_deleted = FALSE
+          AND (
+              status = 'PENDING'
+              OR (
+                  status = 'PROCESSING'
+                  AND (deadline_at IS NULL OR deadline_at &lt;= #{now})
+              )
+          )
+    </update>
+
 </mapper>

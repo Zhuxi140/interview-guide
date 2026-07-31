@@ -47,7 +47,7 @@ app:
       high-delay-ms: 5000
       medium-delay-ms: 30000
       low-delay-ms: 300000
-      lease-seconds: 120
+      lease-seconds: 300
       batch-size: 100
       worker-threads: 8
       # 默认不缓存已领取消息，避免任务排队期间租约过期。

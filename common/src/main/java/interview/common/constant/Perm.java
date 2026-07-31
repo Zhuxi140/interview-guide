@@ -58,6 +58,14 @@ public interface Perm {
         String UPDATE = "application:update-status";
         String MY_LIST = "candidate:applications";
         String WITHDRAW = "candidate:application:withdraw";
+        String SCREENING_CONFIG_DETAIL = "application:screening-config:detail";
+        String SCREENING_CONFIG_UPDATE = "application:screening-config:update";
+        String AI_SCREENING_CREATE = "application:ai-screening:create";
+        String AI_SCREENING_DETAIL = "application:ai-screening:detail";
+        String AI_SCREENING_REVIEW = "application:ai-screening:review";
+        String CANDIDATE_PROFILE_DETAIL = "application:candidate-profile:detail";
+        String MATCH_ANALYSIS_CREATE = "candidate:application:match-analysis:create";
+        String MATCH_ANALYSIS_DETAIL = "candidate:application:match-analysis:detail";
     }
 
     interface AdminLlm {

@@ -17,8 +17,6 @@ import interview.common.exception.BusinessException;
 import interview.common.util.TraceUtil;
 import interview.framework.context.AuthContext;
 import interview.resume.mapper.ResumesMapper;
-import interview.resume.model.entity.CandidateProfile;
-import interview.resume.model.entity.CandidateSkillScores;
 import interview.resume.model.entity.ResumeAnalyses;
 import interview.resume.model.entity.Resumes;
 import interview.resume.model.enums.AnalyzeStatus;
@@ -52,9 +50,6 @@ import java.util.List;
 public class ResumesServiceImpl extends ServiceImpl<ResumesMapper, Resumes> implements ResumesService {
 
     private final ResumeAnalysesService resumeAnalysesService;
-    private final CandidateSkillScoresService candidateSkillScoresService;
-    private final CandidateProfileService candidateProfileService;
-    private final ResumeAnalysisTaskHandler resumeAnalysisTaskHandler;
     private final FileStorageApi fileStorageService;
     private final FileHashApi fileHashService;
     private final FileParseApi fileParseService;
@@ -63,6 +58,7 @@ public class ResumesServiceImpl extends ServiceImpl<ResumesMapper, Resumes> impl
     private final ResumesMapper resumeMapper;
     private final ResumeTxService resumeTxService;
     private final ResumeCleanupMessageFactory cleanupMessageFactory;
+    private final ResumeAnalysisStateService resumeAnalysisStateService;
 
     private static final int MAX_RESUME_COUNT = 5;
     private static final long UPLOAD_DEADLINE_MINUTES = 15;
@@ -356,59 +352,9 @@ public class ResumesServiceImpl extends ServiceImpl<ResumesMapper, Resumes> impl
     }
 
     @Override
-    @Transactional
-    public ResumeAnalyzeTriggerVO analyzeResume(Long resumeId) {
-        // 校验简历存在
+    public ResumeAnalyzeTriggerVO analyzeResume(Long resumeId, String idempotencyKey) {
         Long userId = AuthContext.getRequiredUserId();
-        Resumes resumes = lambdaQuery()
-                .select(Resumes::getResumeText)
-                .eq(Resumes::getId, resumeId)
-                .eq(Resumes::getUserId, userId)
-                .one();
-        if (resumes == null) {
-            throw new BusinessException(ErrorCode.RESUME_NOT_FOUND);
-        }
-        // 更新 resumes.analyzeStatus = AnalyzeStatus.PROCESSING
-        boolean update = lambdaUpdate()
-                .eq(Resumes::getId, resumeId)
-                .in(Resumes::getAnalyzeStatus,AnalyzeStatus.PENDING,
-                        AnalyzeStatus.FAILED)
-                .set(Resumes::getAnalyzeStatus, AnalyzeStatus.PROCESSING)
-                .update();
-
-        if (!update) {
-            throw new BusinessException(ErrorCode.RESUME_ANALYZE_STATUS_ERROR);
-        }
-
-        // 写入本地消息表进行兜底补偿
-        MessageDTO msg = MessageDTO.builder()
-                .bizKey(MsgTopic.RESUME_UPLOAD_CLEANUP.name() + ":" + ":" + userId + ":" + resumeId)
-                .topic(MsgTopic.RESUME_AI_PARSER)
-                .schemaVersion(1)
-                .payload(resumeId.toString())
-                .status(MsgStatus.PENDING)
-                .priority(MsgPriority.HIGH)
-                .build();
-        localMessageApi.saveInCurrentTransaction(msg);
-        //TODO ④ 异步/同步调用大模型解析 resumeText（从 resumes 表读取）
-        String resumeText = resumes.getResumeText();
-        if (StrUtil.isBlank(resumeText)) {
-            throw new BusinessException(ErrorCode.RESUME_ANALYSIS_FAILED);
-        }
-        resumeAnalysisTaskHandler.handleResumeAnalysis(resumes.getResumeText());
-        //TODO ⑤ 解析结果写入 resume_analyses 表（overallScore, strengthsJson, suggestionsJson）
-        //TODO ⑥ 写入 candidate_skill_scores 表（每个维度一条记录）
-        //TODO ⑦ 合并/更新 candidate_profile 表（按 userId 聚合各维度平均分）
-        //TODO ⑧ 更新 resumes.analyzeStatus = AnalyzeStatus.COMPLETED（或 FAILED）
-        //TODO ⑨ Phase 4 扩展点：写入 token_consume_logs
-
-        // 发本地消息触发异步解析（由 MessageDispatcher 消费）
-
-        return ResumeAnalyzeTriggerVO.builder()
-                .taskId(null)
-                .resumeId(resumeId)
-                .analyzeStatus(AnalyzeStatus.PROCESSING)
-                .build();
+        return resumeAnalysisStateService.accept(userId, resumeId, idempotencyKey);
     }
 
     @Override
@@ -416,7 +362,7 @@ public class ResumesServiceImpl extends ServiceImpl<ResumesMapper, Resumes> impl
         // ① 校验简历存在
         Long userId = AuthContext.getRequiredUserId();
         Resumes resume = lambdaQuery()
-                .select(Resumes::getUserId)
+                .select(Resumes::getUserId, Resumes::getAnalysisMessageId)
                 .eq(Resumes::getUserId, userId)
                 .eq(Resumes::getId, resumeId)
                 .one();
@@ -425,51 +371,23 @@ public class ResumesServiceImpl extends ServiceImpl<ResumesMapper, Resumes> impl
         }
 
         // ② 查询分析结果主表
+        if (resume.getAnalysisMessageId() == null) {
+            throw new BusinessException(ErrorCode.RESUME_ANALYSIS_NOT_FOUND);
+        }
         ResumeAnalyses analysis = resumeAnalysesService.lambdaQuery()
+                .eq(ResumeAnalyses::getId, resume.getAnalysisMessageId())
                 .eq(ResumeAnalyses::getResumeId, resumeId)
                 .one();
         if (analysis == null) {
             throw new BusinessException(ErrorCode.RESUME_ANALYSIS_NOT_FOUND);
         }
 
-        // ③ 查询各维度打分
-        List<ResumeAnalysisVO.SkillScoreItem> skillScores = candidateSkillScoresService.lambdaQuery()
-                .select(CandidateSkillScores::getDimensionCode,
-                        CandidateSkillScores::getScore,
-                        CandidateSkillScores::getAiJustification)
-                .eq(CandidateSkillScores::getResumeAnalysisId, analysis.getId())
-                .list()
-                .stream()
-                .map(s -> ResumeAnalysisVO.SkillScoreItem.builder()
-                        .dimensionCode(s.getDimensionCode())
-                        .score(s.getScore())
-                        .aiJustification(s.getAiJustification())
-                        .build())
-                .toList();
-
-        // ④ 查询用户画像聚合
-        List<ResumeAnalysisVO.CandidateProfileItem> candidateProfile = candidateProfileService.lambdaQuery()
-                .select(CandidateProfile::getDimensionCode,
-                        CandidateProfile::getAvgScore,
-                        CandidateProfile::getLatestJustification)
-                .eq(CandidateProfile::getUserId, resume.getUserId())
-                .list()
-                .stream()
-                .map(c -> ResumeAnalysisVO.CandidateProfileItem.builder()
-                        .dimensionCode(c.getDimensionCode())
-                        .avgScore(c.getAvgScore())
-                        .latestJustification(c.getLatestJustification())
-                        .build())
-                .toList();
-
-        // ⑤ 组装嵌套 VO 返回
+        // ③ 仅返回候选人本人简历分析结果，HR 人才画像由独立业务生成。
         return ResumeAnalysisVO.builder()
                 .overallScore(analysis.getOverallScore())
                 .strengthsJson(analysis.getStrengthsJson() != null ? analysis.getStrengthsJson().toString() : null)
                 .suggestionsJson(analysis.getSuggestionsJson() != null ? analysis.getSuggestionsJson().toString() : null)
                 .analyzedAt(analysis.getAnalyzedAt())
-                .skillScores(skillScores)
-                .candidateProfile(candidateProfile)
                 .build();
     }
 }

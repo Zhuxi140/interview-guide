@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="interview.matching.mapper.JobScreeningConfigMapper">
+
+    <update id="updateByExpectedVersion">
+        UPDATE job_screening_configs
+        SET enabled = #{config.enabled},
+            overall_threshold = #{config.overallThreshold},
+            dimension_thresholds = CAST(#{config.dimensionThresholds} AS JSONB),
+            version = version + 1,
+            updated_by = #{config.updatedBy},
+            trace_id = #{config.traceId},
+            updated_at = #{now}
+        WHERE job_id = #{config.jobId}
+          AND enterprise_id = #{config.enterpriseId}
+          AND version = #{expectedVersion}
+    </update>
+
+</mapper>

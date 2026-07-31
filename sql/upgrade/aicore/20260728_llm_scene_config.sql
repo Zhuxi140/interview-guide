@@ -177,12 +177,22 @@ INSERT INTO llm_scene_config (
 ) VALUES
 (
     'RESUME_ANALYSIS', 'CHAT', NULL, 0.200, 0.900,
-    16000, 2000, 60, 'resume-analysis-v1', '{}'::jsonb,
+    16000, 2000, 60, 'v1', '{}'::jsonb,
     TRUE, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 ),
 (
-    'JOB_RESUME_MATCHING', 'CHAT', NULL, 0.200, 0.900,
-    16000, 1000, 60, 'job-resume-matching-v1', '{}'::jsonb,
+    'CANDIDATE_PROFILE_GENERATION', 'CHAT', NULL, 0.200, 0.900,
+    16000, 2000, 60, 'v1', '{}'::jsonb,
+    TRUE, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+),
+(
+    'HR_APPLICATION_SCREENING', 'CHAT', NULL, 0.200, 0.900,
+    16000, 1000, 60, 'v1', '{}'::jsonb,
+    TRUE, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+),
+(
+    'CANDIDATE_JOB_MATCHING', 'CHAT', NULL, 0.200, 0.900,
+    16000, 1000, 60, 'v1', '{}'::jsonb,
     TRUE, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 )
 ON CONFLICT (scene_code) DO NOTHING;

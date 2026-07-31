@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.baomidou.mybatisplus.core.toolkit.IdWorker;
 import interview.api.system.EnterpriseValidationApi;
 import interview.api.system.UserApi;
+import interview.common.enums.AiTaskStatus;
 import interview.common.enums.ErrorCode;
 import interview.common.enums.UserType;
 import interview.common.exception.BusinessException;
@@ -18,6 +19,7 @@ import interview.matching.model.bo.JobApplicationBO;
 import interview.matching.model.bo.JobApplicationListBO;
 import interview.matching.model.bo.MyApplicationListBO;
 import interview.matching.model.entity.JobApplications;
+import interview.matching.model.entity.ApplicationAiScreening;
 import interview.matching.model.enums.JobApplicationStatus;
 import interview.matching.model.req.*;
 import interview.matching.model.vo.*;
@@ -45,6 +47,7 @@ public class JobApplicationsServiceImpl extends ServiceImpl<JobApplicationsMappe
     private final UserApi userApi;
     private final JobService jobService;
     private final ResumesService resumesService;
+    private final ApplicationAiScreeningService applicationAiScreeningService;
 
     @Override
     @Transactional(rollbackFor = BusinessException.class)
@@ -115,6 +118,9 @@ public class JobApplicationsServiceImpl extends ServiceImpl<JobApplicationsMappe
             throw new BusinessException(ErrorCode.JOB_APPLICATION_ALREADY_EXISTS);
         }
 
+        // 岗位开启自动初筛时，在当前事务内复用同一受理服务写入任务和 Outbox。
+        applicationAiScreeningService.acceptAutomatic(jobApplications);
+
         return toSubmitVO(jobApplications);
     }
 
@@ -148,17 +154,16 @@ public class JobApplicationsServiceImpl extends ServiceImpl<JobApplicationsMappe
         Map<Long, String> nameMap = userApi.getUserNamesByIds(userIds);
 
         List<JobApplicationListItemVO> vos = records.stream()
-                                                .map(bo ->
-                                                        JobApplicationListItemVO.builder()
-                                                                .id(bo.id())
-                                                                .candidateId(bo.candidateId())
-                                                                .candidateName(nameMap.get(bo.candidateId()))
-                                                                .resumeFileName(bo.resumeFileName())
-                                                                .aiMatchScore(bo.aiMatchScore())
-                                                                .status(bo.status())
-                                                                .createdAt(bo.createdAt())
-                                                                .build()
-                                                ).toList();
+                .map(bo -> new JobApplicationListItemVO(
+                        bo.id(),
+                        bo.candidateId(),
+                        nameMap.get(bo.candidateId()),
+                        bo.resumeFileName(),
+                        bo.aiScreeningScore(),
+                        bo.aiRecommendation(),
+                        bo.status(),
+                        bo.createdAt()))
+                .toList();
         // ⑤ 返回 IPage<JobApplicationListItemVO>
         Page<JobApplicationListItemVO> voPage = new Page<>(boPage.getCurrent(), boPage.getSize(), boPage.getTotal());
         voPage.setRecords(vos);
@@ -185,19 +190,19 @@ public class JobApplicationsServiceImpl extends ServiceImpl<JobApplicationsMappe
         String candidateName = userApi.getUserNameById(bo.candidateId());
 
         // ④ 返回 JobApplicationVO
-        return JobApplicationVO.builder()
-                .id(applicationId)
-                .enterpriseId(enterpriseId)
-                .jobId(bo.jobId())
-                .candidateId(bo.candidateId())
-                .candidateName(candidateName)
-                .resumeId(bo.resumeId())
-                .resumeFileName(bo.resumeFileName())
-                .aiMatchScore(bo.aiMatchScore())
-                .status(bo.status())
-                .createdAt(bo.createdAt())
-                .updatedAt(bo.updatedAt())
-                .build();
+        return new JobApplicationVO(
+                applicationId,
+                enterpriseId,
+                bo.jobId(),
+                bo.candidateId(),
+                candidateName,
+                bo.resumeId(),
+                bo.resumeFileName(),
+                bo.aiScreeningScore(),
+                bo.aiRecommendation(),
+                bo.status(),
+                bo.createdAt(),
+                bo.updatedAt());
     }
 
     @Override
@@ -211,6 +216,26 @@ public class JobApplicationsServiceImpl extends ServiceImpl<JobApplicationsMappe
 
         // ②校验：enterpriseValidationApi.validateEnterpriseBelong(enterpriseId, AuthContext.getRequiredUserId())
         enterpriseValidationApi.validateEnterpriseBelong(enterpriseId, AuthContext.getRequiredUserId());
+        JobApplications locked = jobApplicationsMapper.selectByIdForUpdate(applicationId);
+        if (locked == null || !enterpriseId.equals(locked.getEnterpriseId())) {
+            throw new BusinessException(ErrorCode.APPLICATION_NOT_FOUND);
+        }
+
+        // 有效 AI 任务必须完成后走专用审核接口；失败任务仍允许人工兜底。
+        if ((req.getStatus() == JobApplicationStatus.PASSED
+                || req.getStatus() == JobApplicationStatus.REJECTED)
+                && applicationAiScreeningService.lambdaQuery()
+                .eq(ApplicationAiScreening::getApplicationId, applicationId)
+                .in(ApplicationAiScreening::getStatus,
+                        AiTaskStatus.WAITING_PROFILE,
+                        AiTaskStatus.PENDING,
+                        AiTaskStatus.PROCESSING,
+                        AiTaskStatus.COMPLETED)
+                .isNull(ApplicationAiScreening::getReviewDecision)
+                .exists()) {
+            throw new BusinessException(
+                    ErrorCode.APPLICATION_AI_SCREENING_STATUS_INVALID);
+        }
 
         // 使用路径资源、租户和期望状态完成原子条件更新。
         Long userId = AuthContext.getRequiredUserId();
@@ -251,18 +276,16 @@ public class JobApplicationsServiceImpl extends ServiceImpl<JobApplicationsMappe
         Map<Long, String> nameMap = enterpriseValidationApi.getNameList(enterpriseIds);
         // ④ 返回 IPage<MyApplicationListItemVO>
         List<MyApplicationListItemVO> vos = records.stream()
-                .map(bo ->
-                        MyApplicationListItemVO
-                                .builder()
-                                .id(bo.id())
-                                .jobId(bo.jobId())
-                                .jobTitle(bo.jobTitle())
-                                .enterpriseName(nameMap.get(bo.enterpriseId()))
-                                .aiMatchScore(bo.aiMatchScore())
-                                .status(bo.status())
-                                .createdAt(bo.createdAt())
-                                .build()
-                ).toList();
+                .map(bo -> new MyApplicationListItemVO(
+                        bo.id(),
+                        bo.jobId(),
+                        bo.jobTitle(),
+                        nameMap.get(bo.enterpriseId()),
+                        bo.matchScore(),
+                        bo.passProbability(),
+                        bo.status(),
+                        bo.createdAt()))
+                .toList();
 
         Page<MyApplicationListItemVO> voPage = new Page<>(boPage.getCurrent(), boPage.getSize(), boPage.getTotal());
         voPage.setRecords(vos);

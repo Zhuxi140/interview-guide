@@ -10,7 +10,8 @@ public record MyApplicationListBO(
         Long jobId,
         Long enterpriseId,
         String jobTitle,
-        Integer aiMatchScore,
+        Integer matchScore,
+        Integer passProbability,
         JobApplicationStatus status,
         OffsetDateTime createdAt
 ) {

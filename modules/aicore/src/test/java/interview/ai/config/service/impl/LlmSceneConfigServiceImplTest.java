@@ -1,6 +1,5 @@
 package interview.ai.config.service.impl;
 
-import interview.ai.config.Listener.LLMSceneChangedListener;
 import interview.ai.config.mapper.AiGlobalRouteMapper;
 import interview.ai.config.mapper.LlmProviderConfigMapper;
 import interview.ai.config.mapper.LlmSceneConfigMapper;
@@ -12,6 +11,7 @@ import interview.ai.config.model.req.LlmSceneUpdateReq;
 import interview.ai.config.model.vo.LlmSceneStatusVO;
 import interview.ai.config.model.vo.LlmSceneVO;
 import interview.common.enums.AiModelType;
+import interview.common.enums.AiSceneCode;
 import interview.common.exception.BusinessException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -65,12 +65,12 @@ class LlmSceneConfigServiceImplTest {
         when(providerMapper.lockByIdIncludingDeleted("dashscope-chat"))
                 .thenReturn(provider("dashscope-chat"));
         when(sceneMapper.updateSceneByVersion(any(), eq(2))).thenReturn(1);
-        when(sceneMapper.selectById("RESUME_ANALYSIS")).thenReturn(latest);
+        when(sceneMapper.selectById(AiSceneCode.RESUME_ANALYSIS)).thenReturn(latest);
 
         LlmSceneUpdateReq req = validUpdateReq();
         req.setProviderId(" DashScope-Chat ");
 
-        LlmSceneVO result = service.updateScene("resume_analysis", req);
+        LlmSceneVO result = service.updateScene(AiSceneCode.RESUME_ANALYSIS, req);
 
         ArgumentCaptor<LlmSceneConfig> updateCaptor = ArgumentCaptor.forClass(LlmSceneConfig.class);
         verify(sceneMapper).updateSceneByVersion(updateCaptor.capture(), eq(2));
@@ -88,7 +88,8 @@ class LlmSceneConfigServiceImplTest {
                 .providerId("dashscope-chat")
                 .version(1)
                 .build();
-        when(sceneMapper.selectById("RESUME_ANALYSIS")).thenReturn(current, latest);
+        when(sceneMapper.selectById(AiSceneCode.RESUME_ANALYSIS))
+                .thenReturn(current, latest);
         when(routeMapper.lockByModelType(AiModelType.CHAT)).thenReturn(route);
         when(sceneMapper.lockBySceneCode("RESUME_ANALYSIS")).thenReturn(current);
         when(providerMapper.lockByIdIncludingDeleted("dashscope-chat"))
@@ -99,7 +100,8 @@ class LlmSceneConfigServiceImplTest {
         req.setExpectedVersion(3);
         req.setEnabled(true);
 
-        LlmSceneStatusVO result = service.updateSceneStatus("RESUME_ANALYSIS", req);
+        LlmSceneStatusVO result = service.updateSceneStatus(
+                AiSceneCode.RESUME_ANALYSIS, req);
 
         InOrder locks = inOrder(routeMapper, sceneMapper, providerMapper);
         locks.verify(routeMapper).lockByModelType(AiModelType.CHAT);
@@ -116,7 +118,7 @@ class LlmSceneConfigServiceImplTest {
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> service.updateScene("RESUME_ANALYSIS", req)
+                () -> service.updateScene(AiSceneCode.RESUME_ANALYSIS, req)
         );
 
         assertEquals(120020, exception.getCode());
@@ -131,14 +133,14 @@ class LlmSceneConfigServiceImplTest {
         req.setMaxInputTokens(16000);
         req.setMaxOutputTokens(2000);
         req.setTimeoutSeconds(60);
-        req.setPromptVersion("resume-analysis-v1");
+        req.setPromptVersion("v1");
         req.setExtraOptions("{}");
         return req;
     }
 
     private LlmSceneConfig scene(boolean enabled, int version, String providerId) {
         return LlmSceneConfig.builder()
-                .sceneCode("RESUME_ANALYSIS")
+                .sceneCode(AiSceneCode.RESUME_ANALYSIS)
                 .modelType(AiModelType.CHAT)
                 .providerId(providerId)
                 .temperature(BigDecimal.valueOf(0.2))

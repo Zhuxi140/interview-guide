@@ -13,16 +13,41 @@
         ON CONFLICT DO NOTHING
     </insert>
 
+    <select id="selectByIdForUpdate"
+            resultType="interview.matching.model.entity.JobApplications">
+        SELECT id,
+               enterprise_id,
+               job_id,
+               candidate_id,
+               resume_id,
+               status,
+               created_at,
+               updated_at
+        FROM job_applications
+        WHERE id = #{applicationId}
+          AND is_deleted = FALSE
+        FOR UPDATE
+    </select>
+
     <select id="pageApplicationsWithJoin" resultType="interview.matching.model.bo.JobApplicationListBO">
         SELECT
             ja.id,
             ja.candidate_id,
             r.file_name AS resume_file_name,
-            ja.ai_match_score,
+            screening.overall_match_score AS ai_screening_score,
+            screening.recommendation AS ai_recommendation,
             ja.status,
             ja.created_at
         FROM job_applications ja
             LEFT JOIN resumes r ON r.id = ja.resume_id
+            LEFT JOIN LATERAL (
+                SELECT overall_match_score, recommendation
+                FROM application_ai_screenings
+                WHERE application_id = ja.id
+                  AND status = 'COMPLETED'
+                ORDER BY created_at DESC, id DESC
+                LIMIT 1
+            ) screening ON TRUE
         WHERE
             ja.is_deleted = false
           AND
@@ -44,12 +69,21 @@
             ja.candidate_id,
             r.id AS resume_id,
             r.file_name AS resume_file_name,
-            ja.ai_match_score,
+            screening.overall_match_score AS ai_screening_score,
+            screening.recommendation AS ai_recommendation,
             ja.status,
             ja.created_at,
             ja.updated_at
             FROM job_applications ja
         join resumes r ON ja.resume_id = r.id
+        LEFT JOIN LATERAL (
+            SELECT overall_match_score, recommendation
+            FROM application_ai_screenings
+            WHERE application_id = ja.id
+              AND status = 'COMPLETED'
+            ORDER BY created_at DESC, id DESC
+            LIMIT 1
+        ) screening ON TRUE
         WHERE
             ja.is_deleted = false
           AND
@@ -64,11 +98,20 @@
             ja.job_id,
             ja.enterprise_id,
             j.title AS job_title,
-            ja.ai_match_score,
+            prediction.match_score,
+            prediction.pass_probability,
             ja.status,
             ja.created_at
         FROM job_applications ja
         JOIN jobs j ON ja.job_id = j.id
+        LEFT JOIN LATERAL (
+            SELECT match_score, pass_probability
+            FROM candidate_job_match_analyses
+            WHERE application_id = ja.id
+              AND status = 'COMPLETED'
+            ORDER BY created_at DESC, id DESC
+            LIMIT 1
+        ) prediction ON TRUE
         WHERE ja.candidate_id = #{candidateId}
           AND ja.is_deleted = false
         <if test="status != null">

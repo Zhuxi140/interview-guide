@@ -6,70 +6,66 @@ import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
-import lombok.*;
+import interview.common.enums.AiTaskStatus;
+import interview.framework.mybatis.JsonbStringTypeHandler;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.io.Serializable;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 /**
- * <p>
- * 候选人画像聚合表（供雷达图读取）
- * </p>
- *
- * @author zhuxi
- * @since 2026-07-13
+ * 一份简历的一版岗位无关人才画像。
  */
-
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@TableName("candidate_profile")
+@TableName(value = "candidate_ai_profiles", autoResultMap = true)
 public class CandidateProfile implements Serializable {
 
-    private static final long serialVersionUID = 1L;
-
-    /**
-     * 主键
-     */
-    @TableId(value = "id", type = IdType.ASSIGN_ID)
+    @TableId(type = IdType.INPUT)
     private Long id;
 
-    /**
-     * [逻辑外键]→sys_users, 仅 user_type='CANDIDATE'
-     */
-    private Long userId;
+    private Long candidateId;
 
-    /**
-     * 打分维度编码
-     */
-    private String dimensionCode;
+    private Long resumeId;
 
-    /**
-     * 各版简历该维度的平均分
-     */
-    private Integer avgScore;
+    private Long sourceApplicationId;
 
-    /**
-     * 最新简历的 AI 推导依据
-     */
-    private String latestJustification;
+    private Long sourceEnterpriseId;
 
-    /**
-     * 逻辑删除标识
-     */
+    private AiTaskStatus status;
+
+    private String profileSchemaVersion;
+
+    @TableField(typeHandler = JsonbStringTypeHandler.class)
+    private String summaryJson;
+
+    @TableField(typeHandler = JsonbStringTypeHandler.class)
+    private String llmConfigSnapshot;
+
+    private Integer attemptCount;
+
+    private OffsetDateTime deadlineAt;
+
+    private String failureReason;
+
+    private OffsetDateTime analyzedAt;
+
     @TableLogic
     private Boolean isDeleted;
 
-    /**
-     * 创建时间
-     */
-    @TableField(fill = FieldFill.INSERT)
-    private LocalDateTime createdAt;
+    private Long createdBy;
 
-    /**
-     * 更新时间
-     */
     @TableField(fill = FieldFill.INSERT_UPDATE)
-    private LocalDateTime updatedAt;
+    private String traceId;
+
+    @TableField(fill = FieldFill.INSERT)
+    private OffsetDateTime createdAt;
+
+    @TableField(fill = FieldFill.INSERT_UPDATE)
+    private OffsetDateTime updatedAt;
 }

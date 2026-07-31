@@ -1,5 +1,6 @@
 package interview.matching.model.bo;
 
+import interview.common.enums.ScreeningRecommendation;
 import interview.matching.model.enums.JobApplicationStatus;
 
 import java.time.OffsetDateTime;
@@ -12,7 +13,8 @@ public record JobApplicationListBO(
         Long id,
         Long candidateId,
         String resumeFileName,
-        Integer aiMatchScore,
+        Integer aiScreeningScore,
+        ScreeningRecommendation aiRecommendation,
         JobApplicationStatus status,
         OffsetDateTime createdAt
 ){}

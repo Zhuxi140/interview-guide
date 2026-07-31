@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="interview.matching.mapper.ApplicationAiScreeningMapper">
+
+    <resultMap id="applicationScreeningExecutionMap"
+               type="interview.matching.model.bo.ApplicationScreeningExecutionBO">
+        <constructor>
+            <arg column="screening_id" javaType="java.lang.Long"/>
+            <arg column="application_id" javaType="java.lang.Long"/>
+            <arg column="candidate_profile_id" javaType="java.lang.Long"/>
+            <arg column="threshold_snapshot" javaType="java.lang.String"/>
+            <arg column="job_snapshot" javaType="java.lang.String"/>
+            <arg column="attempt_count" javaType="java.lang.Integer"/>
+        </constructor>
+    </resultMap>
+
+    <select id="claimScreening" resultMap="applicationScreeningExecutionMap"
+            affectData="true">
+        UPDATE application_ai_screenings
+        SET status = 'PROCESSING',
+            attempt_count = attempt_count + 1,
+            deadline_at = #{deadline},
+            trace_id = #{traceId},
+            updated_at = #{now}
+        WHERE id = #{screeningId}
+          AND candidate_profile_id IS NOT NULL
+          AND attempt_count &lt; #{maxAttempts}
+          AND (
+              status = 'PENDING'
+              OR (
+                  status = 'PROCESSING'
+                  AND (deadline_at IS NULL OR deadline_at &lt;= #{now})
+              )
+          )
+        RETURNING id AS screening_id,
+                  application_id,
+                  candidate_profile_id,
+                  threshold_snapshot::TEXT,
+                  job_snapshot::TEXT,
+                  attempt_count
+    </select>
+
+    <update id="completeScreening">
+        UPDATE application_ai_screenings
+        SET status = 'COMPLETED',
+            overall_match_score = #{overallMatchScore},
+            dimension_matches_json = CAST(#{dimensionMatchesJson} AS JSONB),
+            recommendation = #{recommendation},
+            llm_config_snapshot = CAST(#{snapshotJson} AS JSONB),
+            deadline_at = NULL,
+            failure_reason = NULL,
+            trace_id = #{traceId},
+            updated_at = #{now}
+        WHERE id = #{screeningId}
+          AND attempt_count = #{attemptCount}
+          AND status = 'PROCESSING'
+    </update>
+
+    <update id="releaseScreeningForRetry">
+        UPDATE application_ai_screenings
+        SET status = 'PENDING',
+            deadline_at = NULL,
+            failure_reason = #{failureReason},
+            trace_id = #{traceId},
+            updated_at = #{now}
+        WHERE id = #{screeningId}
+          AND attempt_count = #{attemptCount}
+          AND status = 'PROCESSING'
+    </update>
+
+    <update id="failScreening">
+        UPDATE application_ai_screenings
+        SET status = 'FAILED',
+            deadline_at = NULL,
+            failure_reason = #{failureReason},
+            trace_id = #{traceId},
+            updated_at = #{now}
+        WHERE id = #{screeningId}
+          AND attempt_count = #{attemptCount}
+          AND status = 'PROCESSING'
+    </update>
+
+    <update id="failWaitingScreening">
+        UPDATE application_ai_screenings
+        SET status = 'FAILED',
+            deadline_at = NULL,
+            failure_reason = #{failureReason},
+            trace_id = #{traceId},
+            updated_at = #{now}
+        WHERE id = #{screeningId}
+          AND status = 'WAITING_PROFILE'
+    </update>
+
+    <update id="failExhaustedScreening">
+        UPDATE application_ai_screenings
+        SET status = 'FAILED',
+            deadline_at = NULL,
+            failure_reason = #{failureReason},
+            trace_id = #{traceId},
+            updated_at = #{now}
+        WHERE id = #{screeningId}
+          AND attempt_count &gt;= #{maxAttempts}
+          AND (
+              status = 'PENDING'
+              OR (
+                  status = 'PROCESSING'
+                  AND (deadline_at IS NULL OR deadline_at &lt;= #{now})
+              )
+          )
+    </update>
+
+</mapper>

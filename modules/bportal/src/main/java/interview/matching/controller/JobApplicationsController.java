@@ -15,7 +15,10 @@ import interview.matching.model.vo.JobApplicationStatusVO;
 import interview.matching.model.vo.JobApplicationSubmitVO;
 import interview.matching.model.vo.JobApplicationVO;
 import interview.matching.model.vo.MyApplicationListItemVO;
+import interview.matching.model.vo.CandidateJobMatchAnalysisVO;
+import interview.matching.model.vo.CandidateJobMatchTriggerVO;
 import interview.matching.service.JobApplicationsService;
+import interview.matching.service.CandidateJobMatchAnalysisService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -23,6 +26,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -38,6 +42,7 @@ import org.springframework.web.bind.annotation.*;
 public class JobApplicationsController {
 
     private final JobApplicationsService jobApplicationsService;
+    private final CandidateJobMatchAnalysisService candidateJobMatchAnalysisService;
 
     @MaxRiskLevel(RiskLevel.NO_RISK)
     @Operation(summary = "候选人投递简历")
@@ -67,7 +72,7 @@ public class JobApplicationsController {
 
     @RequirePermission(permissions = Perm.Application.DETAIL, scope = PermissionScope.ENTERPRISE)
     @MaxRiskLevel(RiskLevel.NO_RISK)
-    @Operation(summary = "查询投递详情（含 AI 人岗匹配分）")
+    @Operation(summary = "查询投递详情（含最新 HR AI 初筛建议）")
     @GetMapping("/enterprises/{enterpriseId}/applications/{applicationId}")
     public Result<JobApplicationVO> getApplicationDetail(
             @PathVariable("enterpriseId") Long enterpriseId,
@@ -105,5 +110,25 @@ public class JobApplicationsController {
             @RequestBody @Valid JobApplicationWithdrawReq req) {
         return Result.success(
                 jobApplicationsService.withdrawApplication(applicationId, req));
+    }
+
+    @MaxRiskLevel(RiskLevel.LOW_RISK)
+    @Operation(summary = "候选人发起岗位适配预测")
+    @PostMapping("/candidate/applications/{applicationId}/match-analyses")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public Result<CandidateJobMatchTriggerVO> createMatchAnalysis(
+            @PathVariable("applicationId") Long applicationId,
+            @RequestHeader("Idempotency-Key")
+            @NotBlank @Size(max = 128) String idempotencyKey) {
+        return Result.success(candidateJobMatchAnalysisService.accept(
+                applicationId, idempotencyKey));
+    }
+
+    @MaxRiskLevel(RiskLevel.NO_RISK)
+    @Operation(summary = "候选人查询最新岗位适配预测")
+    @GetMapping("/candidate/applications/{applicationId}/match-analyses/latest")
+    public Result<CandidateJobMatchAnalysisVO> getLatestMatchAnalysis(
+            @PathVariable("applicationId") Long applicationId) {
+        return Result.success(candidateJobMatchAnalysisService.getLatest(applicationId));
     }
 }

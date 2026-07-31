@@ -81,6 +81,26 @@ public class Resumes implements Serializable {
     private Long cleanupMessageId;
 
     /**
+     * 当前 AI 分析消息 ID，同时作为对外 taskId
+     */
+    private Long analysisMessageId;
+
+    /**
+     * 当前 AI 分析请求幂等键摘要
+     */
+    private String analysisIdempotencyKeyHash;
+
+    /**
+     * 当前 AI 分析已领取次数
+     */
+    private Integer analysisAttemptCount;
+
+    /**
+     * 当前 AI 分析执行截止时间
+     */
+    private OffsetDateTime analysisDeadlineAt;
+
+    /**
      * 上传时间
      */
     @TableField(fill = FieldFill.INSERT)

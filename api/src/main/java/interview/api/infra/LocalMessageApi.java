@@ -1,6 +1,7 @@
 package interview.api.infra;
 
 import interview.api.infra.dto.MessageDTO;
+import interview.common.enums.MsgTopic;
 
 /**
  * @author zhuxi
@@ -35,4 +36,12 @@ public interface LocalMessageApi {
      * @return 消息 ID
      */
     Long ensurePending(MessageDTO message);
+
+    /**
+     * 按主题和业务幂等键查询消息 ID
+     * @param topic 消息主题
+     * @param bizKey 业务幂等键
+     * @return 消息 ID；不存在时返回 null
+     */
+    Long findIdByBizKey(MsgTopic topic, String bizKey);
 }

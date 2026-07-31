@@ -15,7 +15,7 @@ public class MessageDispatchProperties {
     private long highDelayMs = 5_000;
     private long mediumDelayMs = 30_000;
     private long lowDelayMs = 300_000;
-    private long leaseSeconds = 120;
+    private long leaseSeconds = 300;
     private int batchSize = 100;
     private int workerThreads = 8;
     private int queueCapacity = 0;

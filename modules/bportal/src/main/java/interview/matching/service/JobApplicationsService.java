@@ -47,7 +47,7 @@ public interface JobApplicationsService extends IService<JobApplications> {
      *
      * @param enterpriseId  企业 ID
      * @param applicationId 投递记录 ID
-     * @return 投递详情（含候选人姓名、简历文件名、AI 匹配分）
+     * @return 投递详情（含候选人姓名、简历文件名和最新 AI 初筛建议）
      */
     JobApplicationVO getApplicationDetail(Long enterpriseId, Long applicationId);
 

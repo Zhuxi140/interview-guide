@@ -1,9 +1,9 @@
 package interview.matching.model.vo;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import interview.common.enums.ScreeningRecommendation;
 import interview.matching.model.enums.JobApplicationStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
-import lombok.Builder;
 
 import java.time.OffsetDateTime;
 
@@ -11,7 +11,6 @@ import java.time.OffsetDateTime;
  * @author zhuxi
  * @apiNote 投递记录详情响应
  */
-@Builder
 @Schema(description = "投递记录详情响应")
 public record JobApplicationVO(
         @Schema(description = "投递ID")
@@ -28,8 +27,10 @@ public record JobApplicationVO(
         Long resumeId,
         @Schema(description = "简历文件名")
         String resumeFileName,
-        @Schema(description = "AI 匹配评分")
-        Integer aiMatchScore,
+        @Schema(description = "最新 HR AI 初筛匹配分")
+        Integer aiScreeningScore,
+        @Schema(description = "最新 HR AI 初筛建议")
+        ScreeningRecommendation aiRecommendation,
         @Schema(description = "投递状态")
         JobApplicationStatus status,
         @Schema(description = "创建时间")

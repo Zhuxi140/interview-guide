@@ -10,8 +10,11 @@ import interview.ai.config.model.entity.LlmProviderConfig;
 import interview.ai.config.model.req.AiGlobalRouteUpdateReq;
 import interview.ai.config.model.vo.AiGlobalRouteVO;
 import interview.common.enums.AiModelType;
+import interview.common.enums.UserType;
 import interview.common.exception.BusinessException;
+import interview.framework.context.AuthContext;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -58,6 +61,15 @@ class AiGlobalRouteServiceImplTest {
     void setUp() {
         service = new AiGlobalRouteServiceImpl(providerMapper, listener);
         ReflectionTestUtils.setField(service, "baseMapper", routeMapper);
+        AuthContext.setAuthContext(AuthContext.AuthUser.builder()
+                .userId(1L)
+                .userType(UserType.PLATFORM_ADMIN)
+                .build());
+    }
+
+    @AfterEach
+    void tearDown() {
+        AuthContext.remove();
     }
 
     @Test

@@ -16,12 +16,16 @@ import interview.resume.model.vo.ResumeUploadVO;
 import interview.resume.model.vo.ResumeVO;
 import interview.resume.service.ResumesService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -90,13 +94,18 @@ public class ResumesController {
     @MaxRiskLevel(RiskLevel.LOW_RISK)
     @Operation(summary = "触发 AI 简历解析（异步，按需付费）")
     @PostMapping("/{resumeId}/analyze")
-    public Result<ResumeAnalyzeTriggerVO> analyzeResume(@PathVariable("resumeId") Long resumeId) {
-        ResumeAnalyzeTriggerVO vo = resumesService.analyzeResume(resumeId);
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public Result<ResumeAnalyzeTriggerVO> analyzeResume(
+            @PathVariable("resumeId") Long resumeId,
+            @Parameter(description = "客户端生成的幂等键，同一用户对同一简历重试时必须保持不变")
+            @RequestHeader("Idempotency-Key")
+            @NotBlank @Size(max = 128) String idempotencyKey) {
+        ResumeAnalyzeTriggerVO vo = resumesService.analyzeResume(resumeId, idempotencyKey);
         return Result.success(vo);
     }
 
     @MaxRiskLevel(RiskLevel.NO_RISK)
-    @Operation(summary = "查询简历 AI 分析结果（含技能评分 + 候选人画像）")
+    @Operation(summary = "查询简历 AI 分析结果")
     @GetMapping("/{resumeId}/analysis")
     public Result<ResumeAnalysisVO> getAnalysis(@PathVariable("resumeId") Long resumeId) {
         ResumeAnalysisVO vo = resumesService.getAnalysis(resumeId);

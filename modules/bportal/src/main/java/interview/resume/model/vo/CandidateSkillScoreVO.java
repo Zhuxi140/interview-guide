@@ -1,28 +1,22 @@
 package interview.resume.model.vo;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
+import interview.common.enums.CandidateDimensionCode;
 import io.swagger.v3.oas.annotations.media.Schema;
-import lombok.Builder;
 
-import java.time.OffsetDateTime;
+import java.util.List;
 
 /**
- * @author zhuxi
- * @apiNote 技能评分项响应
+ * 人才画像固定维度评分响应。
  */
-@Builder
-@Schema(description = "技能评分项响应")
+@Schema(description = "人才画像固定维度评分响应")
 public record CandidateSkillScoreVO(
-        @Schema(description = "评分项ID")
-        Long id,
         @Schema(description = "维度编码")
-        String dimensionCode,
-        @Schema(description = "分数")
+        CandidateDimensionCode dimensionCode,
+        @Schema(description = "维度分数")
         Integer score,
-        @Schema(description = "AI 理由")
+        @Schema(description = "评分依据")
         String aiJustification,
-        @Schema(description = "创建时间")
-        @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-        OffsetDateTime createdAt
+        @Schema(description = "来自简历的证据")
+        List<String> evidence
 ) {
 }

@@ -26,7 +26,7 @@ public class CodeGenerator {
         // ---- 简历域 ----
         generate(baseDir, "resume",
                 "resumes", "resume_analyses",
-                "candidate_skill_scores", "candidate_profile");
+                "candidate_skill_scores", "candidate_ai_profiles");
 
         // ---- 匹配域 ----
         generate(baseDir, "matching",

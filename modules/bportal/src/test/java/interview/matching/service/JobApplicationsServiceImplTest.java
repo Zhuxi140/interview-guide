@@ -48,13 +48,16 @@ class JobApplicationsServiceImplTest {
     private JobService jobService;
     @Mock
     private ResumesService resumesService;
+    @Mock
+    private ApplicationAiScreeningService applicationAiScreeningService;
 
     private JobApplicationsServiceImpl service;
 
     @BeforeEach
     void setUp() {
         service = spy(new JobApplicationsServiceImpl(
-                mapper, enterpriseValidationApi, userApi, jobService, resumesService));
+                mapper, enterpriseValidationApi, userApi, jobService,
+                resumesService, applicationAiScreeningService));
         AuthContext.setAuthContext(AuthContext.AuthUser.builder()
                 .userId(1L)
                 .userType(UserType.CANDIDATE)

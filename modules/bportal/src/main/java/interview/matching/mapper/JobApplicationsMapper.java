@@ -24,6 +24,14 @@ public interface JobApplicationsMapper extends BaseMapper<JobApplications> {
 
     int insertIgnore(JobApplications application);
 
+    /**
+     * 锁定一条有效投递记录。
+     *
+     * @param applicationId 投递 ID
+     * @return 投递记录；不存在时返回 null
+     */
+    JobApplications selectByIdForUpdate(@Param("applicationId") Long applicationId);
+
     IPage<JobApplicationListBO> pageApplicationsWithJoin(IPage<?> page,
                                                          @Param("enterpriseId") Long enterpriseId,
                                                          @Param("jobId") Long jobId,

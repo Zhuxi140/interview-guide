@@ -62,9 +62,10 @@ public interface ResumesService extends IService<Resumes> {
     /**
      * 触发简历 AI 解析（异步，按需付费）
      * @param resumeId 简历 ID
+     * @param idempotencyKey 当前用户与简历范围内的客户端幂等键
      * @return 任务受理信息
      */
-    ResumeAnalyzeTriggerVO analyzeResume(Long resumeId);
+    ResumeAnalyzeTriggerVO analyzeResume(Long resumeId, String idempotencyKey);
 
     /**
      * 查询简历分析结果

@@ -300,6 +300,10 @@ CREATE TABLE IF NOT EXISTS resumes (
     analyze_status  VARCHAR(20),
     upload_deadline_at TIMESTAMPTZ,
     cleanup_message_id BIGINT,
+    analysis_message_id BIGINT,
+    analysis_idempotency_key_hash VARCHAR(64),
+    analysis_attempt_count INT NOT NULL DEFAULT 0,
+    analysis_deadline_at TIMESTAMPTZ,
     created_at      TIMESTAMPTZ     NOT NULL,
     is_deleted      BOOLEAN         DEFAULT FALSE,
     updated_by      BIGINT,
@@ -320,6 +324,10 @@ COMMENT ON COLUMN resumes.resume_text IS '解析后的简历纯文本';
 COMMENT ON COLUMN resumes.analyze_status IS 'UPLOADING / PENDING / PROCESSING / COMPLETED / FAILED / UPLOAD_FAILED';
 COMMENT ON COLUMN resumes.upload_deadline_at IS '上传预占截止时间，超时后由修复任务收敛';
 COMMENT ON COLUMN resumes.cleanup_message_id IS '上传清理消息逻辑引用，不建立跨模块外键';
+COMMENT ON COLUMN resumes.analysis_message_id IS '当前简历 AI 分析消息 ID，同时作为对外 taskId，不建立跨模块外键';
+COMMENT ON COLUMN resumes.analysis_idempotency_key_hash IS '当前简历 AI 分析请求幂等键 SHA-256 摘要';
+COMMENT ON COLUMN resumes.analysis_attempt_count IS '当前简历 AI 分析已领取次数';
+COMMENT ON COLUMN resumes.analysis_deadline_at IS '当前简历 AI 分析执行截止时间';
 COMMENT ON COLUMN resumes.created_at IS '上传时间';
 COMMENT ON COLUMN resumes.is_deleted IS '逻辑删除';
 COMMENT ON COLUMN resumes.updated_by IS '[逻辑外键]→sys_users';
@@ -332,7 +340,12 @@ CREATE INDEX IF NOT EXISTS idx_resumes_user_id ON resumes (user_id);
 CREATE INDEX IF NOT EXISTS idx_resumes_upload_timeout
     ON resumes (upload_deadline_at, id)
     WHERE analyze_status = 'UPLOADING' AND is_deleted = FALSE;
-
+CREATE UNIQUE INDEX IF NOT EXISTS uk_resumes_analysis_message
+    ON resumes (analysis_message_id)
+    WHERE analysis_message_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_resumes_analysis_timeout
+    ON resumes (analysis_deadline_at, id)
+    WHERE analyze_status = 'PROCESSING' AND is_deleted = FALSE;
 
 -- ==================== 11. resume_analyses ====================
 CREATE TABLE IF NOT EXISTS resume_analyses (
@@ -352,7 +365,7 @@ CREATE TABLE IF NOT EXISTS resume_analyses (
 );
 
 COMMENT ON TABLE resume_analyses IS '简历 AI 分析结果表';
-COMMENT ON COLUMN resume_analyses.id IS '主键';
+COMMENT ON COLUMN resume_analyses.id IS '分析消息 ID，同时作为对外 taskId';
 COMMENT ON COLUMN resume_analyses.resume_id IS '[逻辑外键]→resumes';
 COMMENT ON COLUMN resume_analyses.overall_score IS 'AI 综合评分 (0-100)';
 COMMENT ON COLUMN resume_analyses.strengths_json IS '优点列表 (JSON)';
@@ -369,51 +382,77 @@ CREATE INDEX IF NOT EXISTS idx_resume_analyses_resume_id ON resume_analyses (res
 -- ==================== 12. candidate_skill_scores ====================
 CREATE TABLE IF NOT EXISTS candidate_skill_scores (
     id                  BIGINT          NOT NULL,
-    resume_analysis_id  BIGINT          NOT NULL,
+    candidate_profile_id BIGINT         NOT NULL,
     dimension_code      VARCHAR(32)     NOT NULL,
     score               INT             NOT NULL,
     ai_justification    TEXT,
-    is_deleted          BOOLEAN         DEFAULT FALSE,
-    created_at          TIMESTAMPTZ     NOT NULL,
-    PRIMARY KEY (id)
+    evidence_json       JSONB           NOT NULL DEFAULT '[]',
+    is_deleted          BOOLEAN         NOT NULL DEFAULT FALSE,
+    created_at          TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    CONSTRAINT chk_candidate_skill_score CHECK (score BETWEEN 0 AND 100),
+    CONSTRAINT chk_candidate_skill_evidence CHECK (jsonb_typeof(evidence_json) = 'array')
 );
 
 COMMENT ON TABLE candidate_skill_scores IS '标准化人才画像维度打分表';
 COMMENT ON COLUMN candidate_skill_scores.id IS '主键';
-COMMENT ON COLUMN candidate_skill_scores.resume_analysis_id IS '[逻辑外键]→resume_analyses';
+COMMENT ON COLUMN candidate_skill_scores.candidate_profile_id IS '[逻辑外键]→candidate_ai_profiles';
 COMMENT ON COLUMN candidate_skill_scores.dimension_code IS '打分维度编码';
 COMMENT ON COLUMN candidate_skill_scores.score IS '单项得分 (0-100)';
 COMMENT ON COLUMN candidate_skill_scores.ai_justification IS '大模型针对该维度给出扣分或得分的推导依据';
+COMMENT ON COLUMN candidate_skill_scores.evidence_json IS '来自简历的评分证据列表';
 COMMENT ON COLUMN candidate_skill_scores.is_deleted IS '逻辑删除';
 COMMENT ON COLUMN candidate_skill_scores.created_at IS '创建时间';
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_skill_scores_unique ON candidate_skill_scores (resume_analysis_id, dimension_code);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_skill_scores_unique
+    ON candidate_skill_scores (candidate_profile_id, dimension_code);
 
 
--- ==================== 13. candidate_profile ====================
-CREATE TABLE IF NOT EXISTS candidate_profile (
-    id                  BIGINT          NOT NULL,
-    user_id             BIGINT          NOT NULL,
-    dimension_code      VARCHAR(32)     NOT NULL,
-    avg_score           INT,
-    latest_justification TEXT,
-    is_deleted          BOOLEAN         DEFAULT FALSE,
-    created_at          TIMESTAMPTZ     NOT NULL,
-    updated_at          TIMESTAMPTZ,
-    PRIMARY KEY (id)
+-- ==================== 13. candidate_ai_profiles ====================
+CREATE TABLE IF NOT EXISTS candidate_ai_profiles (
+    id                      BIGINT          NOT NULL,
+    candidate_id            BIGINT          NOT NULL,
+    resume_id               BIGINT          NOT NULL,
+    source_application_id   BIGINT,
+    source_enterprise_id    BIGINT,
+    status                  VARCHAR(20)     NOT NULL,
+    profile_schema_version  VARCHAR(32)     NOT NULL,
+    summary_json            JSONB,
+    llm_config_snapshot     JSONB,
+    attempt_count           INT             NOT NULL DEFAULT 0,
+    deadline_at             TIMESTAMPTZ,
+    failure_reason          TEXT,
+    analyzed_at             TIMESTAMPTZ,
+    is_deleted              BOOLEAN         NOT NULL DEFAULT FALSE,
+    created_by              BIGINT,
+    trace_id                VARCHAR(128),
+    created_at              TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at              TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    CONSTRAINT chk_candidate_ai_profile_status
+        CHECK (status IN ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED')),
+    CONSTRAINT chk_candidate_ai_profile_attempt CHECK (attempt_count >= 0),
+    CONSTRAINT chk_candidate_ai_profile_summary
+        CHECK (summary_json IS NULL OR jsonb_typeof(summary_json) = 'object'),
+    CONSTRAINT chk_candidate_ai_profile_llm_snapshot
+        CHECK (llm_config_snapshot IS NULL OR jsonb_typeof(llm_config_snapshot) = 'object')
 );
 
-COMMENT ON TABLE candidate_profile IS '候选人画像聚合表（供雷达图读取）';
-COMMENT ON COLUMN candidate_profile.id IS '主键';
-COMMENT ON COLUMN candidate_profile.user_id IS '[逻辑外键]→sys_users, 仅 user_type=''CANDIDATE''';
-COMMENT ON COLUMN candidate_profile.dimension_code IS '打分维度编码';
-COMMENT ON COLUMN candidate_profile.avg_score IS '各版简历该维度的平均分';
-COMMENT ON COLUMN candidate_profile.latest_justification IS '最新简历的 AI 推导依据';
-COMMENT ON COLUMN candidate_profile.is_deleted IS '逻辑删除标识';
-COMMENT ON COLUMN candidate_profile.created_at IS '创建时间';
-COMMENT ON COLUMN candidate_profile.updated_at IS '更新时间';
+COMMENT ON TABLE candidate_ai_profiles IS '一份简历的一版岗位无关 AI 人才画像';
+COMMENT ON COLUMN candidate_ai_profiles.id IS '画像消息 ID，同时作为 taskId';
+COMMENT ON COLUMN candidate_ai_profiles.source_application_id IS '首次触发画像的投递 ID';
+COMMENT ON COLUMN candidate_ai_profiles.source_enterprise_id IS '首次承担画像生成的企业 ID；候选人触发时为空';
+COMMENT ON COLUMN candidate_ai_profiles.profile_schema_version IS '画像维度和评分规范版本';
+COMMENT ON COLUMN candidate_ai_profiles.llm_config_snapshot IS '实际使用的模型和提示词配置快照，不含密钥';
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_candidate_profile_unique ON candidate_profile (user_id, dimension_code);
+CREATE INDEX IF NOT EXISTS idx_candidate_ai_profiles_candidate
+    ON candidate_ai_profiles (candidate_id, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_candidate_ai_profiles_completed
+    ON candidate_ai_profiles (resume_id, profile_schema_version)
+    WHERE status = 'COMPLETED' AND is_deleted = FALSE;
+CREATE UNIQUE INDEX IF NOT EXISTS uk_candidate_ai_profiles_active
+    ON candidate_ai_profiles (resume_id, profile_schema_version)
+    WHERE status IN ('PENDING', 'PROCESSING') AND is_deleted = FALSE;
 
 
 -- ==================== 14. job_applications ====================
@@ -424,7 +463,6 @@ CREATE TABLE IF NOT EXISTS job_applications (
     candidate_id    BIGINT          NOT NULL,
     resume_id       BIGINT          NOT NULL,
     idempotency_key VARCHAR(128)    NOT NULL,
-    ai_match_score  INT,
     status          VARCHAR(32)     DEFAULT 'APPLIED',
     created_at      TIMESTAMPTZ     NOT NULL,
     is_deleted      BOOLEAN         DEFAULT FALSE,
@@ -441,7 +479,6 @@ COMMENT ON COLUMN job_applications.job_id IS '[逻辑外键]→jobs';
 COMMENT ON COLUMN job_applications.candidate_id IS '[逻辑外键]→sys_users, 仅 user_type=''CANDIDATE''';
 COMMENT ON COLUMN job_applications.resume_id IS '[逻辑外键]→resumes';
 COMMENT ON COLUMN job_applications.idempotency_key IS '候选人投递请求幂等键';
-COMMENT ON COLUMN job_applications.ai_match_score IS '大模型计算的人岗匹配度打分';
 COMMENT ON COLUMN job_applications.status IS 'APPLIED / REVIEWING / PASSED / REJECTED / WITHDRAWN';
 COMMENT ON COLUMN job_applications.created_at IS '投递时间';
 COMMENT ON COLUMN job_applications.is_deleted IS '逻辑删除标识';
@@ -457,6 +494,80 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_applications_job_candidate_active
 CREATE UNIQUE INDEX IF NOT EXISTS uk_applications_candidate_idempotency_active
     ON job_applications (candidate_id, idempotency_key)
     WHERE is_deleted = false;
+
+CREATE TABLE IF NOT EXISTS job_screening_configs (
+    job_id BIGINT NOT NULL PRIMARY KEY,
+    enterprise_id BIGINT NOT NULL,
+    enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    overall_threshold INT NOT NULL CHECK (overall_threshold BETWEEN 0 AND 100),
+    dimension_thresholds JSONB NOT NULL DEFAULT '{}' CHECK (jsonb_typeof(dimension_thresholds) = 'object'),
+    version INT NOT NULL DEFAULT 0 CHECK (version >= 0),
+    created_by BIGINT,
+    updated_by BIGINT,
+    trace_id VARCHAR(128),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_job_screening_configs_enterprise
+    ON job_screening_configs (enterprise_id, enabled);
+
+CREATE TABLE IF NOT EXISTS application_ai_screenings (
+    id BIGINT NOT NULL PRIMARY KEY,
+    application_id BIGINT NOT NULL,
+    candidate_profile_id BIGINT,
+    status VARCHAR(20) NOT NULL CHECK (status IN ('WAITING_PROFILE', 'PENDING', 'PROCESSING', 'COMPLETED', 'FAILED')),
+    overall_match_score INT CHECK (overall_match_score BETWEEN 0 AND 100),
+    dimension_matches_json JSONB,
+    recommendation VARCHAR(32) CHECK (recommendation IN ('RECOMMEND_PASS', 'RECOMMEND_REJECT')),
+    threshold_snapshot JSONB NOT NULL,
+    job_snapshot JSONB NOT NULL,
+    llm_config_snapshot JSONB,
+    review_decision VARCHAR(16) CHECK (review_decision IN ('PASSED', 'REJECTED')),
+    reviewed_by BIGINT,
+    reviewed_at TIMESTAMPTZ,
+    attempt_count INT NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
+    deadline_at TIMESTAMPTZ,
+    failure_reason TEXT,
+    idempotency_key_hash VARCHAR(64) NOT NULL,
+    trace_id VARCHAR(128),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_application_ai_screenings_application
+    ON application_ai_screenings (application_id, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_application_ai_screenings_idempotency
+    ON application_ai_screenings (application_id, idempotency_key_hash);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_application_ai_screenings_active
+    ON application_ai_screenings (application_id)
+    WHERE status IN ('WAITING_PROFILE', 'PENDING', 'PROCESSING');
+
+CREATE TABLE IF NOT EXISTS candidate_job_match_analyses (
+    id BIGINT NOT NULL PRIMARY KEY,
+    application_id BIGINT NOT NULL,
+    candidate_profile_id BIGINT,
+    status VARCHAR(20) NOT NULL CHECK (status IN ('WAITING_PROFILE', 'PENDING', 'PROCESSING', 'COMPLETED', 'FAILED')),
+    match_score INT CHECK (match_score BETWEEN 0 AND 100),
+    pass_probability INT CHECK (pass_probability BETWEEN 0 AND 100),
+    strengths_json JSONB,
+    gaps_json JSONB,
+    job_snapshot JSONB NOT NULL,
+    llm_config_snapshot JSONB,
+    attempt_count INT NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
+    deadline_at TIMESTAMPTZ,
+    failure_reason TEXT,
+    idempotency_key_hash VARCHAR(64) NOT NULL,
+    analyzed_at TIMESTAMPTZ,
+    trace_id VARCHAR(128),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_candidate_job_match_application
+    ON candidate_job_match_analyses (application_id, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_candidate_job_match_idempotency
+    ON candidate_job_match_analyses (application_id, idempotency_key_hash);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_candidate_job_match_active
+    ON candidate_job_match_analyses (application_id)
+    WHERE status IN ('WAITING_PROFILE', 'PENDING', 'PROCESSING');
 
 
 -- ==================== 15. local_message ====================
@@ -643,12 +754,22 @@ INSERT INTO llm_scene_config (
 ) VALUES
 (
     'RESUME_ANALYSIS', 'CHAT', NULL, 0.200, 0.900,
-    16000, 2000, 60, 'resume-analysis-v1', '{}'::jsonb,
+    16000, 2000, 60, 'v1', '{}'::jsonb,
     TRUE, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 ),
 (
-    'JOB_RESUME_MATCHING', 'CHAT', NULL, 0.200, 0.900,
-    16000, 1000, 60, 'job-resume-matching-v1', '{}'::jsonb,
+    'CANDIDATE_PROFILE_GENERATION', 'CHAT', NULL, 0.200, 0.900,
+    16000, 2000, 60, 'v1', '{}'::jsonb,
+    TRUE, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+),
+(
+    'HR_APPLICATION_SCREENING', 'CHAT', NULL, 0.200, 0.900,
+    16000, 1600, 60, 'v1', '{}'::jsonb,
+    TRUE, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+),
+(
+    'CANDIDATE_JOB_MATCHING', 'CHAT', NULL, 0.200, 0.900,
+    16000, 1200, 60, 'v1', '{}'::jsonb,
     TRUE, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 )
 ON CONFLICT (scene_code) DO NOTHING;
@@ -746,6 +867,14 @@ INSERT INTO sys_permissions (id, perm_code, perm_type, api_path, status) VALUES
 (415, 'candidate:applications',      'API', '/api/v1/candidate/applications', 1),
 (416, 'candidate:application:withdraw',
  'API', '/api/v1/candidate/applications/*/withdraw', 1),
+(417, 'application:screening-config:detail', 'API', '/api/v1/enterprises/*/jobs/*/screening-config', 1),
+(418, 'application:screening-config:update', 'API', '/api/v1/enterprises/*/jobs/*/screening-config', 1),
+(419, 'application:ai-screening:create', 'API', '/api/v1/enterprises/*/applications/*/ai-screenings', 1),
+(420, 'application:ai-screening:detail', 'API', '/api/v1/enterprises/*/applications/*/ai-screenings/latest', 1),
+(426, 'application:ai-screening:review', 'API', '/api/v1/enterprises/*/applications/*/ai-screenings/*/review', 1),
+(427, 'application:candidate-profile:detail', 'API', '/api/v1/enterprises/*/applications/*/candidate-profile', 1),
+(428, 'candidate:application:match-analysis:create', 'API', '/api/v1/candidate/applications/*/match-analyses', 1),
+(429, 'candidate:application:match-analysis:detail', 'API', '/api/v1/candidate/applications/*/match-analyses/latest', 1),
 
 -- 2.5 本地消息管理
 (421, 'ops:local-message:page',        'API', '/api/v1/admin/local-messages', 1),
@@ -776,7 +905,7 @@ ON CONFLICT (id) DO UPDATE SET
 
 -- ===== sys_role_permissions =====
 
--- SUPER_ADMIN (1001) — Phase 1 与 Phase 2 全部 51 个权限
+-- SUPER_ADMIN (1001) — Phase 1 与 Phase 2 全部权限
 INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
 (1001, 101, NOW()), (1001, 102, NOW()), (1001, 103, NOW()), (1001, 104, NOW()), (1001, 105, NOW()), (1001, 106, NOW()),
 (1001, 111, NOW()), (1001, 112, NOW()), (1001, 113, NOW()), (1001, 114, NOW()),
@@ -785,6 +914,8 @@ INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
 (1001, 301, NOW()), (1001, 302, NOW()), (1001, 303, NOW()), (1001, 304, NOW()), (1001, 305, NOW()), (1001, 306, NOW()),
 (1001, 401, NOW()), (1001, 402, NOW()), (1001, 403, NOW()), (1001, 404, NOW()), (1001, 405, NOW()), (1001, 406, NOW()), (1001, 407, NOW()),
 (1001, 411, NOW()), (1001, 412, NOW()), (1001, 413, NOW()), (1001, 414, NOW()), (1001, 415, NOW()), (1001, 416, NOW()),
+(1001, 417, NOW()), (1001, 418, NOW()), (1001, 419, NOW()), (1001, 420, NOW()),
+(1001, 426, NOW()), (1001, 427, NOW()), (1001, 428, NOW()), (1001, 429, NOW()),
 (1001, 421, NOW()), (1001, 422, NOW()), (1001, 423, NOW()), (1001, 424, NOW()),
 (1001, 431, NOW()), (1001, 432, NOW()), (1001, 433, NOW()), (1001, 434, NOW()), (1001, 435, NOW()), (1001, 436, NOW()),
 (1001, 437, NOW()), (1001, 438, NOW()), (1001, 439, NOW()), (1001, 440, NOW()), (1001, 441, NOW()), (1001, 442, NOW()), (1001, 443, NOW())
@@ -809,7 +940,8 @@ INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
 (2001, 111, NOW()), (2001, 112, NOW()), (2001, 113, NOW()), (2001, 114, NOW()),
 (2001, 301, NOW()), (2001, 302, NOW()), (2001, 303, NOW()), (2001, 304, NOW()), (2001, 305, NOW()), (2001, 306, NOW()),
 (2001, 401, NOW()), (2001, 402, NOW()), (2001, 403, NOW()), (2001, 404, NOW()), (2001, 405, NOW()), (2001, 406, NOW()),
-(2001, 412, NOW()), (2001, 413, NOW()), (2001, 414, NOW())
+(2001, 412, NOW()), (2001, 413, NOW()), (2001, 414, NOW()),
+(2001, 417, NOW()), (2001, 418, NOW()), (2001, 419, NOW()), (2001, 420, NOW()), (2001, 426, NOW()), (2001, 427, NOW())
 ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 -- ENTERPRISE_ADMIN (2002) — 与 OWNER 一致，仅去掉 enterprise:delete
@@ -818,7 +950,8 @@ INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
 (2002, 111, NOW()), (2002, 112, NOW()), (2002, 113, NOW()), (2002, 114, NOW()),
 (2002, 301, NOW()), (2002, 302, NOW()), (2002, 303, NOW()), (2002, 304, NOW()), (2002, 305, NOW()), (2002, 306, NOW()),
 (2002, 401, NOW()), (2002, 402, NOW()), (2002, 403, NOW()), (2002, 404, NOW()), (2002, 405, NOW()), (2002, 406, NOW()),
-(2002, 412, NOW()), (2002, 413, NOW()), (2002, 414, NOW())
+(2002, 412, NOW()), (2002, 413, NOW()), (2002, 414, NOW()),
+(2002, 417, NOW()), (2002, 418, NOW()), (2002, 419, NOW()), (2002, 420, NOW()), (2002, 426, NOW()), (2002, 427, NOW())
 ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 -- HR_MANAGER (2003) — 团队查看/邀请/改角色 + 岗位全部 + 简历全部 + 投递管理全部
@@ -826,14 +959,16 @@ INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
 (2003, 111, NOW()), (2003, 112, NOW()), (2003, 113, NOW()),
 (2003, 301, NOW()), (2003, 302, NOW()), (2003, 303, NOW()), (2003, 304, NOW()), (2003, 305, NOW()), (2003, 306, NOW()),
 (2003, 401, NOW()), (2003, 402, NOW()), (2003, 403, NOW()), (2003, 404, NOW()), (2003, 405, NOW()), (2003, 406, NOW()),
-(2003, 412, NOW()), (2003, 413, NOW()), (2003, 414, NOW())
+(2003, 412, NOW()), (2003, 413, NOW()), (2003, 414, NOW()),
+(2003, 417, NOW()), (2003, 418, NOW()), (2003, 419, NOW()), (2003, 420, NOW()), (2003, 426, NOW()), (2003, 427, NOW())
 ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 -- HR_RECRUITER (2004) — 岗位发布/查看/编辑（无删除和开关）+ 简历除删除外 + 投递管理
 INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
 (2004, 301, NOW()), (2004, 302, NOW()), (2004, 303, NOW()), (2004, 304, NOW()),
 (2004, 401, NOW()), (2004, 402, NOW()), (2004, 403, NOW()), (2004, 405, NOW()), (2004, 406, NOW()),
-(2004, 412, NOW()), (2004, 413, NOW()), (2004, 414, NOW())
+(2004, 412, NOW()), (2004, 413, NOW()), (2004, 414, NOW()),
+(2004, 417, NOW()), (2004, 419, NOW()), (2004, 420, NOW()), (2004, 426, NOW()), (2004, 427, NOW())
 ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 -- INTERVIEWER (2005) — 仅查看岗位 + 查看简历和投递
@@ -848,5 +983,6 @@ INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
 (3001, 401, NOW()), (3001, 402, NOW()), (3001, 403, NOW()),
 (3001, 404, NOW()), (3001, 405, NOW()), (3001, 406, NOW()),
 (3001, 407, NOW()),
-(3001, 411, NOW()), (3001, 415, NOW()), (3001, 416, NOW())
+(3001, 411, NOW()), (3001, 415, NOW()), (3001, 416, NOW()),
+(3001, 428, NOW()), (3001, 429, NOW())
 ON CONFLICT (role_id, permission_id) DO NOTHING;

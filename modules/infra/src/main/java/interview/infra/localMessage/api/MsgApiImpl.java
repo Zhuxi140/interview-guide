@@ -5,6 +5,7 @@ import interview.api.infra.LocalMessageApi;
 import interview.api.infra.dto.MessageDTO;
 import interview.common.enums.MsgPriority;
 import interview.common.enums.MsgStatus;
+import interview.common.enums.MsgTopic;
 import interview.common.util.TraceUtil;
 import interview.infra.localMessage.model.entity.LocalMessage;
 import interview.infra.localMessage.service.LocalMessageService;
@@ -43,7 +44,7 @@ public class MsgApiImpl implements LocalMessageApi {
         LocalMessage update = new LocalMessage();
         update.setStatus(MsgStatus.IGNORED);
         update.setNextRetryAt(null);
-        update.setLastError("业务处理成功，取消上传补偿");
+        update.setLastError("业务处理已完成，取消待执行补偿消息");
         update.setTraceId(TraceUtil.getTraceId());
         update.setUpdatedAt(OffsetDateTime.now());
         return localMessageService.update(update, Wrappers.lambdaUpdate(LocalMessage.class)
@@ -54,7 +55,7 @@ public class MsgApiImpl implements LocalMessageApi {
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean schedulePending(Long messageId, OffsetDateTime executeAt) {
-        // 上传失败后只允许提前尚未领取消息的执行时间。
+        // 只调整尚未领取消息的执行时间。
         LocalMessage update = new LocalMessage();
         update.setNextRetryAt(executeAt);
         update.setTraceId(TraceUtil.getTraceId());
@@ -97,6 +98,16 @@ public class MsgApiImpl implements LocalMessageApi {
                     .eq(LocalMessage::getStatus, MsgStatus.FAILED));
         }
         return existing.getId();
+    }
+
+    @Override
+    public Long findIdByBizKey(MsgTopic topic, String bizKey) {
+        LocalMessage message = localMessageService.lambdaQuery()
+                .select(LocalMessage::getId)
+                .eq(LocalMessage::getTopic, topic)
+                .eq(LocalMessage::getBizKey, bizKey)
+                .one();
+        return message == null ? null : message.getId();
     }
 
     private LocalMessage toEntity(MessageDTO message) {

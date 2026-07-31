@@ -63,11 +63,6 @@ public class JobApplications implements Serializable {
     private String idempotencyKey;
 
     /**
-     * 大模型计算的人岗匹配度打分
-     */
-    private Integer aiMatchScore;
-
-    /**
      * APPLIED / REVIEWING / PASSED / REJECTED / WITHDRAWN
      */
     private JobApplicationStatus status;

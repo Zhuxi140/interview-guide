@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="interview.matching.mapper.CandidateJobMatchAnalysisMapper">
+
+    <resultMap id="candidateJobMatchExecutionMap"
+               type="interview.matching.model.bo.CandidateJobMatchExecutionBO">
+        <constructor>
+            <arg column="analysis_id" javaType="java.lang.Long"/>
+            <arg column="application_id" javaType="java.lang.Long"/>
+            <arg column="candidate_profile_id" javaType="java.lang.Long"/>
+            <arg column="job_snapshot" javaType="java.lang.String"/>
+            <arg column="attempt_count" javaType="java.lang.Integer"/>
+        </constructor>
+    </resultMap>
+
+    <select id="claimAnalysis" resultMap="candidateJobMatchExecutionMap"
+            affectData="true">
+        UPDATE candidate_job_match_analyses
+        SET status = 'PROCESSING',
+            attempt_count = attempt_count + 1,
+            deadline_at = #{deadline},
+            trace_id = #{traceId},
+            updated_at = #{now}
+        WHERE id = #{analysisId}
+          AND candidate_profile_id IS NOT NULL
+          AND attempt_count &lt; #{maxAttempts}
+          AND (
+              status = 'PENDING'
+              OR (
+                  status = 'PROCESSING'
+                  AND (deadline_at IS NULL OR deadline_at &lt;= #{now})
+              )
+          )
+        RETURNING id AS analysis_id,
+                  application_id,
+                  candidate_profile_id,
+                  job_snapshot::TEXT,
+                  attempt_count
+    </select>
+
+    <update id="completeAnalysis">
+        UPDATE candidate_job_match_analyses
+        SET status = 'COMPLETED',
+            match_score = #{matchScore},
+            pass_probability = #{passProbability},
+            strengths_json = CAST(#{strengthsJson} AS JSONB),
+            gaps_json = CAST(#{gapsJson} AS JSONB),
+            llm_config_snapshot = CAST(#{snapshotJson} AS JSONB),
+            deadline_at = NULL,
+            failure_reason = NULL,
+            analyzed_at = #{now},
+            trace_id = #{traceId},
+            updated_at = #{now}
+        WHERE id = #{analysisId}
+          AND attempt_count = #{attemptCount}
+          AND status = 'PROCESSING'
+    </update>
+
+    <update id="releaseAnalysisForRetry">
+        UPDATE candidate_job_match_analyses
+        SET status = 'PENDING',
+            deadline_at = NULL,
+            failure_reason = #{failureReason},
+            trace_id = #{traceId},
+            updated_at = #{now}
+        WHERE id = #{analysisId}
+          AND attempt_count = #{attemptCount}
+          AND status = 'PROCESSING'
+    </update>
+
+    <update id="failAnalysis">
+        UPDATE candidate_job_match_analyses
+        SET status = 'FAILED',
+            deadline_at = NULL,
+            failure_reason = #{failureReason},
+            trace_id = #{traceId},
+            updated_at = #{now}
+        WHERE id = #{analysisId}
+          AND attempt_count = #{attemptCount}
+          AND status = 'PROCESSING'
+    </update>
+
+    <update id="failWaitingAnalysis">
+        UPDATE candidate_job_match_analyses
+        SET status = 'FAILED',
+            deadline_at = NULL,
+            failure_reason = #{failureReason},
+            trace_id = #{traceId},
+            updated_at = #{now}
+        WHERE id = #{analysisId}
+          AND status = 'WAITING_PROFILE'
+    </update>
+
+    <update id="failExhaustedAnalysis">
+        UPDATE candidate_job_match_analyses
+        SET status = 'FAILED',
+            deadline_at = NULL,
+            failure_reason = #{failureReason},
+            trace_id = #{traceId},
+            updated_at = #{now}
+        WHERE id = #{analysisId}
+          AND attempt_count &gt;= #{maxAttempts}
+          AND (
+              status = 'PENDING'
+              OR (
+                  status = 'PROCESSING'
+                  AND (deadline_at IS NULL OR deadline_at &lt;= #{now})
+              )
+          )
+    </update>
+
+</mapper>

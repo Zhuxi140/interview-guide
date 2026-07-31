@@ -46,6 +46,22 @@ INSERT INTO sys_permissions (id, perm_code, perm_type, api_path, status) VALUES
  'API', '/api/v1/candidate/applications', 1),
 (416, 'candidate:application:withdraw',
  'API', '/api/v1/candidate/applications/*/withdraw', 1),
+(417, 'application:screening-config:detail',
+ 'API', '/api/v1/enterprises/*/jobs/*/screening-config', 1),
+(418, 'application:screening-config:update',
+ 'API', '/api/v1/enterprises/*/jobs/*/screening-config', 1),
+(419, 'application:ai-screening:create',
+ 'API', '/api/v1/enterprises/*/applications/*/ai-screenings', 1),
+(420, 'application:ai-screening:detail',
+ 'API', '/api/v1/enterprises/*/applications/*/ai-screenings/latest', 1),
+(426, 'application:ai-screening:review',
+ 'API', '/api/v1/enterprises/*/applications/*/ai-screenings/*/review', 1),
+(427, 'application:candidate-profile:detail',
+ 'API', '/api/v1/enterprises/*/applications/*/candidate-profile', 1),
+(428, 'candidate:application:match-analysis:create',
+ 'API', '/api/v1/candidate/applications/*/match-analyses', 1),
+(429, 'candidate:application:match-analysis:detail',
+ 'API', '/api/v1/candidate/applications/*/match-analyses/latest', 1),
 
 -- 2.5 本地消息运维
 (421, 'ops:local-message:page',
@@ -94,13 +110,16 @@ ON CONFLICT (id) DO UPDATE SET
 DELETE FROM sys_role_permissions
 WHERE permission_id BETWEEN 401 AND 443;
 
--- SUPER_ADMIN：拥有全部 30 个第二阶段权限。
+-- SUPER_ADMIN：拥有全部第二阶段权限。
 INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
 (1001, 401, NOW()), (1001, 402, NOW()), (1001, 403, NOW()),
 (1001, 404, NOW()), (1001, 405, NOW()), (1001, 406, NOW()),
 (1001, 407, NOW()),
 (1001, 411, NOW()), (1001, 412, NOW()), (1001, 413, NOW()),
 (1001, 414, NOW()), (1001, 415, NOW()), (1001, 416, NOW()),
+(1001, 417, NOW()), (1001, 418, NOW()), (1001, 419, NOW()),
+(1001, 420, NOW()), (1001, 426, NOW()), (1001, 427, NOW()),
+(1001, 428, NOW()), (1001, 429, NOW()),
 (1001, 421, NOW()), (1001, 422, NOW()), (1001, 423, NOW()),
 (1001, 424, NOW()),
 (1001, 431, NOW()), (1001, 432, NOW()), (1001, 433, NOW()),
@@ -121,9 +140,17 @@ ON CONFLICT (role_id, permission_id) DO NOTHING;
 -- 企业招聘角色：只访问本企业的投递资源，仍需接口层校验 enterpriseId。
 INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
 (2001, 412, NOW()), (2001, 413, NOW()), (2001, 414, NOW()),
+(2001, 417, NOW()), (2001, 418, NOW()), (2001, 419, NOW()),
+(2001, 420, NOW()), (2001, 426, NOW()), (2001, 427, NOW()),
 (2002, 412, NOW()), (2002, 413, NOW()), (2002, 414, NOW()),
+(2002, 417, NOW()), (2002, 418, NOW()), (2002, 419, NOW()),
+(2002, 420, NOW()), (2002, 426, NOW()), (2002, 427, NOW()),
 (2003, 412, NOW()), (2003, 413, NOW()), (2003, 414, NOW()),
+(2003, 417, NOW()), (2003, 418, NOW()), (2003, 419, NOW()),
+(2003, 420, NOW()), (2003, 426, NOW()), (2003, 427, NOW()),
 (2004, 412, NOW()), (2004, 413, NOW()), (2004, 414, NOW()),
+(2004, 417, NOW()), (2004, 419, NOW()), (2004, 420, NOW()),
+(2004, 426, NOW()), (2004, 427, NOW()),
 (2005, 412, NOW()), (2005, 413, NOW())
 ON CONFLICT (role_id, permission_id) DO NOTHING;
 
@@ -132,7 +159,8 @@ INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
 (3001, 401, NOW()), (3001, 402, NOW()), (3001, 403, NOW()),
 (3001, 404, NOW()), (3001, 405, NOW()), (3001, 406, NOW()),
 (3001, 407, NOW()),
-(3001, 411, NOW()), (3001, 415, NOW()), (3001, 416, NOW())
+(3001, 411, NOW()), (3001, 415, NOW()), (3001, 416, NOW()),
+(3001, 428, NOW()), (3001, 429, NOW())
 ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 COMMIT;
