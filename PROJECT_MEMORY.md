@@ -85,7 +85,7 @@ InterviewGuide 是一个面向未来微服务拆分的模块化单体项目，�
 
 - 采用 Access Token + Refresh Token。Access Token 是短时 JWT；Refresh Token 的哈希保存在 `user_tokens`。
 - Refresh Token 每次刷新都轮换；已撤销 Token 再次出现视为重放，触发该用户 Token 全量撤销。
-- JWT 携带当前活跃 `enterpriseId`；切换企业后旧 JWT 进入 Redis 黑名单并签发新 JWT。
+- 登录 JWT 默认不携带 `enterpriseId`；管理前端通过 `/auth/workspace` 选择企业或平台工作区，切换后旧 JWT 进入 Redis 黑名单并签发新 JWT。
 - RBAC 分 PLATFORM、ENTERPRISE、BOTH 三种作用域。`@RequirePermission` 才是业务权限边界。
 - `@MaxRiskLevel` 只限制被系统标记的风险用户，不能替代租户归属或权限检查。
 

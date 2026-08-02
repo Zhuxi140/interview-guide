@@ -1,4 +1,4 @@
-package interview.matching.service;
+package interview.matching.service.Impl;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -23,6 +23,8 @@ import interview.matching.model.entity.ApplicationAiScreening;
 import interview.matching.model.enums.JobApplicationStatus;
 import interview.matching.model.req.*;
 import interview.matching.model.vo.*;
+import interview.matching.service.ApplicationAiScreeningService;
+import interview.matching.service.JobApplicationsService;
 import interview.resume.model.entity.Resumes;
 import interview.resume.service.ResumesService;
 import lombok.RequiredArgsConstructor;
@@ -71,6 +73,11 @@ public class JobApplicationsServiceImpl extends ServiceImpl<JobApplicationsMappe
         }
         if (job.getStatus() != JobStatus.OPEN) {
             throw new BusinessException(ErrorCode.JOB_ALREADY_CLOSED);
+        }
+
+        // 直达投递接口同样只接受正常企业的公开岗位。
+        if (enterpriseValidationApi.getPublicEnterprise(job.getEnterpriseId()) == null) {
+            throw new BusinessException(ErrorCode.JOB_NOT_FOUND);
         }
 
         // ③ 校验简历：存在且属于当前用户

@@ -63,6 +63,37 @@ public class EnterpriseValidationApiImpl implements EnterpriseValidationApi {
     }
 
     @Override
+    public void validateActiveEnterpriseBelong(Long enterpriseId, Long userId) {
+        // 先校验企业和成员关系，避免向无关用户暴露企业经营状态。
+        Enterprise enterprise = enterprisesService.lambdaQuery()
+                .select(Enterprise::getId, Enterprise::getStatus)
+                .eq(Enterprise::getId, enterpriseId)
+                .one();
+        if (enterprise == null) {
+            throw new BusinessException(ErrorCode.ENTERPRISE_NOT_FOUND);
+        }
+
+        boolean member = enterpriseTeamMembersService.lambdaQuery()
+                .eq(EnterpriseTeamMember::getEnterpriseId, enterpriseId)
+                .eq(EnterpriseTeamMember::getUserId, userId)
+                .exists();
+        if (!member) {
+            throw new BusinessException(ErrorCode.CURREMT_USER_NOT_ENTERPRISE_MEMBER);
+        }
+
+        // 正式经营接口只允许已认证且未暂停的企业调用。
+        if (enterprise.getStatus() == EnterpriseStatus.PENDING) {
+            throw new BusinessException(ErrorCode.ENTERPRISE_NOT_CERTIFIED);
+        }
+        if (enterprise.getStatus() == EnterpriseStatus.PAUSED) {
+            throw new BusinessException(ErrorCode.ENTERPRISE_FROZEN);
+        }
+        if (enterprise.getStatus() != EnterpriseStatus.NORMAL) {
+            throw new BusinessException(ErrorCode.ENTERPRISE_NOT_FOUND);
+        }
+    }
+
+    @Override
     public List<EnterprisePublicProfileDTO> listPublicEnterprises(String industry) {
         // 只暴露正常、未删除的企业，并在 system 模块内完成行业筛选。
         return enterprisesService.lambdaQuery()

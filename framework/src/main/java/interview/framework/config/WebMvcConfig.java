@@ -27,7 +27,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
 
-        registry.addInterceptor(new JwtInterceptor(jwttUtil))
+        registry.addInterceptor(new JwtInterceptor(jwttUtil, stringRedisTemplate))
                 .addPathPatterns("/**")
                 .excludePathPatterns(
                         "/api/v1/auth/register",

@@ -3,6 +3,7 @@ package interview.interviewcfg.controller;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import interview.common.annonate.MaxRiskLevel;
 import interview.common.annonate.RequirePermission;
+import interview.common.annonate.RequireActiveEnterprise;
 import interview.common.constant.ApiVersion;
 import interview.common.constant.Perm;
 import interview.common.constant.Result;
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
+@RequireActiveEnterprise
 @RequestMapping(ApiVersion.V1 + "/enterprises/{enterpriseId}/interview-templates")
 @Tag(name = "面试模板与组卷（B端）")
 @RequiredArgsConstructor

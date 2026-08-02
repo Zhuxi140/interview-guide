@@ -6,12 +6,14 @@ import interview.common.enums.SmsType;
 import interview.system.auth.model.bo.LoginBO;
 import interview.system.auth.model.bo.RegisterBo;
 import interview.system.auth.model.bo.UserInfoBO;
+import interview.system.auth.model.enums.WorkspaceType;
 import interview.system.auth.model.enums.UserStatus;
 import interview.system.auth.model.req.*;
 import interview.system.auth.model.vo.*;
 import interview.system.auth.service.AuthService;
 import interview.system.auth.service.SecureChallengeService;
 import interview.system.auth.service.SmsService;
+import interview.system.tenant.model.enums.EnterpriseStatus;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -229,23 +231,27 @@ class AuthControllerTest {
     }
 
     @Nested
-    class SwitchEnterprise {
+    class SwitchWorkspace {
 
         private final String authHeader = "Bearer old-jwt-token";
 
         @Test
-        void switchEnterprise_success() {
-            SwitchEnterpriseVO vo = SwitchEnterpriseVO.builder()
-                    .accessToken("new-jwt").expiresInSeconds(1800L).build();
+        void switchWorkspace_success() {
+            WorkspaceSwitchReq req = new WorkspaceSwitchReq();
+            req.setWorkspaceType(WorkspaceType.ENTERPRISE);
+            req.setEnterpriseId(200L);
+            WorkspaceSwitchVO vo = new WorkspaceSwitchVO(
+                    WorkspaceType.ENTERPRISE, 200L, "new-jwt", 1800L);
             when(request.getHeader("Authorization")).thenReturn(authHeader);
-            when(authService.switchEnterprise(200L, "old-jwt-token")).thenReturn(vo);
+            when(authService.switchWorkspace(req, "old-jwt-token")).thenReturn(vo);
 
-            Result<SwitchEnterpriseVO> result = authController.switchEnterprise(200L);
+            Result<WorkspaceSwitchVO> result = authController.switchWorkspace(req);
 
             assertNotNull(result.getData());
             assertEquals("new-jwt", result.getData().accessToken());
+            assertEquals(200L, result.getData().enterpriseId());
             assertEquals(1800L, result.getData().expiresInSeconds());
-            verify(authService).switchEnterprise(200L, "old-jwt-token");
+            verify(authService).switchWorkspace(req, "old-jwt-token");
         }
     }
 
@@ -254,12 +260,20 @@ class AuthControllerTest {
 
         @Test
         void getUserInfo_success() {
+            UserEnterpriseVO enterprise = UserEnterpriseVO.builder()
+                    .id(200L).name("测试企业").status(EnterpriseStatus.NORMAL).build();
             UserInfoBO bo = UserInfoBO.builder()
                     .id(1L).username("testuser").userType("CANDIDATE")
-                    .status(UserStatus.NORMAL).build();
+                    .enterpriseId(200L).enterpriseName("测试企业")
+                    .enterprises(List.of(enterprise))
+                    .status(UserStatus.NORMAL).roles(List.of("CANDIDATE"))
+                    .permissions(List.of("candidate:resume:list")).build();
             UserInfoVO vo = UserInfoVO.builder()
                     .id(1L).username("testuser").userType("CANDIDATE")
-                    .status(UserStatus.NORMAL).build();
+                    .enterpriseId(200L).enterpriseName("测试企业")
+                    .enterprises(List.of(enterprise))
+                    .status(UserStatus.NORMAL).roles(List.of("CANDIDATE"))
+                    .permissions(List.of("candidate:resume:list")).build();
             when(authService.getUserInfo()).thenReturn(bo);
             when(authConverter.toUserInfoVO(bo)).thenReturn(vo);
 
@@ -267,6 +281,10 @@ class AuthControllerTest {
 
             assertEquals(1L, result.getData().id());
             assertEquals("CANDIDATE", result.getData().userType());
+            assertEquals(200L, result.getData().enterpriseId());
+            assertEquals(List.of(enterprise), result.getData().enterprises());
+            assertEquals(List.of("CANDIDATE"), result.getData().roles());
+            assertEquals(List.of("candidate:resume:list"), result.getData().permissions());
             verify(authService).getUserInfo();
             verify(authConverter).toUserInfoVO(bo);
         }

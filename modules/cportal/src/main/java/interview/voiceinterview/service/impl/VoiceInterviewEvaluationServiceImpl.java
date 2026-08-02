@@ -101,7 +101,7 @@ public class VoiceInterviewEvaluationServiceImpl
         if (isSuperAdmin()) {
             return;
         }
-        if (userType == UserType.HR) {
+        if (userType == UserType.ENTERPRISE_USER) {
             enterpriseValidationApi.validateEnterpriseBelong(
                     session.getEnterpriseId(), userId);
             return;

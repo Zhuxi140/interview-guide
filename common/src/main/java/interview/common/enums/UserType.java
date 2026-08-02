@@ -6,7 +6,7 @@ package interview.common.enums;
  */
 
 public enum UserType {
-    HR,
+    ENTERPRISE_USER,
     CANDIDATE,
     PLATFORM_ADMIN,
     PLATFORM_OPS;

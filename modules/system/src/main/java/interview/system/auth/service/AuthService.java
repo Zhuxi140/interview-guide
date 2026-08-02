@@ -9,7 +9,7 @@ import interview.system.auth.model.entity.UserToken;
 import interview.system.auth.model.req.*;
 import interview.system.auth.model.vo.RefreshTokenVO;
 import interview.system.auth.model.vo.TokenInfoVO;
-import interview.system.auth.model.vo.SwitchEnterpriseVO;
+import interview.system.auth.model.vo.WorkspaceSwitchVO;
 import interview.system.auth.model.vo.SecureChallengeStartVO;
 
 import java.util.List;
@@ -91,11 +91,11 @@ public interface AuthService extends IService<UserToken> {
     UserInfoBO getUserInfo();
 
     /**
-     * 切换当前活跃企业
-     * @param enterpriseId 目标企业 ID
+     * 切换当前工作区
+     * @param switchReq 工作区选择
      * @param accessToken 当前 JWT（需加入黑名单）
      * @return 新 JWT
      */
-    SwitchEnterpriseVO switchEnterprise(Long enterpriseId, String accessToken);
+    WorkspaceSwitchVO switchWorkspace(WorkspaceSwitchReq switchReq, String accessToken);
 
 }

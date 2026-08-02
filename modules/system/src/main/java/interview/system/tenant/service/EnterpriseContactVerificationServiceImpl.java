@@ -17,6 +17,7 @@ import interview.system.auth.service.UsersService;
 import interview.system.tenant.model.entity.Enterprise;
 import interview.system.tenant.model.entity.EnterpriseTeamMember;
 import interview.system.tenant.model.enums.EnterpriseContactVerifyStage;
+import interview.system.tenant.model.enums.EnterpriseStatus;
 import interview.system.tenant.model.req.EnterpriseContactCodeVerifyReq;
 import interview.system.tenant.model.req.EnterpriseContactNewPhoneReq;
 import interview.system.tenant.model.vo.EnterpriseContactVerifyStartVO;
@@ -124,6 +125,9 @@ public class EnterpriseContactVerificationServiceImpl
     public void verifyOldPhone(Long enterpriseId, EnterpriseContactCodeVerifyReq req) {
         Long userId = AuthContext.getRequiredUserId();
 
+        // 流程执行期间仍需确认企业允许维护认证资料。
+        getEnterpriseAndCheckMember(enterpriseId, userId);
+
         // 原子校验流程归属、当前状态和验证码，并推进为原号码已验证
         verifyCodeTransition(
                 req.getFlowId(),
@@ -140,6 +144,9 @@ public class EnterpriseContactVerificationServiceImpl
     @Override
     public void sendNewPhoneCode(Long enterpriseId, EnterpriseContactNewPhoneReq req) {
         Long userId = AuthContext.getRequiredUserId();
+
+        // 发送短信前重新确认企业未被暂停或注销。
+        getEnterpriseAndCheckMember(enterpriseId, userId);
 
         // 读取流程并校验流程属于当前用户和企业
         Map<String, String> flow = getFlow(req.getFlowId());
@@ -176,6 +183,9 @@ public class EnterpriseContactVerificationServiceImpl
     @Override
     public String verifyNewPhone(Long enterpriseId, EnterpriseContactCodeVerifyReq req) {
         Long userId = AuthContext.getRequiredUserId();
+
+        // 签发安全令牌前重新确认企业仍可维护认证资料。
+        getEnterpriseAndCheckMember(enterpriseId, userId);
 
         // 读取并校验流程归属，阻止跨用户或跨企业使用 flowId
         Map<String, String> flow = getFlow(req.getFlowId());
@@ -279,10 +289,17 @@ public class EnterpriseContactVerificationServiceImpl
     private Enterprise getEnterpriseAndCheckMember(Long enterpriseId, Long userId) {
         // 查询企业及联系电话，不加载本流程不需要的其他字段
         Enterprise enterprise = enterprisesService.lambdaQuery()
-                .select(Enterprise::getId, Enterprise::getContactPhone)
+                .select(Enterprise::getId, Enterprise::getContactPhone, Enterprise::getStatus)
                 .eq(Enterprise::getId, enterpriseId)
                 .one();
         if (enterprise == null) {
+            throw new BusinessException(ErrorCode.ENTERPRISE_NOT_FOUND);
+        }
+        if (enterprise.getStatus() == EnterpriseStatus.PAUSED) {
+            throw new BusinessException(ErrorCode.ENTERPRISE_FROZEN);
+        }
+        if (enterprise.getStatus() != EnterpriseStatus.PENDING
+                && enterprise.getStatus() != EnterpriseStatus.NORMAL) {
             throw new BusinessException(ErrorCode.ENTERPRISE_NOT_FOUND);
         }
 

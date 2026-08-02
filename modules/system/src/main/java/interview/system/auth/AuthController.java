@@ -137,12 +137,13 @@ public class AuthController {
     }
 
     @MaxRiskLevel(RiskLevel.MID_RISK)
-    @Operation(summary = "切换当前活跃企业（旧 JWT 将被加入黑名单）")
-    @PutMapping("/enterprise/{enterpriseId}")
-    public Result<SwitchEnterpriseVO> switchEnterprise(@PathVariable Long enterpriseId) {
+    @Operation(summary = "切换管理前端工作区（旧 JWT 将被加入黑名单）")
+    @PutMapping("/workspace")
+    public Result<WorkspaceSwitchVO> switchWorkspace(
+            @RequestBody @Valid WorkspaceSwitchReq switchReq) {
         String header = request.getHeader("Authorization");
         String accessToken = StrUtil.removePrefix(header, "Bearer ");
-        return Result.success(authService.switchEnterprise(enterpriseId, accessToken));
+        return Result.success(authService.switchWorkspace(switchReq, accessToken));
     }
 
     @MaxRiskLevel(RiskLevel.HIGH_RISK)

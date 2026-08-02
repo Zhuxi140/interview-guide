@@ -8,6 +8,7 @@ import interview.common.enums.PermissionScope;
 import interview.common.enums.RiskLevel;
 import interview.common.annonate.MaxRiskLevel;
 import interview.common.annonate.RequirePermission;
+import interview.common.annonate.RequireActiveEnterprise;
 import interview.job.model.req.JobCreateReq;
 import interview.job.model.req.JobListQuery;
 import interview.job.model.req.JobStatusReq;
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.*;
  * @author zhuxi
  */
 @RestController
+@RequireActiveEnterprise
 @RequestMapping(ApiVersion.V1 + "/enterprises/{enterpriseId}/jobs")
 @Tag(name = "岗位管理")
 @RequiredArgsConstructor

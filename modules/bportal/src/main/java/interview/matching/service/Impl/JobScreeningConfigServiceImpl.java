@@ -1,4 +1,4 @@
-package interview.matching.service;
+package interview.matching.service.Impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import interview.api.system.EnterpriseValidationApi;
@@ -13,6 +13,7 @@ import interview.matching.mapper.JobScreeningConfigMapper;
 import interview.matching.model.entity.JobScreeningConfig;
 import interview.matching.model.req.JobScreeningConfigUpdateReq;
 import interview.matching.model.vo.JobScreeningConfigVO;
+import interview.matching.service.JobScreeningConfigService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;

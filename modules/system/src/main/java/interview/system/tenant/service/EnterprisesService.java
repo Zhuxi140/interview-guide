@@ -93,8 +93,7 @@ public interface EnterprisesService extends IService<Enterprise> {
             Long enterpriseId, SecureActionContext secureActionContext);
 
     /**
-     * 注销企业（仅 OWNER）
-     *
+     * 注销企业，并按剩余已认证企业决定是否回退用户类型
      * @param enterpriseId 企业 ID
      * @param secureActionContext 安全操作上下文
      */

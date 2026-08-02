@@ -9,6 +9,7 @@ import interview.billing.model.vo.*;
 import interview.billing.service.PaymentOrderService;
 import interview.common.annonate.MaxRiskLevel;
 import interview.common.annonate.RequirePermission;
+import interview.common.annonate.RequireActiveEnterprise;
 import interview.common.constant.ApiVersion;
 import interview.common.constant.Perm;
 import interview.common.constant.Result;
@@ -27,6 +28,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.OffsetDateTime;
 
 @RestController
+@RequireActiveEnterprise
 @RequestMapping(ApiVersion.V1 + "/enterprises/{enterpriseId}/billing/orders")
 @Tag(name = "充值订单（企业端）")
 @RequiredArgsConstructor

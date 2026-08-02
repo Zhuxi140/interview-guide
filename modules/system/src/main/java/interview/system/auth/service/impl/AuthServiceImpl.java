@@ -21,12 +21,13 @@ import interview.system.auth.model.bo.UserInfoBO;
 import interview.system.auth.mapper.AuthMapper;
 import interview.system.auth.model.bo.RegisterBo;
 import interview.system.auth.model.entity.UserToken;
+import interview.system.auth.model.enums.WorkspaceType;
 import interview.system.auth.model.req.*;
 import interview.system.auth.model.vo.RefreshTokenVO;
 import interview.system.auth.model.vo.SecureChallengeStartVO;
-import interview.system.auth.model.vo.SwitchEnterpriseVO;
 import interview.system.auth.model.vo.TokenInfoVO;
 import interview.system.auth.model.vo.UserEnterpriseVO;
+import interview.system.auth.model.vo.WorkspaceSwitchVO;
 import interview.system.auth.service.AuthService;
 import interview.system.auth.service.SecureChallengeService;
 import interview.system.auth.service.SmsService;
@@ -118,7 +119,6 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
     @Override
     @Transactional(rollbackFor = BusinessException.class)
     public LoginBO login(LoginReq login, String clientIp) {
-
         // 验证用户名、状态、密码
         User user = checkAndGetUser(login);
         return buildLoginResult(user, login.getDeviceInfo(), clientIp);
@@ -229,9 +229,12 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
         // 生成refreshToken
         String raw = checkAndGetUserToken(userId, token.getDeviceInfo(), ipAddress);
 
-        // 加载企业信息、用户信息 和 角色权限信息
-        EnterpriseContext enterpriseContext = loadEnterpriseContext(userId);
-        RbacContext rbacContext = loadRbacContext(userId, enterpriseContext.enterpriseId);
+        // 按客户端当前工作区恢复企业上下文，避免刷新后跳到最近加入的企业。
+        Long enterpriseId = refresh.getEnterpriseId();
+        if (enterpriseId != null) {
+            loadEnterpriseContext(userId, enterpriseId);
+        }
+        RbacContext rbacContext = loadRbacContext(userId, enterpriseId);
 
         List<String> platformRoleCodes = rbacContext.platformRoleCodes;
 
@@ -242,7 +245,6 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
         newClaims.put("riskLevel", user.getRiskLevel().getCode());
         newClaims.put("platformRoleCodes", platformRoleCodes);
         newClaims.put("entRoleMap", rbacContext.entRoleMap);
-        Long enterpriseId = enterpriseContext.enterpriseId;
         if (enterpriseId != null) {
             newClaims.put("enterpriseId", enterpriseId);
         }
@@ -259,14 +261,36 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
 
     @Override
     @Transactional(rollbackFor = BusinessException.class)
-    public SwitchEnterpriseVO switchEnterprise(Long enterpriseId, String accessToken) {
-        AuthContext.AuthUser authUser = AuthContext.getRequiredAuthContext();
-        Long userId = authUser.userId();
-        Map<Long, List<interview.common.enums.Role>> entRoleMap = authUser.entRoleMap();
-
-        if (entRoleMap == null || !entRoleMap.containsKey(enterpriseId)) {
-            throw new BusinessException(ErrorCode.ENTERPRISE_NOT_BELONG);
+    public WorkspaceSwitchVO switchWorkspace(WorkspaceSwitchReq switchReq, String accessToken) {
+        Long userId = AuthContext.getRequiredUserId();
+        User user = usersService.lambdaQuery()
+                .select(User::getUsername, User::getUserType, User::getRiskLevel, User::getStatus)
+                .eq(User::getId, userId)
+                .one();
+        if (user == null) {
+            throw new BusinessException(ErrorCode.ACCOUNT_DATA_ANOMALY);
         }
+        if (user.getStatus() != UserStatus.NORMAL) {
+            throw new BusinessException(ErrorCode.USER_ALREADY_FREEZE);
+        }
+
+        // 校验目标工作区；企业归属必须以当前数据库记录为准。
+        Long enterpriseId = switchReq.getEnterpriseId();
+        if (switchReq.getWorkspaceType() == WorkspaceType.ENTERPRISE) {
+            if (enterpriseId == null) {
+                throw new BusinessException(ErrorCode.PARAM_VALID_ERROR);
+            }
+            loadEnterpriseContext(userId, enterpriseId);
+        } else {
+            if (enterpriseId != null) {
+                throw new BusinessException(ErrorCode.PARAM_VALID_ERROR);
+            }
+            if (user.getUserType() != UserType.PLATFORM_ADMIN
+                    && user.getUserType() != UserType.PLATFORM_OPS) {
+                throw new BusinessException(ErrorCode.PERMISSION_DENIED);
+            }
+        }
+        RbacContext rbacContext = loadRbacContext(userId, enterpriseId);
 
         // 旧 JWT 加入黑名单（同 refreshToken 逻辑）
         try {
@@ -284,30 +308,24 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
             // token 已过期或无效，无需加入黑名单
         }
 
-        // 将 entRoleMap 中的 Role 枚举转为 name 字符串（保持一致于登录时的 claims 格式）
-        Map<Long, List<String>> entRoleMapStr = new HashMap<>();
-        for (Map.Entry<Long, List<interview.common.enums.Role>> entry : entRoleMap.entrySet()) {
-            entRoleMapStr.put(entry.getKey(),
-                    entry.getValue().stream().map(interview.common.enums.Role::name).toList());
-        }
-
         Map<String, Object> claims = new HashMap<>();
         claims.put("userId", userId);
-        claims.put("username", authUser.username());
-        claims.put("userType", authUser.userType().name());
-        claims.put("riskLevel", authUser.riskLevel().getCode());
-        claims.put("platformRoleCodes", authUser.platformRoleCodes().stream()
-                .map(interview.common.enums.Role::name)
-                .toList());
-        claims.put("entRoleMap", entRoleMapStr);
-        claims.put("enterpriseId", enterpriseId);
+        claims.put("username", user.getUsername());
+        claims.put("userType", user.getUserType().name());
+        claims.put("riskLevel", user.getRiskLevel().getCode());
+        claims.put("platformRoleCodes", rbacContext.platformRoleCodes);
+        claims.put("entRoleMap", rbacContext.entRoleMap);
+        if (enterpriseId != null) {
+            claims.put("enterpriseId", enterpriseId);
+        }
 
         String newToken = jwttUtil.generatorToken(claims, userId);
 
-        return SwitchEnterpriseVO.builder()
-                .accessToken(newToken)
-                .expiresInSeconds(jwtProperties.getExpiration() * 60L)
-                .build();
+        return new WorkspaceSwitchVO(
+                switchReq.getWorkspaceType(),
+                enterpriseId,
+                newToken,
+                jwtProperties.getExpiration() * 60L);
     }
 
     @Override
@@ -430,6 +448,7 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
                     User::getPhone,
                     User::getEmail,
                     User::getAvatarUrl,
+                    User::getUserType,
                     User::getStatus
                 )
                 .eq(User::getId, userId)
@@ -445,6 +464,10 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
             throw new BusinessException(ErrorCode.USER_ALREADY_FREEZE);
         }
 
+        // 复用登录流程的企业、角色与权限聚合规则，返回当前最新会话信息。
+        EnterpriseContext enterpriseContext = loadEnterpriseContext(userId, AuthContext.getEnterpriseId());
+        RbacContext rbacContext = loadRbacContext(userId, enterpriseContext.enterpriseId);
+
         return UserInfoBO.builder()
                 .id(userId)
                 .username(user.getUsername())
@@ -452,8 +475,14 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
                 .phone(user.getPhone())
                 .email(user.getEmail())
                 .avatarUrl(user.getAvatarUrl())
-                .userType(AuthContext.getUserType().name())
+                .userType(user.getUserType().name())
+                .enterpriseId(enterpriseContext.enterpriseId)
+                .enterpriseName(enterpriseContext.name)
+                .logoUrl(enterpriseContext.logoUrl)
+                .enterprises(enterpriseContext.enterprises)
                 .status(user.getStatus())
+                .roles(rbacContext.platformRoleCodes)
+                .permissions(rbacContext.permissions)
                 .build();
     }
 
@@ -587,10 +616,10 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
     private LoginBO buildLoginResult(User user, String deviceInfo, String clientIp) {
         Long userId = user.getId();
 
-        // 创建新设备令牌并加载企业、角色和权限上下文。
+        // 创建新设备令牌并加载可选企业及基础角色权限，不替用户选择企业。
         String raw = checkAndGetUserToken(userId, deviceInfo, clientIp);
         EnterpriseContext enterpriseContext = loadEnterpriseContext(userId);
-        RbacContext rbacContext = loadRbacContext(userId, enterpriseContext.enterpriseId);
+        RbacContext rbacContext = loadRbacContext(userId, null);
         List<String> platformRoleCodes = rbacContext.platformRoleCodes;
 
         // 生成携带当前授权快照的短时 Access Token。
@@ -601,15 +630,11 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
         claims.put("riskLevel", user.getRiskLevel().getCode());
         claims.put("platformRoleCodes", platformRoleCodes);
         claims.put("entRoleMap", rbacContext.entRoleMap);
-        Long enterpriseId = enterpriseContext.enterpriseId;
-        if (enterpriseId != null) {
-            claims.put("enterpriseId", enterpriseId);
-        }
         String token = jwttUtil.generatorToken(claims, userId);
 
         return LoginBO.builder()
                 .userId(userId)
-                .enterpriseId(enterpriseId)
+                .enterpriseId(null)
                 .enterpriseName(enterpriseContext.name)
                 .logoUrl(enterpriseContext.logoUrl)
                 .enterprises(enterpriseContext.enterprises)
@@ -648,6 +673,10 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
     }
 
     private EnterpriseContext loadEnterpriseContext(Long userId) {
+        return loadEnterpriseContext(userId, null);
+    }
+
+    private EnterpriseContext loadEnterpriseContext(Long userId, Long preferredEnterpriseId) {
         // 查用户所有企业成员记录，按加入时间降序（最新加入的排第一）
         List<EnterpriseTeamMember> members = enterpriseTeamMembersService.lambdaQuery()
                 .select(EnterpriseTeamMember::getEnterpriseId)
@@ -656,6 +685,9 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
                 .list();
 
         if (members.isEmpty()) {
+            if (preferredEnterpriseId != null) {
+                throw new BusinessException(ErrorCode.ENTERPRISE_NOT_BELONG);
+            }
             return new EnterpriseContext(null, null, null, List.of());
         }
 
@@ -665,7 +697,8 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
 
         // 批量查企业信息
         List<Enterprise> enterprises = enterprisesService.lambdaQuery()
-                .select(Enterprise::getId, Enterprise::getName, Enterprise::getShortName, Enterprise::getLogoUrl)
+                .select(Enterprise::getId, Enterprise::getName, Enterprise::getShortName,
+                        Enterprise::getLogoUrl, Enterprise::getStatus)
                 .in(Enterprise::getId, enterpriseIds)
                 .list();
 
@@ -675,11 +708,18 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
                         .name(e.getName())
                         .shortName(e.getShortName())
                         .logoUrl(e.getLogoUrl())
+                        .status(e.getStatus())
                         .build())
                 .toList();
 
-        // 取最近加入的企业作为活跃企业
-        Long activeEnterpriseId = members.get(0).getEnterpriseId();
+        // 未显式选择企业时仅返回列表，不生成活跃企业上下文。
+        if (preferredEnterpriseId == null) {
+            return new EnterpriseContext(null, null, null, enterpriseBriefs);
+        }
+        if (!enterpriseIds.contains(preferredEnterpriseId)) {
+            throw new BusinessException(ErrorCode.ENTERPRISE_NOT_BELONG);
+        }
+        Long activeEnterpriseId = preferredEnterpriseId;
         Enterprise activeEnterprise = enterprises.stream()
                 .filter(e -> e.getId().equals(activeEnterpriseId))
                 .findFirst()
@@ -748,16 +788,25 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
             }
         }
 
-        // 汇总所有 roleId 查权限
+        // 只汇总基础角色与当前企业角色，避免其他企业权限进入当前工作区。
         List<Integer> allRoleIds = new ArrayList<>(platformRoleIds);
-        teamMembers.stream().map(EnterpriseTeamMember::getRoleId).forEach(allRoleIds::add);
-
-        if (CollUtil.isEmpty(allRoleIds)) {
-            log.error("脏数据拦截: 用户ID [{}], 企业Id [{}], 其关联的角色ID 在 user_roles 和 EnterprisesTeamMembers 表中查不到实体记录！", userId, enterpriseId);
-            throw new BusinessException(ErrorCode.ACCOUNT_DATA_ANOMALY);
+        if (enterpriseId != null) {
+            teamMembers.stream()
+                    .filter(member -> enterpriseId.equals(member.getEnterpriseId()))
+                    .map(EnterpriseTeamMember::getRoleId)
+                    .forEach(allRoleIds::add);
         }
 
-        List<String> permissions = permissionsMapper.getPermCodeByRoleId(allRoleIds);
+        if (CollUtil.isEmpty(allRoleIds)) {
+            if (teamMembers.isEmpty()) {
+                log.error("脏数据拦截: 用户ID [{}] 未关联任何有效角色", userId);
+                throw new BusinessException(ErrorCode.ACCOUNT_DATA_ANOMALY);
+            }
+            return new RbacContext(platformRoleCodes, entRoleMap, List.of());
+        }
+
+        List<String> permissions = permissionsMapper.getPermCodeByRoleId(
+                allRoleIds.stream().distinct().toList());
 
         return new RbacContext(platformRoleCodes, entRoleMap, permissions);
     }

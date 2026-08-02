@@ -12,6 +12,7 @@ import interview.system.auth.service.UsersService;
 import interview.system.tenant.model.entity.Enterprise;
 import interview.system.tenant.model.entity.EnterpriseTeamMember;
 import interview.system.tenant.model.enums.EnterpriseContactVerifyStage;
+import interview.system.tenant.model.enums.EnterpriseStatus;
 import interview.system.tenant.model.req.EnterpriseContactNewPhoneReq;
 import interview.system.tenant.model.vo.EnterpriseContactVerifyStartVO;
 import interview.system.tenant.service.EnterpriseContactVerificationServiceImpl;
@@ -111,6 +112,7 @@ class EnterpriseContactVerificationServiceImplTest {
     @Test
     void sendNewPhoneCode_shouldAllowPhoneWithoutPlatformAccount() {
         String flowId = "flow-1";
+        mockEditableEnterprise(EnterpriseStatus.NORMAL, true, "13800000001");
         EnterpriseContactNewPhoneReq req = new EnterpriseContactNewPhoneReq();
         req.setFlowId(flowId);
         req.setNewPhone("13900000002");
@@ -137,18 +139,24 @@ class EnterpriseContactVerificationServiceImplTest {
         verifyNoInteractions(usersService);
     }
 
+    @Test
+    void sendNewPhoneCode_shouldRejectPausedEnterprise() {
+        mockEditableEnterprise(EnterpriseStatus.PAUSED, true, "13800000001");
+        EnterpriseContactNewPhoneReq req = new EnterpriseContactNewPhoneReq();
+        req.setFlowId("flow-1");
+        req.setNewPhone("13900000002");
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.sendNewPhoneCode(enterpriseId, req));
+
+        assertEquals(ErrorCode.ENTERPRISE_FROZEN.getCode(), exception.getCode());
+        verifyNoInteractions(smsService);
+    }
+
     private void mockStartDependencies(
             String enterprisePhone, String userPhone, Long memberCount) {
-        LambdaQueryChainWrapper<Enterprise> enterpriseQuery = mockQueryWrapper();
-        when(enterprisesService.lambdaQuery()).thenReturn(enterpriseQuery);
-        when(enterpriseQuery.one()).thenReturn(
-                Enterprise.builder()
-                        .id(enterpriseId)
-                        .contactPhone(enterprisePhone)
-                        .build());
-        LambdaQueryChainWrapper<EnterpriseTeamMember> memberQuery = mockQueryWrapper();
-        when(enterpriseTeamMembersService.lambdaQuery()).thenReturn(memberQuery);
-        when(memberQuery.exists()).thenReturn(memberCount > 0);
+        mockEditableEnterprise(
+                EnterpriseStatus.NORMAL, memberCount > 0, enterprisePhone);
         if (memberCount > 0) {
             LambdaQueryChainWrapper<User> query = mockQueryWrapper();
             when(usersService.lambdaQuery()).thenReturn(query);
@@ -156,6 +164,23 @@ class EnterpriseContactVerificationServiceImplTest {
                     .id(userId)
                     .phone(userPhone)
                     .build());
+        }
+    }
+
+    private void mockEditableEnterprise(
+            EnterpriseStatus status, boolean member, String enterprisePhone) {
+        LambdaQueryChainWrapper<Enterprise> enterpriseQuery = mockQueryWrapper();
+        when(enterprisesService.lambdaQuery()).thenReturn(enterpriseQuery);
+        when(enterpriseQuery.one()).thenReturn(
+                Enterprise.builder()
+                        .id(enterpriseId)
+                        .contactPhone(enterprisePhone)
+                        .status(status)
+                        .build());
+        if (status == EnterpriseStatus.PENDING || status == EnterpriseStatus.NORMAL) {
+            LambdaQueryChainWrapper<EnterpriseTeamMember> memberQuery = mockQueryWrapper();
+            when(enterpriseTeamMembersService.lambdaQuery()).thenReturn(memberQuery);
+            when(memberQuery.exists()).thenReturn(member);
         }
     }
 }

@@ -2,6 +2,7 @@ package interview.matching.controller;
 
 import interview.common.annonate.MaxRiskLevel;
 import interview.common.annonate.RequirePermission;
+import interview.common.annonate.RequireActiveEnterprise;
 import interview.common.constant.ApiVersion;
 import interview.common.constant.Perm;
 import interview.common.constant.Result;
@@ -38,6 +39,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
  * HR 岗位初筛配置、AI 建议与人工审核接口。
  */
 @RestController
+@RequireActiveEnterprise
 @RequestMapping(ApiVersion.V1 + "/enterprises/{enterpriseId}")
 @Tag(name = "HR AI 初筛")
 @RequiredArgsConstructor

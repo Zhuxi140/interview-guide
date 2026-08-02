@@ -16,13 +16,13 @@ public record LoginVO (
     @Schema(description = "用户ID")
     Long userId,
 
-    @Schema(description = "企业ID")
+    @Schema(description = "当前企业 ID；登录后尚未选择工作区，固定为空")
     Long enterpriseId,
 
-    @Schema(description = "企业名称")
+    @Schema(description = "当前企业名称；登录后尚未选择工作区，固定为空")
     String enterpriseName,
 
-    @Schema(description = "企业logo URL")
+    @Schema(description = "当前企业 Logo URL；登录后尚未选择工作区，固定为空")
     String logoUrl,
 
     @Schema(description = "用户所属企业列表")
@@ -37,7 +37,8 @@ public record LoginVO (
     @Schema(description = "头像 URL")
     String avatarUrl,
 
-    @Schema(description = "用户类型：HR / CANDIDATE")
+    @Schema(description = "用户类型", example = "CANDIDATE",
+            allowableValues = {"ENTERPRISE_USER", "CANDIDATE", "PLATFORM_ADMIN", "PLATFORM_OPS"})
     String userType,
 
     @Schema(description = "角色编码集合")

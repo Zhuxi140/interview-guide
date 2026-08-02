@@ -5,6 +5,7 @@ import interview.billing.model.vo.TokenConsumeLogListItemVO;
 import interview.billing.service.TokenConsumeLogService;
 import interview.common.annonate.MaxRiskLevel;
 import interview.common.annonate.RequirePermission;
+import interview.common.annonate.RequireActiveEnterprise;
 import interview.common.constant.ApiVersion;
 import interview.common.constant.Perm;
 import interview.common.constant.Result;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.OffsetDateTime;
 
 @RestController
+@RequireActiveEnterprise
 @RequestMapping(ApiVersion.V1 + "/enterprises/{enterpriseId}/billing/token-consume-logs")
 @Tag(name = "算力消耗流水（企业端）")
 @RequiredArgsConstructor

@@ -192,7 +192,7 @@ public class EnterprisesController {
     @MaxRiskLevel(RiskLevel.NO_RISK)
     @RequirePermission(permissions = Perm.Enterprise.DELETE, scope = PermissionScope.ENTERPRISE)
     @RequireSecure(SecureActionType.DELETE_ENTERPRISE)
-    @Operation(summary = "注销企业（仅 OWNER可操作）")
+    @Operation(summary = "注销企业（仅 OWNER，按需回退用户类型）")
     @DeleteMapping("/{enterpriseId}")
     public Result<Void> deleteEnterprise(@PathVariable("enterpriseId") Long enterpriseId) {
         // 读取拦截器已校验并消费的企业注销安全上下文

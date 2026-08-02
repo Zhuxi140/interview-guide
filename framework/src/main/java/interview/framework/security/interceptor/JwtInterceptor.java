@@ -1,6 +1,7 @@
 package interview.framework.security.interceptor;
 
 import cn.hutool.core.util.StrUtil;
+import interview.common.constant.AuthKeyConstant;
 import interview.common.enums.RiskLevel;
 import interview.common.enums.Role;
 import interview.common.enums.UserType;
@@ -14,6 +15,7 @@ import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 import java.util.Collections;
@@ -33,6 +35,7 @@ import java.util.stream.Collectors;
 public class JwtInterceptor implements HandlerInterceptor {
 
     private final JwttUtil jwttUtil;
+    private final StringRedisTemplate stringRedisTemplate;
 
     @Override
     public boolean preHandle(HttpServletRequest request,HttpServletResponse response,Object handler){
@@ -44,6 +47,9 @@ public class JwtInterceptor implements HandlerInterceptor {
         }
 
         token = token.substring(7);
+        if (Boolean.TRUE.equals(stringRedisTemplate.hasKey(AuthKeyConstant.getTokenBanKey(token)))) {
+            throw new UnauthorizedException();
+        }
         Claims claims = jwttUtil.parseToken(token);
 
         Long userId = Optional.ofNullable(claims.get("userId", Long.class))

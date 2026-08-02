@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapp
 import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
 import interview.api.system.EnterpriseValidationApi;
 import interview.api.system.UserApi;
+import interview.api.system.dto.EnterprisePublicProfileDTO;
 import interview.common.enums.ErrorCode;
 import interview.common.enums.UserType;
 import interview.common.exception.BusinessException;
@@ -15,6 +16,7 @@ import interview.matching.mapper.JobApplicationsMapper;
 import interview.matching.model.entity.JobApplications;
 import interview.matching.model.enums.JobApplicationStatus;
 import interview.matching.model.req.JobApplicationSubmitReq;
+import interview.matching.service.Impl.JobApplicationsServiceImpl;
 import interview.resume.model.entity.Resumes;
 import interview.resume.service.ResumesService;
 import org.junit.jupiter.api.AfterEach;
@@ -82,6 +84,9 @@ class JobApplicationsServiceImplTest {
                 .enterpriseId(10L)
                 .status(JobStatus.OPEN)
                 .build());
+        when(enterpriseValidationApi.getPublicEnterprise(10L)).thenReturn(
+                new EnterprisePublicProfileDTO(
+                        10L, "测试企业", "测试", "互联网", "100-499人", null));
 
         LambdaQueryChainWrapper<Resumes> resumeQuery =
                 mock(LambdaQueryChainWrapper.class, Answers.RETURNS_SELF);

@@ -8,9 +8,12 @@ import interview.api.system.SecureChallengeApi;
 import interview.common.constant.SecureActionContext;
 import interview.common.enums.ErrorCode;
 import interview.common.enums.SecureActionType;
+import interview.common.enums.UserType;
 import interview.common.exception.BusinessException;
 import interview.framework.config.CustomIdGenerator;
 import interview.framework.context.AuthContext;
+import interview.system.auth.model.entity.User;
+import interview.system.auth.service.UsersService;
 import interview.system.rbac.model.entity.Role;
 import interview.system.rbac.service.RolesService;
 import interview.system.rbac.service.UserRolesService;
@@ -59,6 +62,7 @@ class EnterprisesServiceImplTest {
     @Mock private RolesService rolesService;
     @Mock private SecureChallengeApi secureChallengeApi;
     @Mock private JobValidationApi jobValidationApi;
+    @Mock private UsersService usersService;
 
     private EnterprisesServiceImpl enterprisesService;
     private LambdaQueryChainWrapper<Enterprise> enterpriseQueryWrapper;
@@ -76,7 +80,8 @@ class EnterprisesServiceImplTest {
     void setUp() {
         enterprisesService = spy(new EnterprisesServiceImpl(
             customIdGenerator, userRolesService, enterpriseTeamMembersService,
-            enterprisesMapper, rolesService, secureChallengeApi, jobValidationApi
+            enterprisesMapper, rolesService, secureChallengeApi, jobValidationApi,
+            usersService
         ));
         ReflectionTestUtils.setField(enterprisesService, "baseMapper", enterprisesMapper);
         enterpriseQueryWrapper = mockQueryWrapper();
@@ -499,6 +504,10 @@ class EnterprisesServiceImplTest {
         void deleteEnterprise_success() {
             doReturn(enterpriseQueryWrapper).when(enterprisesService).lambdaQuery();
             when(enterpriseQueryWrapper.exists()).thenReturn(true);
+            when(enterpriseQueryWrapper.one()).thenReturn(Enterprise.builder()
+                    .id(enterpriseId)
+                    .status(EnterpriseStatus.PENDING)
+                    .build());
             LambdaQueryChainWrapper<EnterpriseTeamMember> memberQueryWrapper = mockQueryWrapper();
             when(memberQueryWrapper.exists()).thenReturn(true);
             when(enterpriseTeamMembersService.lambdaQuery()).thenReturn(memberQueryWrapper);
@@ -521,12 +530,99 @@ class EnterprisesServiceImplTest {
                     enterpriseId, context));
             verify(enterprisesService).lambdaUpdate();
             verify(enterpriseUpdateWrapper).eq(any(), eq(enterpriseId));
+            verify(enterpriseUpdateWrapper).set(any(), eq(EnterpriseStatus.CANCELLED));
             verify(enterpriseUpdateWrapper).set(any(), eq(true));
             verify(enterpriseUpdateWrapper).update();
             verify(enterpriseTeamMembersService).lambdaUpdate();
             verify(memberUpdateWrapper).eq(any(), eq(enterpriseId));
             verify(memberUpdateWrapper).set(any(), eq(true));
             verify(memberUpdateWrapper).update();
+            verifyNoInteractions(usersService);
+        }
+
+        @Test
+        void deleteEnterprise_shouldDowngradeUserWhenLastCertifiedEnterpriseIsDeleted() {
+            LambdaQueryChainWrapper<Enterprise> validationQuery = mockQueryWrapper();
+            when(validationQuery.exists()).thenReturn(true);
+            LambdaQueryChainWrapper<Enterprise> currentQuery = mockQueryWrapper();
+            when(currentQuery.one()).thenReturn(Enterprise.builder()
+                    .id(enterpriseId)
+                    .status(EnterpriseStatus.NORMAL)
+                    .build());
+            doReturn(validationQuery, currentQuery).when(enterprisesService).lambdaQuery();
+
+            LambdaQueryChainWrapper<EnterpriseTeamMember> belongingQuery = mockQueryWrapper();
+            when(belongingQuery.exists()).thenReturn(true);
+            LambdaQueryChainWrapper<EnterpriseTeamMember> remainingQuery = mockQueryWrapper();
+            when(remainingQuery.list()).thenReturn(List.of());
+            when(enterpriseTeamMembersService.lambdaQuery())
+                    .thenReturn(belongingQuery, remainingQuery);
+
+            doReturn(enterpriseUpdateWrapper).when(enterprisesService).lambdaUpdate();
+            when(enterpriseUpdateWrapper.update()).thenReturn(true);
+            LambdaUpdateChainWrapper<EnterpriseTeamMember> memberUpdate = mockUpdateWrapper();
+            when(memberUpdate.update()).thenReturn(true);
+            when(enterpriseTeamMembersService.lambdaUpdate()).thenReturn(memberUpdate);
+
+            LambdaQueryChainWrapper<User> userQuery = mockQueryWrapper();
+            when(userQuery.one()).thenReturn(User.builder()
+                    .id(userId)
+                    .userType(UserType.ENTERPRISE_USER)
+                    .build());
+            when(usersService.lambdaQuery()).thenReturn(userQuery);
+            LambdaUpdateChainWrapper<User> userUpdate = mockUpdateWrapper();
+            when(userUpdate.update()).thenReturn(true);
+            when(usersService.lambdaUpdate()).thenReturn(userUpdate);
+
+            assertDoesNotThrow(() -> enterprisesService.deleteEnterprise(
+                    enterpriseId, deleteContext()));
+
+            verify(userUpdate).set(any(), eq(UserType.CANDIDATE));
+            verify(userUpdate).update();
+        }
+
+        @Test
+        void deleteEnterprise_shouldKeepUserTypeWhenAnotherCertifiedEnterpriseExists() {
+            Long otherEnterpriseId = 10002L;
+            LambdaQueryChainWrapper<Enterprise> validationQuery = mockQueryWrapper();
+            when(validationQuery.exists()).thenReturn(true);
+            LambdaQueryChainWrapper<Enterprise> currentQuery = mockQueryWrapper();
+            when(currentQuery.one()).thenReturn(Enterprise.builder()
+                    .id(enterpriseId)
+                    .status(EnterpriseStatus.NORMAL)
+                    .build());
+            LambdaQueryChainWrapper<Enterprise> remainingEnterpriseQuery = mockQueryWrapper();
+            when(remainingEnterpriseQuery.exists()).thenReturn(true);
+            doReturn(validationQuery, currentQuery, remainingEnterpriseQuery)
+                    .when(enterprisesService).lambdaQuery();
+
+            LambdaQueryChainWrapper<EnterpriseTeamMember> belongingQuery = mockQueryWrapper();
+            when(belongingQuery.exists()).thenReturn(true);
+            LambdaQueryChainWrapper<EnterpriseTeamMember> remainingMemberQuery = mockQueryWrapper();
+            when(remainingMemberQuery.list()).thenReturn(List.of(
+                    EnterpriseTeamMember.builder().enterpriseId(otherEnterpriseId).build()));
+            when(enterpriseTeamMembersService.lambdaQuery())
+                    .thenReturn(belongingQuery, remainingMemberQuery);
+
+            doReturn(enterpriseUpdateWrapper).when(enterprisesService).lambdaUpdate();
+            when(enterpriseUpdateWrapper.update()).thenReturn(true);
+            LambdaUpdateChainWrapper<EnterpriseTeamMember> memberUpdate = mockUpdateWrapper();
+            when(memberUpdate.update()).thenReturn(true);
+            when(enterpriseTeamMembersService.lambdaUpdate()).thenReturn(memberUpdate);
+
+            assertDoesNotThrow(() -> enterprisesService.deleteEnterprise(
+                    enterpriseId, deleteContext()));
+
+            verifyNoInteractions(usersService);
+        }
+
+        private SecureActionContext deleteContext() {
+            return SecureActionContext.builder()
+                    .userId(userId)
+                    .actionType(SecureActionType.DELETE_ENTERPRISE)
+                    .resourceId(enterpriseId)
+                    .enterpriseId(enterpriseId)
+                    .build();
         }
     }
 

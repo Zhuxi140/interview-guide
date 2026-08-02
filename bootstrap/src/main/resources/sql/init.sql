@@ -40,7 +40,7 @@ COMMENT ON COLUMN sys_users.password_hash IS 'BCrypt 加密后的密码摘要';
 COMMENT ON COLUMN sys_users.nickname IS '用户昵称';
 COMMENT ON COLUMN sys_users.avatar_url IS '头像存储路径 / RustFS 存储 URL';
 COMMENT ON COLUMN sys_users.phone IS '手机号（脱敏存储）';
-COMMENT ON COLUMN sys_users.user_type IS '用户类型 (PLATFORM_ADMIN / PLATFORM_OPS / HR / CANDIDATE)';
+COMMENT ON COLUMN sys_users.user_type IS '用户类型 (PLATFORM_ADMIN / PLATFORM_OPS / ENTERPRISE_USER / CANDIDATE)';
 COMMENT ON COLUMN sys_users.risk_level IS '风控等级 (0: 无风险, 1: 低风险, 2: 中风险, 3: 高风险)';
 COMMENT ON COLUMN sys_users.status IS '账号全局状态 (1: 正常, 0: 禁用)';
 COMMENT ON COLUMN sys_users.is_deleted IS '逻辑删除标识';

@@ -40,7 +40,9 @@ public class RegisterReq {
     private String code;
 
     @NotBlank(message = "用户类型不能为空")
-    @Pattern(regexp = "^(HR|CANDIDATE)$", message = "用户类型仅支持 HR / CANDIDATE")
-    @Schema(description = "用户类型：HR / CANDIDATE")
+    @Pattern(regexp = "^(ENTERPRISE_USER|CANDIDATE)$",
+            message = "用户类型仅支持 ENTERPRISE_USER / CANDIDATE")
+    @Schema(description = "用户类型", example = "CANDIDATE",
+            allowableValues = {"ENTERPRISE_USER", "CANDIDATE"})
     private String userType;
 }

@@ -21,6 +21,14 @@ public interface EnterpriseValidationApi {
     void validateEnterpriseBelong(Long enterpriseId,Long userId);
 
     /**
+     * 校验企业处于正常经营状态，且当前用户仍为企业成员
+     *
+     * @param enterpriseId 企业 ID
+     * @param userId       当前用户 ID
+     */
+    void validateActiveEnterpriseBelong(Long enterpriseId, Long userId);
+
+    /**
      * 批量查询企业名称
      *
      * @param enterpriseId 企业 ID 列表

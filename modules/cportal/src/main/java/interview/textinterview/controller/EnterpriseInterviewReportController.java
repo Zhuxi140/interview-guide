@@ -3,6 +3,7 @@ package interview.textinterview.controller;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import interview.common.annonate.MaxRiskLevel;
 import interview.common.annonate.RequirePermission;
+import interview.common.annonate.RequireActiveEnterprise;
 import interview.common.constant.ApiVersion;
 import interview.common.constant.Perm;
 import interview.common.constant.Result;
@@ -28,6 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
  * 企业端面试报告只读接口。
  */
 @RestController
+@RequireActiveEnterprise
 @RequestMapping(ApiVersion.V1 + "/enterprises/{enterpriseId}")
 @Tag(name = "面试报告（B端）")
 @RequiredArgsConstructor

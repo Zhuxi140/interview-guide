@@ -7,6 +7,7 @@ import interview.common.constant.Result;
 import interview.common.enums.PermissionScope;
 import interview.common.enums.RiskLevel;
 import interview.common.annonate.MaxRiskLevel;
+import interview.common.annonate.RequireActiveEnterprise;
 import interview.common.annonate.RequirePermission;
 import interview.matching.model.enums.JobApplicationStatus;
 import interview.matching.model.req.*;
@@ -58,6 +59,7 @@ public class JobApplicationsController {
     }
 
     @RequirePermission(permissions = Perm.Application.LIST, scope = PermissionScope.ENTERPRISE)
+    @RequireActiveEnterprise
     @MaxRiskLevel(RiskLevel.NO_RISK)
     @Operation(summary = "查询岗位投递列表（分页，HR 端）")
     @GetMapping("/enterprises/{enterpriseId}/jobs/{jobId}/applications")
@@ -71,6 +73,7 @@ public class JobApplicationsController {
     }
 
     @RequirePermission(permissions = Perm.Application.DETAIL, scope = PermissionScope.ENTERPRISE)
+    @RequireActiveEnterprise
     @MaxRiskLevel(RiskLevel.NO_RISK)
     @Operation(summary = "查询投递详情（含最新 HR AI 初筛建议）")
     @GetMapping("/enterprises/{enterpriseId}/applications/{applicationId}")
@@ -82,6 +85,7 @@ public class JobApplicationsController {
     }
 
     @RequirePermission(permissions = Perm.Application.UPDATE, scope = PermissionScope.ENTERPRISE)
+    @RequireActiveEnterprise
     @MaxRiskLevel(RiskLevel.MID_RISK)
     @Operation(summary = "HR 更新投递状态")
     @PatchMapping("/enterprises/{enterpriseId}/applications/{applicationId}/status")

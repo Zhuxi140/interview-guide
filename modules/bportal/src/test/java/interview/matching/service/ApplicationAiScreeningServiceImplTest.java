@@ -14,6 +14,7 @@ import interview.matching.model.entity.ApplicationAiScreening;
 import interview.matching.model.entity.JobApplications;
 import interview.matching.model.enums.JobApplicationStatus;
 import interview.matching.model.req.ApplicationAiReviewReq;
+import interview.matching.service.Impl.ApplicationAiScreeningServiceImpl;
 import interview.resume.mapper.CandidateProfileMapper;
 import interview.resume.mapper.CandidateSkillScoresMapper;
 import interview.resume.service.CandidateProfileService;
@@ -57,7 +58,7 @@ class ApplicationAiScreeningServiceImplTest {
         ReflectionTestUtils.setField(service, "baseMapper", screeningMapper);
         AuthContext.setAuthContext(AuthContext.AuthUser.builder()
                 .userId(7L)
-                .userType(UserType.HR)
+                .userType(UserType.ENTERPRISE_USER)
                 .build());
     }
 

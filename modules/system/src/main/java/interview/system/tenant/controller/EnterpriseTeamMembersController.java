@@ -8,6 +8,7 @@ import interview.common.enums.PermissionScope;
 import interview.common.enums.RiskLevel;
 import interview.common.annonate.MaxRiskLevel;
 import interview.common.annonate.RequirePermission;
+import interview.common.annonate.RequireActiveEnterprise;
 import interview.system.tenant.model.req.TeamMemberCreateReq;
 import interview.system.tenant.model.req.TeamMemberUpdateReq;
 import interview.system.tenant.model.vo.TeamMemberCreateVO;
@@ -27,6 +28,7 @@ import jakarta.validation.constraints.Pattern;
  * @author zhuxi
  */
 @RestController
+@RequireActiveEnterprise
 @RequestMapping(ApiVersion.V1 + "/enterprises/{enterpriseId}/members")
 @Tag(name = "团队成员管理")
 @RequiredArgsConstructor

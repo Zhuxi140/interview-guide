@@ -1,4 +1,4 @@
-package interview.matching.service;
+package interview.matching.service.Impl;
 
 import cn.hutool.crypto.digest.DigestUtil;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
@@ -26,6 +26,8 @@ import interview.matching.model.enums.JobApplicationStatus;
 import interview.matching.model.message.CandidateJobMatchCommand;
 import interview.matching.model.vo.CandidateJobMatchAnalysisVO;
 import interview.matching.model.vo.CandidateJobMatchTriggerVO;
+import interview.matching.service.CandidateJobMatchAnalysisService;
+import interview.matching.service.MatchingAiInputService;
 import interview.resume.model.entity.CandidateProfile;
 import interview.resume.service.CandidateProfileService;
 import lombok.RequiredArgsConstructor;

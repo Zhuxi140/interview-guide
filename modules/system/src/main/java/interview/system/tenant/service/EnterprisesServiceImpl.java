@@ -9,14 +9,17 @@ import interview.api.system.dto.SecureChallengeStartDTO;
 import interview.common.constant.SecureActionContext;
 import interview.common.enums.ErrorCode;
 import interview.common.enums.SecureActionType;
+import interview.common.enums.UserType;
 import interview.common.exception.BusinessException;
 import interview.common.util.TraceUtil;
 import interview.framework.config.CustomIdGenerator;
 import interview.framework.context.AuthContext;
+import interview.system.auth.model.entity.User;
+import interview.system.auth.model.vo.SecureChallengeStartVO;
+import interview.system.auth.service.UsersService;
 import interview.system.rbac.model.entity.Role;
 import interview.system.rbac.service.RolesService;
 import interview.system.rbac.service.UserRolesService;
-import interview.system.auth.model.vo.SecureChallengeStartVO;
 import interview.system.tenant.mapper.EnterprisesMapper;
 import interview.system.tenant.model.bo.EnterpriseCreateBO;
 import interview.system.tenant.model.bo.ListUserEnterprisesBO;
@@ -64,6 +67,7 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
     private final RolesService rolesService;
     private final SecureChallengeApi secureChallengeApi;
     private final JobValidationApi jobValidationApi;
+    private final UsersService usersService;
 
     @Override
     @Transactional(rollbackFor = BusinessException.class)
@@ -356,11 +360,22 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
             throw new BusinessException(ErrorCode.ENTERPRISE_DATA_ANOMALY);
         }
 
+        // 企业状态是认证结果的业务事实源，NORMAL 表示注销前已通过认证。
+        Enterprise current = lambdaQuery()
+                .select(Enterprise::getId, Enterprise::getStatus)
+                .eq(Enterprise::getId, enterpriseId)
+                .one();
+        if (current == null) {
+            throw new BusinessException(ErrorCode.ENTERPRISE_NOT_FOUND);
+        }
+        boolean certified = current.getStatus() == EnterpriseStatus.NORMAL;
 
-        //逻辑删除 enterprises（is_deleted = true）
+        // 使用原状态作为并发条件，将企业状态收敛为已注销并逻辑删除。
         Long deleteUserId = AuthContext.getRequiredUserId();
         boolean updated = lambdaUpdate()
                 .eq(Enterprise::getId, enterpriseId)
+                .eq(Enterprise::getStatus, current.getStatus())
+                .set(Enterprise::getStatus, EnterpriseStatus.CANCELLED)
                 .set(Enterprise::getIsDeleted, true)
                 .set(Enterprise::getUpdatedAt, OffsetDateTime.now())
                 .set(Enterprise::getTraceId, TraceUtil.getTraceId())
@@ -383,7 +398,42 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
             throw new BusinessException(ErrorCode.ENTERPRISE_DATA_ANOMALY);
         }
 
-        // TODO: Phase 8 扩展：需校验 sys_enterprise_cert 已通过认证
+        // 已认证企业注销后，仅在用户没有其他正常企业时回退账号类型。
+        if (certified && !hasOtherCertifiedEnterprise(deleteUserId)) {
+            User user = usersService.lambdaQuery()
+                    .select(User::getId, User::getUserType)
+                    .eq(User::getId, deleteUserId)
+                    .one();
+            if (user == null) {
+                throw new BusinessException(ErrorCode.ACCOUNT_DATA_ANOMALY);
+            }
+            if (user.getUserType() == UserType.ENTERPRISE_USER) {
+                boolean userUpdated = usersService.lambdaUpdate()
+                        .eq(User::getId, deleteUserId)
+                        .eq(User::getUserType, UserType.ENTERPRISE_USER)
+                        .set(User::getUserType, UserType.CANDIDATE)
+                        .set(User::getUpdatedAt, OffsetDateTime.now())
+                        .update();
+                if (!userUpdated) {
+                    throw new BusinessException(ErrorCode.ACCOUNT_DATA_ANOMALY);
+                }
+            }
+        }
+    }
+
+    private boolean hasOtherCertifiedEnterprise(Long userId) {
+        List<Long> enterpriseIds = enterpriseTeamMembersService.lambdaQuery()
+                .select(EnterpriseTeamMember::getEnterpriseId)
+                .eq(EnterpriseTeamMember::getUserId, userId)
+                .list()
+                .stream()
+                .map(EnterpriseTeamMember::getEnterpriseId)
+                .distinct()
+                .toList();
+        return !enterpriseIds.isEmpty() && lambdaQuery()
+                .in(Enterprise::getId, enterpriseIds)
+                .eq(Enterprise::getStatus, EnterpriseStatus.NORMAL)
+                .exists();
     }
 
     private SecureChallengeStartVO toSecureChallengeStartVO(
@@ -420,7 +470,9 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
     public void verifyEnterpriseId(Long enterpriseId) {
         boolean exists = lambdaQuery()
                 .eq(Enterprise::getId, enterpriseId)
-                .eq(Enterprise::getStatus, EnterpriseStatus.NORMAL)
+                .in(Enterprise::getStatus,
+                        EnterpriseStatus.PENDING,
+                        EnterpriseStatus.NORMAL)
                 .exists();
         if (!exists) {
             throw new BusinessException(ErrorCode.ENTERPRISE_NOT_FOUND);

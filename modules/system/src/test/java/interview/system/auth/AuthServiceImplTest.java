@@ -14,11 +14,12 @@ import interview.system.auth.model.bo.LoginBO;
 import interview.system.auth.model.bo.RegisterBo;
 import interview.system.auth.model.bo.UserInfoBO;
 import interview.system.auth.model.entity.UserToken;
+import interview.system.auth.model.enums.WorkspaceType;
 import interview.common.enums.SmsType;
 import interview.system.auth.model.req.*;
 import interview.system.auth.model.vo.RefreshTokenVO;
-import interview.system.auth.model.vo.SwitchEnterpriseVO;
 import interview.system.auth.model.vo.TokenInfoVO;
+import interview.system.auth.model.vo.WorkspaceSwitchVO;
 import interview.system.auth.service.impl.AuthServiceImpl;
 import interview.system.auth.service.SecureChallengeService;
 import interview.system.auth.service.SmsService;
@@ -33,6 +34,7 @@ import interview.system.tenant.service.EnterpriseTeamMembersService;
 import interview.system.tenant.service.EnterprisesService;
 import interview.system.tenant.model.entity.Enterprise;
 import interview.system.tenant.model.entity.EnterpriseTeamMember;
+import interview.system.tenant.model.enums.EnterpriseStatus;
 import io.jsonwebtoken.Claims;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -284,10 +286,11 @@ class AuthServiceImplTest {
 
                 assertNotNull(result);
                 assertEquals(userId, result.userId());
-                assertEquals(enterpriseId, result.enterpriseId());
+                assertNull(result.enterpriseId());
                 assertNotNull(result.enterprises());
                 assertEquals(1, result.enterprises().size());
                 assertEquals("TestCorp", result.enterprises().get(0).name());
+                assertEquals(EnterpriseStatus.PENDING, result.enterprises().get(0).status());
                 assertNotNull(result.accessToken());
                 assertNotNull(result.refreshToken());
             }
@@ -307,6 +310,7 @@ class AuthServiceImplTest {
                     .name("TestCorp")
                     .shortName("TC")
                     .logoUrl("http://logo.url")
+                    .status(EnterpriseStatus.PENDING)
                     .build();
 
             LambdaQueryChainWrapper<Enterprise> eq = mockQueryWrapper();
@@ -474,7 +478,7 @@ class AuthServiceImplTest {
         @Test
         void getUserToken_success() {
             AuthContext.setAuthContext(AuthContext.AuthUser.builder()
-                .userId(userId).userType(UserType.HR).build());
+                .userId(userId).userType(UserType.ENTERPRISE_USER).build());
 
             UserToken token = UserToken.builder()
                 .id(1L).deviceInfo(deviceInfo).ipAddress(ipAddress)
@@ -503,7 +507,7 @@ class AuthServiceImplTest {
         @BeforeEach
         void setUp() {
             AuthContext.setAuthContext(AuthContext.AuthUser.builder()
-                .userId(userId).userType(UserType.HR).build());
+                .userId(userId).userType(UserType.ENTERPRISE_USER).build());
             secureActionContext = SecureActionContext.builder()
                     .actionType(SecureActionType.REVOKE_DEVICE)
                     .resourceId(1L)
@@ -542,10 +546,10 @@ class AuthServiceImplTest {
         }
     }
 
-    // ============================== switchEnterprise ==============================
+    // ============================== switchWorkspace ==============================
 
     @Nested
-    class SwitchEnterprise {
+    class SwitchWorkspace {
 
         private final Long targetEnterpriseId = 200L;
         private final String oldAccessToken = "old-jwt-token";
@@ -558,7 +562,7 @@ class AuthServiceImplTest {
             AuthContext.setAuthContext(AuthContext.AuthUser.builder()
                     .userId(userId)
                     .username(username)
-                    .userType(UserType.HR)
+                    .userType(UserType.ENTERPRISE_USER)
                     .riskLevel(RiskLevel.NO_RISK)
                     .platformRoleCodes(List.of())
                     .entRoleMap(entRoleMap)
@@ -566,7 +570,8 @@ class AuthServiceImplTest {
         }
 
         @Test
-        void switchEnterprise_success() {
+        void switchWorkspace_success() {
+            mockCurrentUser(UserType.ENTERPRISE_USER);
             Claims claims = mock(Claims.class);
             when(claims.getExpiration()).thenReturn(new Date(System.currentTimeMillis() + 5000));
             when(jwttUtil.parseToken(oldAccessToken)).thenReturn(claims);
@@ -574,19 +579,105 @@ class AuthServiceImplTest {
             when(jwtProperties.getExpiration()).thenReturn(30L);
             when(jwttUtil.generatorToken(anyMap(), eq(userId))).thenReturn("new-jwt-token");
 
-            SwitchEnterpriseVO result = authService.switchEnterprise(targetEnterpriseId, oldAccessToken);
+            EnterpriseTeamMember member = EnterpriseTeamMember.builder()
+                    .enterpriseId(targetEnterpriseId)
+                    .roleId(interview.common.enums.Role.ENTERPRISE_OWNER.getCode())
+                    .build();
+            LambdaQueryChainWrapper<EnterpriseTeamMember> contextMemberQuery = mockQueryWrapper();
+            when(contextMemberQuery.list()).thenReturn(List.of(member));
+            LambdaQueryChainWrapper<EnterpriseTeamMember> rbacMemberQuery = mockQueryWrapper();
+            when(rbacMemberQuery.list()).thenReturn(List.of(member));
+            when(enterpriseTeamMembersService.lambdaQuery())
+                    .thenReturn(contextMemberQuery, rbacMemberQuery);
+
+            LambdaQueryChainWrapper<Enterprise> enterpriseQuery = mockQueryWrapper();
+            when(enterpriseQuery.list()).thenReturn(List.of(Enterprise.builder()
+                    .id(targetEnterpriseId)
+                    .name("测试企业")
+                    .status(EnterpriseStatus.NORMAL)
+                    .build()));
+            when(enterprisesService.lambdaQuery()).thenReturn(enterpriseQuery);
+
+            LambdaQueryChainWrapper<UserRole> userRoleQuery = mockQueryWrapper();
+            when(userRoleQuery.list()).thenReturn(List.of());
+            when(userRolesService.lambdaQuery()).thenReturn(userRoleQuery);
+
+            Role enterpriseRole = new Role();
+            enterpriseRole.setId(interview.common.enums.Role.ENTERPRISE_OWNER.getCode());
+            enterpriseRole.setRoleCode(interview.common.enums.Role.ENTERPRISE_OWNER.name());
+            LambdaQueryChainWrapper<Role> roleQuery = mockQueryWrapper();
+            when(roleQuery.list()).thenReturn(List.of(enterpriseRole));
+            when(rolesService.lambdaQuery()).thenReturn(roleQuery);
+            when(permissionsMapper.getPermCodeByRoleId(anyList())).thenReturn(List.of());
+
+            WorkspaceSwitchReq req = new WorkspaceSwitchReq();
+            req.setWorkspaceType(WorkspaceType.ENTERPRISE);
+            req.setEnterpriseId(targetEnterpriseId);
+
+            WorkspaceSwitchVO result = authService.switchWorkspace(req, oldAccessToken);
 
             assertNotNull(result);
             assertEquals("new-jwt-token", result.accessToken());
+            assertEquals(WorkspaceType.ENTERPRISE, result.workspaceType());
+            assertEquals(targetEnterpriseId, result.enterpriseId());
             assertEquals(1800L, result.expiresInSeconds());
             verify(valueOps).set(anyString(), anyString(), anyLong(), any());
         }
 
         @Test
-        void switchEnterprise_fail_notBelong() {
+        void switchWorkspace_fail_notBelong() {
+            mockCurrentUser(UserType.ENTERPRISE_USER);
+            LambdaQueryChainWrapper<EnterpriseTeamMember> memberQuery = mockQueryWrapper();
+            when(memberQuery.list()).thenReturn(List.of());
+            when(enterpriseTeamMembersService.lambdaQuery()).thenReturn(memberQuery);
+            WorkspaceSwitchReq req = new WorkspaceSwitchReq();
+            req.setWorkspaceType(WorkspaceType.ENTERPRISE);
+            req.setEnterpriseId(999L);
+
             BusinessException ex = assertThrows(BusinessException.class,
-                    () -> authService.switchEnterprise(999L, oldAccessToken));
+                    () -> authService.switchWorkspace(req, oldAccessToken));
             assertEquals(ErrorCode.ENTERPRISE_NOT_BELONG.getCode(), ex.getCode());
+        }
+
+        @Test
+        void switchWorkspace_toPlatform() {
+            mockCurrentUser(UserType.PLATFORM_ADMIN);
+            when(jwtProperties.getExpiration()).thenReturn(30L);
+            when(jwttUtil.generatorToken(anyMap(), eq(userId))).thenReturn("platform-jwt");
+            LambdaQueryChainWrapper<UserRole> userRoleQuery = mockQueryWrapper();
+            when(userRoleQuery.list()).thenReturn(List.of(
+                    UserRole.builder().roleId(interview.common.enums.Role.SUPER_ADMIN.getCode()).build()));
+            when(userRolesService.lambdaQuery()).thenReturn(userRoleQuery);
+            Role platformRole = new Role();
+            platformRole.setRoleCode(interview.common.enums.Role.SUPER_ADMIN.name());
+            LambdaQueryChainWrapper<Role> roleQuery = mockQueryWrapper();
+            when(roleQuery.list()).thenReturn(List.of(platformRole));
+            when(rolesService.lambdaQuery()).thenReturn(roleQuery);
+            LambdaQueryChainWrapper<EnterpriseTeamMember> memberQuery = mockQueryWrapper();
+            when(memberQuery.list()).thenReturn(List.of());
+            when(enterpriseTeamMembersService.lambdaQuery()).thenReturn(memberQuery);
+            when(permissionsMapper.getPermCodeByRoleId(anyList())).thenReturn(List.of());
+            WorkspaceSwitchReq req = new WorkspaceSwitchReq();
+            req.setWorkspaceType(WorkspaceType.PLATFORM);
+
+            WorkspaceSwitchVO result = authService.switchWorkspace(req, oldAccessToken);
+
+            assertNull(result.enterpriseId());
+            assertEquals(WorkspaceType.PLATFORM, result.workspaceType());
+            ArgumentCaptor<Map<String, Object>> claims = ArgumentCaptor.forClass(Map.class);
+            verify(jwttUtil).generatorToken(claims.capture(), eq(userId));
+            assertFalse(claims.getValue().containsKey("enterpriseId"));
+        }
+
+        private void mockCurrentUser(UserType userType) {
+            LambdaQueryChainWrapper<User> userQuery = mockQueryWrapper();
+            when(userQuery.one()).thenReturn(User.builder()
+                    .username(username)
+                    .userType(userType)
+                    .riskLevel(RiskLevel.NO_RISK)
+                    .status(UserStatus.NORMAL)
+                    .build());
+            when(usersService.lambdaQuery()).thenReturn(userQuery);
         }
     }
 
@@ -605,12 +696,31 @@ class AuthServiceImplTest {
         void getUserInfo_success() {
             User user = User.builder()
                 .username(username).nickname("testuser").phone(phone).email(email)
-                .avatarUrl("http://avatar.url").status(UserStatus.NORMAL)
+                .avatarUrl("http://avatar.url").userType(UserType.CANDIDATE)
+                .status(UserStatus.NORMAL)
                 .build();
 
             LambdaQueryChainWrapper<User> q = mockQueryWrapper();
             when(q.one()).thenReturn(user);
             when(usersService.lambdaQuery()).thenReturn(q);
+
+            Integer candidateRoleId = interview.common.enums.Role.CANDIDATE.getCode();
+            LambdaQueryChainWrapper<UserRole> userRoleQuery = mockQueryWrapper();
+            when(userRoleQuery.list()).thenReturn(List.of(
+                    UserRole.builder().roleId(candidateRoleId).build()));
+            when(userRolesService.lambdaQuery()).thenReturn(userRoleQuery);
+
+            Role candidateRole = new Role();
+            candidateRole.setRoleCode("CANDIDATE");
+            LambdaQueryChainWrapper<Role> roleQuery = mockQueryWrapper();
+            when(roleQuery.list()).thenReturn(List.of(candidateRole));
+            when(rolesService.lambdaQuery()).thenReturn(roleQuery);
+
+            LambdaQueryChainWrapper<EnterpriseTeamMember> memberQuery = mockQueryWrapper();
+            when(memberQuery.list()).thenReturn(List.of());
+            when(enterpriseTeamMembersService.lambdaQuery()).thenReturn(memberQuery);
+            when(permissionsMapper.getPermCodeByRoleId(List.of(candidateRoleId)))
+                    .thenReturn(List.of("candidate:resume:list"));
 
             UserInfoBO result = authService.getUserInfo();
 
@@ -618,6 +728,73 @@ class AuthServiceImplTest {
             assertEquals(username, result.username());
             assertEquals(phone, result.phone());
             assertEquals(UserStatus.NORMAL, result.status());
+            assertNull(result.enterpriseId());
+            assertEquals(List.of(), result.enterprises());
+            assertEquals(List.of("CANDIDATE"), result.roles());
+            assertEquals(List.of("candidate:resume:list"), result.permissions());
+        }
+
+        @Test
+        void getUserInfo_shouldKeepJwtSelectedEnterprise() {
+            Long selectedEnterpriseId = 200L;
+            Long latestEnterpriseId = 201L;
+            AuthContext.setAuthContext(AuthContext.AuthUser.builder()
+                    .userId(userId)
+                    .userType(UserType.ENTERPRISE_USER)
+                    .enterpriseId(selectedEnterpriseId)
+                    .build());
+
+            User user = User.builder()
+                    .username(username)
+                    .userType(UserType.ENTERPRISE_USER)
+                    .status(UserStatus.NORMAL)
+                    .build();
+            LambdaQueryChainWrapper<User> userQuery = mockQueryWrapper();
+            when(userQuery.one()).thenReturn(user);
+            when(usersService.lambdaQuery()).thenReturn(userQuery);
+
+            LambdaQueryChainWrapper<EnterpriseTeamMember> contextMemberQuery = mockQueryWrapper();
+            when(contextMemberQuery.list()).thenReturn(List.of(
+                    EnterpriseTeamMember.builder().enterpriseId(latestEnterpriseId).build(),
+                    EnterpriseTeamMember.builder().enterpriseId(selectedEnterpriseId).build()));
+            LambdaQueryChainWrapper<EnterpriseTeamMember> rbacMemberQuery = mockQueryWrapper();
+            when(rbacMemberQuery.list()).thenReturn(List.of());
+            when(enterpriseTeamMembersService.lambdaQuery())
+                    .thenReturn(contextMemberQuery, rbacMemberQuery);
+
+            Enterprise selectedEnterprise = Enterprise.builder()
+                    .id(selectedEnterpriseId)
+                    .name("已选企业")
+                    .status(EnterpriseStatus.NORMAL)
+                    .build();
+            Enterprise latestEnterprise = Enterprise.builder()
+                    .id(latestEnterpriseId)
+                    .name("最近加入企业")
+                    .status(EnterpriseStatus.PENDING)
+                    .build();
+            LambdaQueryChainWrapper<Enterprise> enterpriseQuery = mockQueryWrapper();
+            when(enterpriseQuery.list()).thenReturn(List.of(selectedEnterprise, latestEnterprise));
+            when(enterprisesService.lambdaQuery()).thenReturn(enterpriseQuery);
+
+            Integer candidateRoleId = interview.common.enums.Role.CANDIDATE.getCode();
+            LambdaQueryChainWrapper<UserRole> userRoleQuery = mockQueryWrapper();
+            when(userRoleQuery.list()).thenReturn(List.of(
+                    UserRole.builder().roleId(candidateRoleId).build()));
+            when(userRolesService.lambdaQuery()).thenReturn(userRoleQuery);
+
+            Role candidateRole = new Role();
+            candidateRole.setRoleCode("CANDIDATE");
+            LambdaQueryChainWrapper<Role> roleQuery = mockQueryWrapper();
+            when(roleQuery.list()).thenReturn(List.of(candidateRole));
+            when(rolesService.lambdaQuery()).thenReturn(roleQuery);
+            when(permissionsMapper.getPermCodeByRoleId(List.of(candidateRoleId)))
+                    .thenReturn(List.of("candidate:resume:list"));
+
+            UserInfoBO result = authService.getUserInfo();
+
+            assertEquals(selectedEnterpriseId, result.enterpriseId());
+            assertEquals("已选企业", result.enterpriseName());
+            assertEquals(2, result.enterprises().size());
         }
 
         @Test

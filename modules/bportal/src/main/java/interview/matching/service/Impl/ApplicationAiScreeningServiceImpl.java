@@ -1,4 +1,4 @@
-package interview.matching.service;
+package interview.matching.service.Impl;
 
 import cn.hutool.crypto.digest.DigestUtil;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
@@ -31,6 +31,9 @@ import interview.matching.model.req.ApplicationAiReviewReq;
 import interview.matching.model.vo.ApplicationAiScreeningReviewVO;
 import interview.matching.model.vo.ApplicationAiScreeningTriggerVO;
 import interview.matching.model.vo.ApplicationAiScreeningVO;
+import interview.matching.service.ApplicationAiScreeningService;
+import interview.matching.service.JobScreeningConfigService;
+import interview.matching.service.MatchingAiInputService;
 import interview.resume.mapper.CandidateProfileMapper;
 import interview.resume.mapper.CandidateSkillScoresMapper;
 import interview.resume.model.entity.CandidateProfile;
