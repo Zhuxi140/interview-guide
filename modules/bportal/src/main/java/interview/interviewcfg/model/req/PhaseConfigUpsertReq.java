@@ -1,6 +1,8 @@
 package interview.interviewcfg.model.req;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
@@ -14,8 +16,8 @@ public record PhaseConfigUpsertReq(
         Integer questionCount,
 
         @NotNull(message = "难度权重不能为空")
-        @Min(value = 0, message = "权重不能小于0")
-        @Max(value = 1, message = "权重不能大于1")
+        @DecimalMin(value = "0.0", message = "权重不能小于0")
+        @DecimalMax(value = "1.0", message = "权重不能大于1")
         @Schema(description = "难度权重系数 0.0~1.0", example = "0.5")
         Double difficultyWeight,
 

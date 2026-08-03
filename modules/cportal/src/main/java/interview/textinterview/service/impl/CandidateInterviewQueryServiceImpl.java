@@ -39,7 +39,11 @@ public class CandidateInterviewQueryServiceImpl implements CandidateInterviewQue
                                 schedule.id(),
                                 schedule.enterpriseName(),
                                 schedule.jobTitle(),
+                                schedule.roundNo(),
+                                schedule.phaseCode(),
+                                schedule.phaseName(),
                                 schedule.interviewTime(),
+                                schedule.durationMinutes(),
                                 schedule.interviewType(),
                                 schedule.status(),
                                 schedule.version()

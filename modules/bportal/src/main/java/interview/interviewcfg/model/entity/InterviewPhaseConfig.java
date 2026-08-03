@@ -31,6 +31,7 @@ public class InterviewPhaseConfig implements Serializable {
     @Builder.Default
     private Double difficultyWeight = 0.5;
 
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String promptOverride;
 
     @Version

@@ -94,6 +94,7 @@ public interface Perm {
     }
 
     interface InterviewSchedule {
+        String AI_SUGGEST = "interview-schedule:ai-suggest";
         String LIST = "interview-schedule:list";
         String DETAIL = "interview-schedule:detail";
     }

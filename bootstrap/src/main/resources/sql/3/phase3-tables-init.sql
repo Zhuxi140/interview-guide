@@ -8,6 +8,8 @@
 
 BEGIN;
 
+CREATE EXTENSION IF NOT EXISTS btree_gist;
+
 -- ==================== 1. interview_stage_templates ====================
 CREATE TABLE IF NOT EXISTS interview_stage_templates (
     id                      BIGINT          NOT NULL,
@@ -52,6 +54,8 @@ CREATE TABLE IF NOT EXISTS interview_phase_configs (
         CHECK (question_count BETWEEN 1 AND 20),
     CONSTRAINT ck_interview_phase_difficulty
         CHECK (difficulty_weight BETWEEN 0.0 AND 1.0),
+    CONSTRAINT ck_interview_phase_code
+        CHECK (phase_code ~ '^[A-Z][A-Z0-9_]{0,31}$'),
     CONSTRAINT ck_interview_phase_version
         CHECK (version >= 0)
 );
@@ -65,7 +69,83 @@ COMMENT ON COLUMN interview_phase_configs.template_id IS '[逻辑外键]→inter
 COMMENT ON COLUMN interview_phase_configs.phase_code IS '模板内的阶段编码';
 COMMENT ON COLUMN interview_phase_configs.version IS '多管理员编辑使用的乐观锁版本号';
 
--- ==================== 3. interview_schedule ====================
+-- ==================== 3. interview_plan_drafts ====================
+CREATE TABLE IF NOT EXISTS interview_plan_drafts (
+    id                      BIGINT          NOT NULL,
+    enterprise_id           BIGINT          NOT NULL,
+    application_id          BIGINT          NOT NULL,
+    template_id             BIGINT          NOT NULL,
+    requested_by            BIGINT          NOT NULL,
+    idempotency_key         VARCHAR(128)    NOT NULL,
+    request_json            JSONB           NOT NULL,
+    input_snapshot_json     JSONB,
+    plan_json               JSONB,
+    status                  VARCHAR(16)     NOT NULL DEFAULT 'PENDING',
+    failure_reason          VARCHAR(512),
+    generation_message_id   BIGINT,
+    version                 INT             NOT NULL DEFAULT 0,
+    expires_at              TIMESTAMPTZ,
+    applied_at              TIMESTAMPTZ,
+    created_at              TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by              BIGINT,
+    trace_id                VARCHAR(128),
+    updated_at              TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    CONSTRAINT ck_interview_plan_request_object
+        CHECK (jsonb_typeof(request_json) = 'object'),
+    CONSTRAINT ck_interview_plan_input_object
+        CHECK (input_snapshot_json IS NULL OR jsonb_typeof(input_snapshot_json) = 'object'),
+    CONSTRAINT ck_interview_plan_result_object
+        CHECK (plan_json IS NULL OR jsonb_typeof(plan_json) = 'object'),
+    CONSTRAINT ck_interview_plan_status
+        CHECK (status IN ('PENDING', 'PROCESSING', 'READY', 'APPLIED', 'FAILED', 'EXPIRED')),
+    CONSTRAINT ck_interview_plan_version
+        CHECK (version >= 0)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_interview_plan_idempotency
+    ON interview_plan_drafts (enterprise_id, application_id, requested_by, idempotency_key);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_interview_plan_application_active
+    ON interview_plan_drafts (application_id)
+    WHERE status IN ('PENDING', 'PROCESSING', 'READY');
+CREATE UNIQUE INDEX IF NOT EXISTS uk_interview_plan_generation_message
+    ON interview_plan_drafts (generation_message_id)
+    WHERE generation_message_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_interview_plan_application_created
+    ON interview_plan_drafts (enterprise_id, application_id, created_at DESC, id DESC);
+
+COMMENT ON TABLE interview_plan_drafts IS 'Agent 面试编排业务草案表';
+COMMENT ON COLUMN interview_plan_drafts.application_id IS '[逻辑外键]→job_applications';
+COMMENT ON COLUMN interview_plan_drafts.template_id IS '[逻辑外键]→interview_stage_templates';
+COMMENT ON COLUMN interview_plan_drafts.request_json IS '创建草案时的编排参数快照';
+COMMENT ON COLUMN interview_plan_drafts.input_snapshot_json IS 'Agent 使用的非敏感输入快照';
+COMMENT ON COLUMN interview_plan_drafts.plan_json IS '阶段、题纲和排期建议结构化结果';
+COMMENT ON COLUMN interview_plan_drafts.generation_message_id IS '[逻辑引用]→local_message，不建跨模块外键';
+COMMENT ON COLUMN interview_plan_drafts.version IS 'HR 确认草案使用的乐观锁版本';
+
+-- ==================== 4. candidate_interview_availability ====================
+CREATE TABLE IF NOT EXISTS candidate_interview_availability (
+    candidate_user_id BIGINT       NOT NULL PRIMARY KEY,
+    timezone          VARCHAR(64)  NOT NULL,
+    ranges_json       JSONB        NOT NULL DEFAULT '[]'::JSONB,
+    version           INT          NOT NULL DEFAULT 0,
+    updated_by        BIGINT,
+    trace_id          VARCHAR(128),
+    created_at        TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at        TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT ck_candidate_availability_ranges
+        CHECK (jsonb_typeof(ranges_json) = 'array'),
+    CONSTRAINT ck_candidate_availability_version
+        CHECK (version >= 0)
+);
+
+COMMENT ON TABLE candidate_interview_availability IS '候选人可面试时间聚合配置表';
+COMMENT ON COLUMN candidate_interview_availability.candidate_user_id IS '[逻辑外键]→sys_users，同时作为主键';
+COMMENT ON COLUMN candidate_interview_availability.timezone IS 'IANA 时区';
+COMMENT ON COLUMN candidate_interview_availability.ranges_json IS '按开始时间排序的可面试时间范围数组';
+COMMENT ON COLUMN candidate_interview_availability.version IS '完整替换配置使用的乐观锁版本';
+
+-- ==================== 5. interview_schedule ====================
 CREATE TABLE IF NOT EXISTS interview_schedule (
     id                      BIGINT          NOT NULL,
     enterprise_id           BIGINT          NOT NULL,
@@ -74,7 +154,8 @@ CREATE TABLE IF NOT EXISTS interview_schedule (
     application_id          BIGINT          NOT NULL,
     template_id             BIGINT          NOT NULL,
     round_no                SMALLINT        NOT NULL DEFAULT 1,
-    stage_code              VARCHAR(32),
+    phase_code              VARCHAR(32)     NOT NULL,
+    template_snapshot_json  JSONB           NOT NULL,
     idempotency_key         VARCHAR(128)    NOT NULL,
     interview_time          TIMESTAMPTZ     NOT NULL,
     duration_minutes        INT             NOT NULL DEFAULT 60,
@@ -90,6 +171,10 @@ CREATE TABLE IF NOT EXISTS interview_schedule (
     PRIMARY KEY (id),
     CONSTRAINT ck_interview_schedule_round
         CHECK (round_no > 0),
+    CONSTRAINT ck_interview_schedule_phase_code
+        CHECK (phase_code ~ '^[A-Z][A-Z0-9_]{0,31}$'),
+    CONSTRAINT ck_interview_schedule_template_snapshot
+        CHECK (jsonb_typeof(template_snapshot_json) = 'object'),
     CONSTRAINT ck_interview_schedule_duration
         CHECK (duration_minutes BETWEEN 15 AND 480),
     CONSTRAINT ck_interview_schedule_type
@@ -106,6 +191,9 @@ CREATE TABLE IF NOT EXISTS interview_schedule (
 CREATE UNIQUE INDEX IF NOT EXISTS uk_interview_schedule_application_round_active
     ON interview_schedule (application_id, round_no)
     WHERE is_deleted = FALSE;
+CREATE UNIQUE INDEX IF NOT EXISTS uk_interview_schedule_application_phase_active
+    ON interview_schedule (application_id, phase_code)
+    WHERE is_deleted = FALSE;
 CREATE UNIQUE INDEX IF NOT EXISTS uk_interview_schedule_idempotency
     ON interview_schedule (enterprise_id, idempotency_key);
 CREATE INDEX IF NOT EXISTS idx_interview_schedule_enterprise_time
@@ -116,6 +204,33 @@ CREATE INDEX IF NOT EXISTS idx_interview_schedule_interviewer_time
     WHERE is_deleted = FALSE
       AND interviewer_user_id IS NOT NULL
       AND status IN ('PENDING_CONFIRMATION', 'CONFIRMED', 'IN_PROGRESS');
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'interview_schedule'::regclass
+          AND conname = 'ex_interview_schedule_interviewer_time'
+    ) THEN
+        ALTER TABLE interview_schedule
+            ADD CONSTRAINT ex_interview_schedule_interviewer_time
+            EXCLUDE USING gist (
+                interviewer_user_id WITH =,
+                tsrange(
+                    interview_time AT TIME ZONE 'UTC',
+                    (interview_time AT TIME ZONE 'UTC')
+                        + duration_minutes * INTERVAL '1 minute',
+                    '[)'
+                ) WITH &&
+            )
+            WHERE (
+                is_deleted = FALSE
+                AND interviewer_user_id IS NOT NULL
+                AND status IN ('PENDING_CONFIRMATION', 'CONFIRMED', 'IN_PROGRESS')
+            );
+    END IF;
+END
+$$;
 CREATE INDEX IF NOT EXISTS idx_interview_schedule_application
     ON interview_schedule (application_id, round_no DESC);
 
@@ -126,12 +241,15 @@ COMMENT ON COLUMN interview_schedule.company_user_id IS '[逻辑外键]→sys_us
 COMMENT ON COLUMN interview_schedule.interviewer_user_id IS '[逻辑外键]→sys_users，被分配的面试官';
 COMMENT ON COLUMN interview_schedule.application_id IS '[逻辑外键]→job_applications，候选人和岗位由投递记录确定';
 COMMENT ON COLUMN interview_schedule.template_id IS '[逻辑外键]→interview_stage_templates';
+COMMENT ON COLUMN interview_schedule.round_no IS '投递下的面试轮次，对应模板阶段 sortOrder';
+COMMENT ON COLUMN interview_schedule.phase_code IS '由模板快照按 round_no 派生的阶段编码';
+COMMENT ON COLUMN interview_schedule.template_snapshot_json IS '首轮排期固化的完整模板及阶段组卷配置快照';
 COMMENT ON COLUMN interview_schedule.idempotency_key IS '创建排期请求幂等键';
 COMMENT ON COLUMN interview_schedule.status IS 'PENDING_CONFIRMATION / CONFIRMED / IN_PROGRESS / COMPLETED / DECLINED / CANCELLED / NO_SHOW';
 COMMENT ON COLUMN interview_schedule.version IS '排期管理操作使用的乐观锁版本号';
 COMMENT ON COLUMN interview_schedule.updated_by IS '[逻辑外键]→sys_users';
 
--- ==================== 4. interview_sessions ====================
+-- ==================== 6. interview_sessions ====================
 CREATE TABLE IF NOT EXISTS interview_sessions (
     id                      BIGINT          NOT NULL,
     enterprise_id           BIGINT          NOT NULL,
@@ -185,7 +303,7 @@ COMMENT ON COLUMN interview_sessions.schedule_id IS '[逻辑外键]→interview_
 COMMENT ON COLUMN interview_sessions.idempotency_key IS '创建会话请求幂等键';
 COMMENT ON COLUMN interview_sessions.last_event_sequence IS '已持久化语义事件的最后序号，使用原子条件更新推进';
 
--- ==================== 5. interview_answers ====================
+-- ==================== 7. interview_answers ====================
 CREATE TABLE IF NOT EXISTS interview_answers (
     id                      BIGINT          NOT NULL,
     session_id              BIGINT          NOT NULL,
@@ -230,7 +348,7 @@ COMMENT ON COLUMN interview_answers.parent_message_id IS '[逻辑外键]→inter
 COMMENT ON COLUMN interview_answers.idempotency_key IS '提交答案请求幂等键，题目未作答时为空';
 COMMENT ON COLUMN interview_answers.answered_at IS '实际提交答案时间，题目生成后尚未回答时为空';
 
--- ==================== 6. interview_timeline_events ====================
+-- ==================== 8. interview_timeline_events ====================
 CREATE TABLE IF NOT EXISTS interview_timeline_events (
     id                      BIGINT          NOT NULL,
     session_id              BIGINT          NOT NULL,
@@ -267,7 +385,7 @@ COMMENT ON COLUMN interview_timeline_events.event_id IS '会话内事件幂等ID
 COMMENT ON COLUMN interview_timeline_events.sequence_num IS '会话内严格递增序号';
 COMMENT ON COLUMN interview_timeline_events.payload_json IS '完整语义事件载荷，不保存高频增量片段或心跳';
 
--- ==================== 7. interview_takeovers ====================
+-- ==================== 9. interview_takeovers ====================
 CREATE TABLE IF NOT EXISTS interview_takeovers (
     id                      BIGINT          NOT NULL,
     session_id              BIGINT          NOT NULL,
@@ -301,7 +419,7 @@ COMMENT ON COLUMN interview_takeovers.enterprise_id IS '[逻辑外键]→enterpr
 COMMENT ON COLUMN interview_takeovers.interviewer_user_id IS '[逻辑外键]→sys_users';
 COMMENT ON COLUMN interview_takeovers.request_id IS '接管命令幂等ID';
 
--- ==================== 8. interview_reports ====================
+-- ==================== 10. interview_reports ====================
 CREATE TABLE IF NOT EXISTS interview_reports (
     id                      BIGINT          NOT NULL,
     enterprise_id           BIGINT          NOT NULL,
@@ -347,7 +465,7 @@ COMMENT ON COLUMN interview_reports.generation_status IS 'PENDING / PROCESSING /
 COMMENT ON COLUMN interview_reports.failure_reason IS '报告生成失败的受控原因';
 COMMENT ON COLUMN interview_reports.report_pdf_url IS '报告PDF对象存储定位信息，不直接作为永久公网地址使用';
 
--- ==================== 9. application_transition_logs ====================
+-- ==================== 11. application_transition_logs ====================
 CREATE TABLE IF NOT EXISTS application_transition_logs (
     id                      BIGINT          NOT NULL,
     enterprise_id           BIGINT          NOT NULL,

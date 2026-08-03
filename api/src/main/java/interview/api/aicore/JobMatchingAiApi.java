@@ -1,9 +1,7 @@
 package interview.api.aicore;
 
-import interview.api.aicore.dto.AiCandidateJobMatchResult;
-import interview.api.aicore.dto.AiCandidateProfileInput;
-import interview.api.aicore.dto.AiHrScreeningResult;
-import interview.api.aicore.dto.AiJobRequirementInput;
+import interview.api.aicore.dto.*;
+import interview.common.exception.BusinessException;
 
 /**
  * 岗位匹配 AI 内部接口。
@@ -29,4 +27,7 @@ public interface JobMatchingAiApi {
      */
     AiCandidateJobMatchResult matchForCandidate(
             AiCandidateProfileInput profile, AiJobRequirementInput job);
+
+
+
 }

@@ -19,4 +19,17 @@ public enum InterviewScheduleStatus {
     NO_SHOW("候选人未到场");
 
     private final String message;
+
+    public static boolean isTerminal(InterviewScheduleStatus status){
+        switch (status){
+            case COMPLETED:
+            case DECLINED:
+            case CANCELLED:
+            case NO_SHOW:
+                return true;
+            default:
+                return false;
+        }
+    }
+
 }

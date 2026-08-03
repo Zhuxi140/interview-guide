@@ -6,10 +6,8 @@ import interview.ai.matching.model.CandidateJobMatchModelOutput;
 import interview.ai.matching.model.HrScreeningModelOutput;
 import interview.ai.matching.service.JobMatchingAiService;
 import interview.api.aicore.JobMatchingAiApi;
-import interview.api.aicore.dto.AiCandidateJobMatchResult;
-import interview.api.aicore.dto.AiCandidateProfileInput;
-import interview.api.aicore.dto.AiHrScreeningResult;
-import interview.api.aicore.dto.AiJobRequirementInput;
+import interview.api.aicore.dto.*;
+import interview.api.system.EnterpriseValidationApi;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -47,4 +45,6 @@ public class JobMatchingAiApiImpl implements JobMatchingAiApi {
                 result.data().gaps(),
                 LlmConfigSnapshotMapper.toDto(result.llmConfigSnapshot()));
     }
+
+
 }

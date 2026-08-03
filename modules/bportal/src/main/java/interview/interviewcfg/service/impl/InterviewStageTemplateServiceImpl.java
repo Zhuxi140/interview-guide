@@ -12,6 +12,7 @@ import interview.common.exception.BusinessException;
 import interview.framework.context.AuthContext;
 import interview.interviewcfg.mapper.InterviewPhaseConfigMapper;
 import interview.interviewcfg.mapper.InterviewStageTemplateMapper;
+import interview.interviewcfg.model.bo.InterviewTemplateSnapshot;
 import interview.interviewcfg.model.entity.InterviewPhaseConfig;
 import interview.interviewcfg.model.entity.InterviewStageTemplate;
 import interview.interviewcfg.model.req.InterviewTemplateCreateReq;
@@ -19,8 +20,10 @@ import interview.interviewcfg.model.req.InterviewTemplateUpdateReq;
 import interview.interviewcfg.model.req.PhaseConfigUpsertReq;
 import interview.interviewcfg.model.vo.*;
 import interview.interviewcfg.service.InterviewStageTemplateService;
+import interview.interviewcfg.service.support.InterviewTemplateStageRules;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
@@ -30,6 +33,8 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -49,13 +54,28 @@ public class InterviewStageTemplateServiceImpl
     @Override
     @Transactional
     public InterviewTemplateCreateVO createTemplate(Long enterpriseId, InterviewTemplateCreateReq req) {
-        // TODO ① 校验企业存在、当前用户属于目标企业，并确认调用方具有模板管理权限。
-        // TODO ② 规范化模板名称和阶段字段，校验 phaseCode 属于支持的阶段编码，phaseCode/sortOrder 均不得重复。
-        // TODO ③ 按 sortOrder 排序阶段，校验排序连续性及阶段数量上限，再序列化为 stagesSequenceJson。
-        // TODO ④ 校验同一企业内模板名称等业务唯一约束，构建包含 enterpriseId、初始 version 和审计字段的实体。
-        // TODO ⑤ 插入 interview_stage_templates；将唯一键冲突转换为明确业务错误，禁止静默覆盖已有模板。
-        // TODO ⑥ 根据落库结果组装 id、templateName、version、createdAt；实现前需先补齐实体/表中的 version 和逻辑删除字段。
-        return null;
+        // 校验企业归属并规范化模板阶段。
+        enterpriseValidationApi.validateEnterpriseBelong(
+                enterpriseId, AuthContext.getRequiredUserId());
+        String templateName = StrUtil.trim(req.templateName());
+        List<StageVO> stages = InterviewTemplateStageRules.normalize(req.stages());
+        InterviewStageTemplate template = InterviewStageTemplate.builder()
+                .enterpriseId(enterpriseId)
+                .templateName(templateName)
+                .stagesSequenceJson(writeStages(stages))
+                .version(0)
+                .build();
+        try {
+            baseMapper.insert(template);
+            // 模板创建后立即补齐每个阶段的默认组卷配置。
+            for (StageVO stage : stages) {
+                interviewPhaseConfigMapper.insert(defaultPhaseConfig(template.getId(), stage.phaseCode()));
+            }
+        } catch (DuplicateKeyException exception) {
+            throw new BusinessException(ErrorCode.INTERVIEW_TEMPLATE_ALREADY_EXISTS);
+        }
+        return new InterviewTemplateCreateVO(
+                template.getId(), template.getTemplateName(), template.getVersion(), template.getCreatedAt());
     }
 
     @Override
@@ -143,13 +163,50 @@ public class InterviewStageTemplateServiceImpl
     @Override
     @Transactional
     public InterviewTemplateUpdateVO updateTemplate(Long enterpriseId, Long templateId, InterviewTemplateUpdateReq req) {
-        // TODO ① 按 templateId + enterpriseId 查询未删除模板，校验租户归属并取得当前 version。
-        // TODO ② 至少要求 templateName 或 stages 存在；名称变更时规范化并校验企业内名称唯一性。
-        // TODO ③ stages 非空时执行创建接口相同的编码、重复项、排序和数量校验，并全量序列化替换阶段 JSON。
-        // TODO ④ 检查被移除阶段是否仍有 phaseConfig 或已被排期引用，按业务规则拒绝删除或同步清理孤立配置。
-        // TODO ⑤ 使用 id + enterpriseId + version=expectedVersion 条件更新允许变更字段，同时执行 version=version+1 和审计填充。
-        // TODO ⑥ 更新零行时重新判断模板不存在还是版本冲突；成功后返回新 version 和 updatedAt。
-        return null;
+        // 使用模板版本阻止多个管理端基于旧数据相互覆盖。
+        enterpriseValidationApi.validateEnterpriseBelong(
+                enterpriseId, AuthContext.getRequiredUserId());
+        InterviewStageTemplate current = lambdaQuery()
+                .eq(InterviewStageTemplate::getId, templateId)
+                .eq(InterviewStageTemplate::getEnterpriseId, enterpriseId)
+                .one();
+        if (current == null) {
+            throw new BusinessException(ErrorCode.INTERVIEW_TEMPLATE_NOT_FOUND);
+        }
+        if (!current.getVersion().equals(req.expectedVersion())) {
+            throw new BusinessException(ErrorCode.INTERVIEW_TEMPLATE_VERSION_CONFLICT);
+        }
+        if (req.templateName() == null && req.stages() == null) {
+            throw new BusinessException(ErrorCode.PARAM_VALID_ERROR);
+        }
+
+        String templateName = req.templateName() == null ? null : StrUtil.trim(req.templateName());
+        if (templateName != null && templateName.isBlank()) {
+            throw new BusinessException(ErrorCode.PARAM_VALID_ERROR);
+        }
+        List<StageVO> stages = req.stages() == null
+                ? null : InterviewTemplateStageRules.normalize(req.stages());
+        InterviewStageTemplate update = InterviewStageTemplate.builder()
+                .id(templateId)
+                .templateName(templateName)
+                .stagesSequenceJson(stages == null ? null : writeStages(stages))
+                .version(req.expectedVersion())
+                .build();
+        try {
+            if (baseMapper.updateById(update) != 1) {
+                throw new BusinessException(ErrorCode.INTERVIEW_TEMPLATE_VERSION_CONFLICT);
+            }
+            if (stages != null) {
+                syncPhaseConfigs(templateId, stages);
+            }
+        } catch (DuplicateKeyException exception) {
+            throw new BusinessException(ErrorCode.INTERVIEW_TEMPLATE_ALREADY_EXISTS);
+        }
+        return new InterviewTemplateUpdateVO(
+                templateId,
+                templateName == null ? current.getTemplateName() : templateName,
+                req.expectedVersion() + 1,
+                update.getUpdatedAt());
     }
 
     @Override
@@ -166,12 +223,46 @@ public class InterviewStageTemplateServiceImpl
     @Override
     @Transactional
     public PhaseConfigVO upsertPhaseConfig(Long enterpriseId, Long templateId, String phaseCode, PhaseConfigUpsertReq req) {
-        // TODO ① 查询 enterpriseId 下未删除模板，解析 stagesSequenceJson 并确认 phaseCode 确实属于模板阶段。
-        // TODO ② 复核 questionCount、difficultyWeight 的业务范围；promptOverride 为空表示清除旧自定义提示词。
-        // TODO ③ 按 templateId + phaseCode 查询已有配置，存在则使用实体完整替换，不存在则构建新实体插入。
-        // TODO ④ 依赖唯一约束保证同一模板同一阶段只有一条配置，并将并发插入冲突转换为重试或业务冲突。
-        // TODO ⑤ 重新读取落库结果并映射 PhaseConfigVO，返回服务端最终 updatedAt。
-        return null;
+        // 阶段配置只能绑定模板中已经声明的阶段编码。
+        enterpriseValidationApi.validateEnterpriseBelong(
+                enterpriseId, AuthContext.getRequiredUserId());
+        InterviewStageTemplate template = lambdaQuery()
+                .eq(InterviewStageTemplate::getId, templateId)
+                .eq(InterviewStageTemplate::getEnterpriseId, enterpriseId)
+                .one();
+        if (template == null) {
+            throw new BusinessException(ErrorCode.INTERVIEW_TEMPLATE_NOT_FOUND);
+        }
+        String normalizedPhaseCode = StrUtil.trim(phaseCode).toUpperCase();
+        boolean phaseExists = parseStages(template).stream()
+                .anyMatch(stage -> stage.phaseCode().equals(normalizedPhaseCode));
+        if (!phaseExists) {
+            throw new BusinessException(ErrorCode.INTERVIEW_PHASE_CONFIG_NOT_FOUND);
+        }
+
+        InterviewPhaseConfig current = interviewPhaseConfigMapper.selectOne(
+                Wrappers.<InterviewPhaseConfig>lambdaQuery()
+                        .eq(InterviewPhaseConfig::getTemplateId, templateId)
+                        .eq(InterviewPhaseConfig::getPhaseCode, normalizedPhaseCode));
+        InterviewPhaseConfig config = InterviewPhaseConfig.builder()
+                .id(current == null ? null : current.getId())
+                .templateId(templateId)
+                .phaseCode(normalizedPhaseCode)
+                .questionCount(req.questionCount())
+                .difficultyWeight(req.difficultyWeight())
+                .promptOverride(req.promptOverride())
+                .version(current == null ? 0 : current.getVersion())
+                .build();
+        try {
+            if (current == null) {
+                interviewPhaseConfigMapper.insert(config);
+            } else if (interviewPhaseConfigMapper.updateById(config) != 1) {
+                throw new BusinessException(ErrorCode.INTERVIEW_PHASE_CONFIG_VERSION_CONFLICT);
+            }
+        } catch (DuplicateKeyException exception) {
+            throw new BusinessException(ErrorCode.INTERVIEW_PHASE_CONFIG_VERSION_CONFLICT);
+        }
+        return toPhaseConfigVO(config);
     }
 
     @Override
@@ -195,6 +286,84 @@ public class InterviewStageTemplateServiceImpl
                         .eq(InterviewPhaseConfig::getTemplateId, templateId)
         );
         return sortAndMapConfigs(stages, configs, templateId);
+    }
+
+    @Override
+    public InterviewTemplateSnapshot buildTemplateSnapshot(Long enterpriseId, Long templateId) {
+        enterpriseValidationApi.validateEnterpriseBelong(
+                enterpriseId, AuthContext.getRequiredUserId());
+        InterviewStageTemplate template = lambdaQuery()
+                .eq(InterviewStageTemplate::getId, templateId)
+                .eq(InterviewStageTemplate::getEnterpriseId, enterpriseId)
+                .one();
+        if (template == null) {
+            throw new BusinessException(ErrorCode.INTERVIEW_TEMPLATE_NOT_FOUND);
+        }
+
+        Map<String, InterviewPhaseConfig> configs = interviewPhaseConfigMapper.selectList(
+                        Wrappers.<InterviewPhaseConfig>lambdaQuery()
+                                .eq(InterviewPhaseConfig::getTemplateId, templateId))
+                .stream()
+                .collect(Collectors.toMap(InterviewPhaseConfig::getPhaseCode, Function.identity()));
+        List<InterviewTemplateSnapshot.StageSnapshot> stages = parseStages(template).stream()
+                .map(stage -> toStageSnapshot(templateId, stage, configs.get(stage.phaseCode())))
+                .toList();
+        return new InterviewTemplateSnapshot(
+                template.getId(), template.getVersion(), template.getTemplateName(), stages);
+    }
+
+    private String writeStages(List<StageVO> stages) {
+        try {
+            return objectMapper.writeValueAsString(stages);
+        } catch (Exception exception) {
+            log.error("面试模板阶段序列化失败", exception);
+            throw new BusinessException(ErrorCode.OBJECT_TO_JSON_ERROR);
+        }
+    }
+
+    private InterviewPhaseConfig defaultPhaseConfig(Long templateId, String phaseCode) {
+        return InterviewPhaseConfig.builder()
+                .templateId(templateId)
+                .phaseCode(phaseCode)
+                .questionCount(3)
+                .difficultyWeight(0.5)
+                .version(0)
+                .build();
+    }
+
+    private void syncPhaseConfigs(Long templateId, List<StageVO> stages) {
+        Map<String, InterviewPhaseConfig> current = interviewPhaseConfigMapper.selectList(
+                        Wrappers.<InterviewPhaseConfig>lambdaQuery()
+                                .eq(InterviewPhaseConfig::getTemplateId, templateId))
+                .stream()
+                .collect(Collectors.toMap(InterviewPhaseConfig::getPhaseCode, Function.identity()));
+        List<String> retainedCodes = stages.stream().map(StageVO::phaseCode).toList();
+        interviewPhaseConfigMapper.delete(
+                Wrappers.<InterviewPhaseConfig>lambdaQuery()
+                        .eq(InterviewPhaseConfig::getTemplateId, templateId)
+                        .notIn(!retainedCodes.isEmpty(), InterviewPhaseConfig::getPhaseCode, retainedCodes));
+        for (String phaseCode : retainedCodes) {
+            if (!current.containsKey(phaseCode)) {
+                interviewPhaseConfigMapper.insert(defaultPhaseConfig(templateId, phaseCode));
+            }
+        }
+    }
+
+    private InterviewTemplateSnapshot.StageSnapshot toStageSnapshot(
+            Long templateId, StageVO stage, InterviewPhaseConfig config) {
+        if (config == null) {
+            log.error("面试模板阶段缺少组卷配置。templateId={}, phaseCode={}", templateId, stage.phaseCode());
+            throw new BusinessException(ErrorCode.INTERVIEW_PHASE_CONFIG_NOT_FOUND);
+        }
+        return new InterviewTemplateSnapshot.StageSnapshot(
+                stage.phaseCode(), stage.phaseName(), stage.sortOrder(),
+                config.getQuestionCount(), config.getDifficultyWeight(), config.getPromptOverride(), config.getVersion());
+    }
+
+    private PhaseConfigVO toPhaseConfigVO(InterviewPhaseConfig config) {
+        return new PhaseConfigVO(
+                config.getId(), config.getPhaseCode(), config.getQuestionCount(),
+                config.getDifficultyWeight(), config.getPromptOverride(), config.getUpdatedAt());
     }
 
     private int countStages(InterviewStageTemplate template) {

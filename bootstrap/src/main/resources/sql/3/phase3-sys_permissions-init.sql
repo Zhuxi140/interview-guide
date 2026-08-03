@@ -42,9 +42,9 @@ INSERT INTO sys_permissions (id, perm_code, perm_type, api_path, status) VALUES
 
 -- 3.2 企业端面试排期
 (511, 'interview-schedule:create',
- 'API', '/api/v1/enterprises/*/interview-schedules', 1),
+ 'API', '/api/v1/enterprises/*/applications/*/interview-schedules', 1),
 (512, 'interview-schedule:ai-suggest',
- 'API', '/api/v1/enterprises/*/interview-schedules/ai-suggestions', 1),
+ 'API', '/api/v1/enterprises/*/applications/*/interview-plan-drafts', 1),
 (513, 'interview-schedule:list',
  'API', '/api/v1/enterprises/*/interview-schedules', 1),
 (514, 'interview-schedule:detail',

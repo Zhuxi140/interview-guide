@@ -49,6 +49,7 @@ public class EnterpriseValidationApiImpl implements EnterpriseValidationApi {
 
     }
 
+
     @Override
     public Map<Long,String> getNameList(List<Long> enterpriseId) {
         if (enterpriseId == null || enterpriseId.isEmpty()) {

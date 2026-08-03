@@ -18,6 +18,9 @@ public record InterviewScheduleUpdateVO(
         @Schema(description = "面试时间")
         OffsetDateTime interviewTime,
 
+        @Schema(description = "预计面试时长（分钟）", example = "60")
+        Integer durationMinutes,
+
         @Schema(description = "乐观锁版本号")
         Integer version,
 

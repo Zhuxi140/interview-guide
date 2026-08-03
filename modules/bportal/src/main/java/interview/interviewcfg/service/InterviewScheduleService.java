@@ -7,25 +7,17 @@ import interview.interviewcfg.model.entity.InterviewSchedule;
 import interview.interviewcfg.model.req.*;
 import interview.interviewcfg.model.vo.*;
 
-import java.util.List;
-
 public interface InterviewScheduleService extends IService<InterviewSchedule> {
 
     /**
      * HR 创建面试排期
      * @param enterpriseId 企业ID
+     * @param applicationId 投递ID
      * @param req 创建请求
+     * @param idempotencyKey 幂等键
      * @return 创建结果
      */
-    InterviewScheduleCreateVO createSchedule(Long enterpriseId, InterviewScheduleCreateReq req);
-
-    /**
-     * AI 推荐排期
-     * @param enterpriseId 企业ID
-     * @param req 推荐请求
-     * @return 推荐列表
-     */
-    List<AiSuggestionItemVO> suggestSchedule(Long enterpriseId, AiSuggestionReq req);
+    InterviewScheduleCreateVO createSchedule(Long enterpriseId, Long applicationId, InterviewScheduleCreateReq req, String idempotencyKey);
 
     /**
      * 查询企业面试排期列表（分页）

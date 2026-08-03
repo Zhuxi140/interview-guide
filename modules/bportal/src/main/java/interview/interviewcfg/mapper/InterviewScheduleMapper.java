@@ -69,4 +69,6 @@ public interface InterviewScheduleMapper extends BaseMapper<InterviewSchedule> {
      */
     List<Long> listScheduleIdsByCandidate(
             @Param("candidateUserId") Long candidateUserId);
+
+
 }

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="interview.textinterview.mapper.CandidateInterviewAvailabilityMapper">
+
+    <update id="updateByExpectedVersion">
+        UPDATE candidate_interview_availability
+        SET timezone = #{availability.timezone},
+            ranges_json = CAST(#{availability.rangesJson} AS JSONB),
+            version = version + 1,
+            updated_by = #{availability.updatedBy},
+            trace_id = #{availability.traceId},
+            updated_at = #{availability.updatedAt}
+        WHERE candidate_user_id = #{availability.candidateUserId}
+          AND version = #{expectedVersion}
+    </update>
+
+</mapper>

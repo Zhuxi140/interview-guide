@@ -2,6 +2,7 @@ package interview.interviewcfg.model.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
 import interview.common.enums.InterviewScheduleStatus;
+import interview.framework.mybatis.JsonbStringTypeHandler;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -34,7 +35,10 @@ public class InterviewSchedule implements Serializable {
 
     private Short roundNo;
 
-    private String stageCode;
+    private String phaseCode;
+
+    @TableField(typeHandler = JsonbStringTypeHandler.class)
+    private String templateSnapshotJson;
 
     private String idempotencyKey;
 
@@ -46,8 +50,7 @@ public class InterviewSchedule implements Serializable {
     private String interviewType = "TEXT";
 
     @Builder.Default
-    private InterviewScheduleStatus status =
-            InterviewScheduleStatus.PENDING_CONFIRMATION;
+    private InterviewScheduleStatus status = InterviewScheduleStatus.PENDING_CONFIRMATION;
 
     private String statusReason;
 

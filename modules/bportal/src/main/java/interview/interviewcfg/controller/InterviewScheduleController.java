@@ -24,8 +24,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-
 @RestController
 @RequireActiveEnterprise
 @RequestMapping(ApiVersion.V1 + "/enterprises/{enterpriseId}")
@@ -38,19 +36,13 @@ public class InterviewScheduleController {
     private final WorkflowTransitionLogService workflowTransitionLogService;
 
     @Operation(summary = "HR 创建排期")
-    @PostMapping("/interview-schedules")
+    @PostMapping("/applications/{applicationId}/interview-schedules")
     public Result<InterviewScheduleCreateVO> createSchedule(
             @PathVariable Long enterpriseId,
-            @Valid @RequestBody InterviewScheduleCreateReq req) {
-        return Result.success(interviewScheduleService.createSchedule(enterpriseId, req));
-    }
-
-    @Operation(summary = "AI 推荐排期")
-    @PostMapping("/interview-schedules/ai-suggestions")
-    public Result<List<AiSuggestionItemVO>> suggestSchedule(
-            @PathVariable Long enterpriseId,
-            @Valid @RequestBody AiSuggestionReq req) {
-        return Result.success(interviewScheduleService.suggestSchedule(enterpriseId, req));
+            @PathVariable Long applicationId,
+            @Valid @RequestBody InterviewScheduleCreateReq req,
+            @RequestHeader(value = "Idempotency-Key", required = true) String idempotencyKey) {
+        return Result.success(interviewScheduleService.createSchedule(enterpriseId, applicationId, req, idempotencyKey));
     }
 
     @Operation(summary = "查询企业面试排期列表（分页）")

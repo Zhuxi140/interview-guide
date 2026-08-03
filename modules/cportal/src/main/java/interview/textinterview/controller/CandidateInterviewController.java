@@ -8,9 +8,12 @@ import interview.common.enums.InterviewReportGenerationStatus;
 import interview.common.enums.InterviewScheduleStatus;
 import interview.common.enums.RiskLevel;
 import interview.framework.context.AuthContext;
+import interview.textinterview.model.req.CandidateInterviewAvailabilityUpdateReq;
 import interview.textinterview.model.req.InterviewDecisionReq;
 import interview.textinterview.model.req.InterviewScheduleCancelReq;
 import interview.textinterview.model.vo.*;
+import interview.textinterview.service.CandidateInterviewAvailabilityService;
+import interview.textinterview.service.CandidateInterviewDecisionService;
 import interview.textinterview.service.CandidateInterviewQueryService;
 import interview.textinterview.service.InterviewReportService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -31,6 +34,25 @@ public class CandidateInterviewController {
 
     private final InterviewReportService interviewReportService;
     private final CandidateInterviewQueryService candidateInterviewQueryService;
+    private final CandidateInterviewAvailabilityService candidateInterviewAvailabilityService;
+    private final CandidateInterviewDecisionService candidateInterviewDecisionService;
+
+    @Operation(summary = "查询本人可面试时间")
+    @MaxRiskLevel(RiskLevel.HIGH_RISK)
+    @GetMapping("/interview-availability")
+    public Result<CandidateInterviewAvailabilityVO> getInterviewAvailability() {
+        // 查询当前登录候选人的完整可面试时间配置。
+        return Result.success(candidateInterviewAvailabilityService.getMyAvailability());
+    }
+
+    @Operation(summary = "完整更新本人可面试时间")
+    @MaxRiskLevel(RiskLevel.MID_RISK)
+    @PutMapping("/interview-availability")
+    public Result<CandidateInterviewAvailabilityVO> updateInterviewAvailability(
+            @Valid @RequestBody CandidateInterviewAvailabilityUpdateReq req) {
+        // 按客户端读取到的版本号完整替换可面试时间配置。
+        return Result.success(candidateInterviewAvailabilityService.updateMyAvailability(req));
+    }
 
     @Operation(summary = "C端查询我的面试排期（分页）")
     @MaxRiskLevel(RiskLevel.NO_RISK)
@@ -45,13 +67,20 @@ public class CandidateInterviewController {
                 page, size, status, sort, order));
     }
 
-    @Operation(summary = "C端接受或拒绝面试邀请")
-    @PostMapping("/interview-schedules/{scheduleId}/decision")
-    public Result<InterviewDecisionVO> decideSchedule(
+    @Operation(summary = "C端确认面试邀请")
+    @PostMapping("/interview-schedules/{scheduleId}/confirm")
+    public Result<InterviewDecisionVO> confirmSchedule(
             @PathVariable Long scheduleId,
             @Valid @RequestBody InterviewDecisionReq req) {
-        // TODO 实现C端面试决策
-        return Result.success(null);
+        return Result.success(candidateInterviewDecisionService.confirmSchedule(scheduleId, req));
+    }
+
+    @Operation(summary = "C端拒绝面试邀请")
+    @PostMapping("/interview-schedules/{scheduleId}/decline")
+    public Result<InterviewDecisionVO> declineSchedule(
+            @PathVariable Long scheduleId,
+            @Valid @RequestBody InterviewDecisionReq req) {
+        return Result.success(candidateInterviewDecisionService.declineSchedule(scheduleId, req));
     }
 
     @Operation(summary = "C端取消已确认但尚未开始的面试")

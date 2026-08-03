@@ -3,6 +3,7 @@ package interview.interviewcfg.service;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.IService;
 import interview.interviewcfg.model.entity.InterviewStageTemplate;
+import interview.interviewcfg.model.bo.InterviewTemplateSnapshot;
 import interview.interviewcfg.model.req.InterviewTemplateCreateReq;
 import interview.interviewcfg.model.req.InterviewTemplateUpdateReq;
 import interview.interviewcfg.model.req.PhaseConfigUpsertReq;
@@ -73,4 +74,12 @@ public interface InterviewStageTemplateService extends IService<InterviewStageTe
      * @return 策略列表
      */
     List<PhaseConfigVO> listPhaseConfigs(Long enterpriseId, Long templateId);
+
+    /**
+     * 生成用于排期的完整模板快照
+     * @param enterpriseId 企业ID
+     * @param templateId 模板ID
+     * @return 模板快照
+     */
+    InterviewTemplateSnapshot buildTemplateSnapshot(Long enterpriseId, Long templateId);
 }
