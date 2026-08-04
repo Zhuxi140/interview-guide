@@ -1,7 +1,9 @@
 package interview.textinterview.service.impl;
 
 import interview.textinterview.model.req.InterviewDecisionReq;
+import interview.textinterview.model.req.InterviewScheduleCancelReq;
 import interview.textinterview.model.vo.InterviewDecisionVO;
+import interview.textinterview.model.vo.InterviewScheduleUpdateVO;
 import interview.textinterview.service.CandidateInterviewDecisionService;
 import org.springframework.stereotype.Service;
 
@@ -30,6 +32,17 @@ public class CandidateInterviewDecisionServiceImpl implements CandidateInterview
         // TODO ④ 更新零行时区分排期不存在、重复拒绝、状态竞争和版本冲突，禁止覆盖 HR 已取消或已调整的排期。
         // TODO ⑤ 在排期所属模块记录状态流转日志，并在事务提交后向企业面试官发送拒绝通知。
         // TODO ⑥ 读取最新排期并返回 id、DECLINED、新 version 和 updatedAt。
+        return null;
+    }
+
+    @Override
+    public InterviewScheduleUpdateVO cancelSchedule(Long scheduleId, InterviewScheduleCancelReq req) {
+        // TODO ① 从 AuthContext 获取候选人 userId，通过排期查询 API 校验排期属于当前候选人。
+        // TODO ② 校验 expectedStatus 为 CONFIRMED、expectedVersion 与当前版本一致，且面试尚未开始。
+        // TODO ③ 通过 bportal 暴露的排期命令 API，按 scheduleId + candidateUserId + status + version 原子更新为 CANCELLED。
+        // TODO ④ 更新零行时区分排期不存在、重复取消、状态竞争和版本冲突，禁止覆盖 HR 已调整的排期。
+        // TODO ⑤ 在排期所属模块记录状态流转日志，并在事务提交后向企业面试官发送取消通知。
+        // TODO ⑥ 读取最新排期并返回 id、CANCELLED、新 version 和 updatedAt。
         return null;
     }
 }

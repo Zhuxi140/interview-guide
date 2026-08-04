@@ -1,17 +1,41 @@
 package interview.interviewcfg.service.impl;
 
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
+import interview.api.system.EnterpriseValidationApi;
+import interview.common.enums.ErrorCode;
+import interview.common.enums.InterviewType;
+import interview.common.exception.BusinessException;
+import interview.framework.context.AuthContext;
+import interview.interviewcfg.mapper.InterviewPlanDraftMapper;
+import interview.interviewcfg.model.entity.InterviewPlanDraft;
+import interview.interviewcfg.model.enums.InterviewPlanDraftStatus;
 import interview.interviewcfg.model.req.InterviewPlanDraftApplyReq;
 import interview.interviewcfg.model.req.InterviewPlanDraftCreateReq;
 import interview.interviewcfg.model.vo.InterviewPlanDraftApplyVO;
 import interview.interviewcfg.model.vo.InterviewPlanDraftCreateVO;
+import interview.interviewcfg.model.vo.InterviewPlanDraftDetailVO;
+import interview.interviewcfg.model.vo.InterviewPlanDraftListItemVO;
 import interview.interviewcfg.service.InterviewPlanDraftService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Agent 面试编排草案实现。
  */
 @Service
-public class InterviewPlanDraftServiceImpl implements InterviewPlanDraftService {
+@Slf4j
+@RequiredArgsConstructor
+public class InterviewPlanDraftServiceImpl
+        extends ServiceImpl<InterviewPlanDraftMapper, InterviewPlanDraft>
+        implements InterviewPlanDraftService {
+
+    private final EnterpriseValidationApi enterpriseValidationApi;
+    private final ObjectMapper objectMapper;
 
     @Override
     public InterviewPlanDraftCreateVO createDraft(Long enterpriseId,
@@ -49,5 +73,147 @@ public class InterviewPlanDraftServiceImpl implements InterviewPlanDraftService 
         // TODO ⑩ 事务提交后发送候选人邀请和面试官通知，通知失败交由独立可靠消息重试。
         // TODO ⑪ 返回草案状态、创建的 scheduleIds 和 appliedAt。
         return null;
+    }
+
+    @Override
+    public IPage<InterviewPlanDraftListItemVO> pageDrafts(Long enterpriseId,
+                                                           Long applicationId,
+                                                           Integer page,
+                                                           Integer size,
+                                                           InterviewPlanDraftStatus status,
+                                                           String sort,
+                                                           String order) {
+        // 校验当前企业归属及分页排序参数，避免绕过 Controller 直接调用时产生越权或任意排序。
+        enterpriseValidationApi.validateActiveEnterpriseBelong(
+                enterpriseId, AuthContext.getRequiredUserId());
+        validatePage(page, size);
+        validateSort(sort);
+        validateOrder(order);
+
+        // 按企业和投递隔离查询，状态条件可选。
+        boolean ascending = "asc".equalsIgnoreCase(order);
+        LambdaQueryChainWrapper<InterviewPlanDraft> query = lambdaQuery()
+                .select(
+                        InterviewPlanDraft::getId,
+                        InterviewPlanDraft::getApplicationId,
+                        InterviewPlanDraft::getTemplateId,
+                        InterviewPlanDraft::getRequestJson,
+                        InterviewPlanDraft::getStatus,
+                        InterviewPlanDraft::getFailureReason,
+                        InterviewPlanDraft::getVersion,
+                        InterviewPlanDraft::getCreatedAt,
+                        InterviewPlanDraft::getUpdatedAt
+                )
+                .eq(InterviewPlanDraft::getEnterpriseId, enterpriseId)
+                .eq(InterviewPlanDraft::getApplicationId, applicationId)
+                .eq(status != null, InterviewPlanDraft::getStatus, status);
+        switch (sort) {
+            case "createdAt" -> query.orderBy(true, ascending, InterviewPlanDraft::getCreatedAt);
+            case "updatedAt" -> query.orderBy(true, ascending, InterviewPlanDraft::getUpdatedAt);
+            case "id" -> query.orderBy(true, ascending, InterviewPlanDraft::getId);
+            default -> throw new BusinessException(ErrorCode.SORT_FIELD_INVALID);
+        }
+        if (!"id".equals(sort)) {
+            query.orderBy(true, ascending, InterviewPlanDraft::getId);
+        }
+
+        // 请求快照中的 interviewType 是列表契约的一部分，统一解析后映射 VO。
+        return query.page(new Page<>(page, size))
+                .convert(draft -> new InterviewPlanDraftListItemVO(
+                        draft.getId(),
+                        draft.getApplicationId(),
+                        draft.getTemplateId(),
+                        parseInterviewType(draft.getRequestJson()),
+                        draft.getStatus(),
+                        draft.getFailureReason(),
+                        draft.getVersion(),
+                        draft.getCreatedAt(),
+                        draft.getUpdatedAt()
+                ));
+    }
+
+    @Override
+    public InterviewPlanDraftDetailVO getDraftDetail(Long enterpriseId,
+                                                      Long applicationId,
+                                                      Long draftId) {
+        // 使用企业、投递和草案三重条件完成租户隔离。
+        enterpriseValidationApi.validateActiveEnterpriseBelong(
+                enterpriseId, AuthContext.getRequiredUserId());
+        InterviewPlanDraft draft = lambdaQuery()
+                .select(
+                        InterviewPlanDraft::getId,
+                        InterviewPlanDraft::getApplicationId,
+                        InterviewPlanDraft::getStatus,
+                        InterviewPlanDraft::getFailureReason,
+                        InterviewPlanDraft::getPlanJson,
+                        InterviewPlanDraft::getVersion,
+                        InterviewPlanDraft::getCreatedAt
+                )
+                .eq(InterviewPlanDraft::getId, draftId)
+                .eq(InterviewPlanDraft::getEnterpriseId, enterpriseId)
+                .eq(InterviewPlanDraft::getApplicationId, applicationId)
+                .one();
+        if (draft == null) {
+            throw new BusinessException(ErrorCode.INTERVIEW_PLAN_DRAFT_NOT_FOUND);
+        }
+
+        // 只有生成完成或已应用的草案才向外返回结构化计划。
+        InterviewPlanDraftDetailVO.PlanVO plan = null;
+        if (draft.getStatus() == InterviewPlanDraftStatus.READY
+                || draft.getStatus() == InterviewPlanDraftStatus.APPLIED) {
+            plan = parsePlan(draft.getPlanJson());
+        }
+        return new InterviewPlanDraftDetailVO(
+                draft.getId(),
+                draft.getApplicationId(),
+                draft.getStatus(),
+                draft.getFailureReason(),
+                plan,
+                draft.getVersion(),
+                draft.getCreatedAt()
+        );
+    }
+
+    private InterviewType parseInterviewType(String requestJson) {
+        try {
+            return objectMapper.readValue(
+                    requestJson, InterviewPlanDraftCreateReq.class).interviewType();
+        } catch (Exception exception) {
+            log.error("面试编排草案请求快照无法解析", exception);
+            throw new BusinessException(ErrorCode.JSON_TO_OBJECT_ERROR);
+        }
+    }
+
+    private InterviewPlanDraftDetailVO.PlanVO parsePlan(String planJson) {
+        if (planJson == null || planJson.isBlank()) {
+            throw new BusinessException(ErrorCode.JSON_TO_OBJECT_ERROR);
+        }
+        try {
+            return objectMapper.readValue(
+                    planJson, InterviewPlanDraftDetailVO.PlanVO.class);
+        } catch (Exception exception) {
+            log.error("面试编排草案计划无法解析", exception);
+            throw new BusinessException(ErrorCode.JSON_TO_OBJECT_ERROR);
+        }
+    }
+
+    private void validatePage(Integer page, Integer size) {
+        if (page == null || page < 1 || size == null || size < 1 || size > 100) {
+            throw new BusinessException(ErrorCode.PAGE_PARAM_INVALID);
+        }
+    }
+
+    private void validateSort(String sort) {
+        if (!"createdAt".equals(sort)
+                && !"updatedAt".equals(sort)
+                && !"id".equals(sort)) {
+            throw new BusinessException(ErrorCode.SORT_FIELD_INVALID);
+        }
+    }
+
+    private void validateOrder(String order) {
+        if (!"asc".equalsIgnoreCase(order) && !"desc".equalsIgnoreCase(order)) {
+            throw new BusinessException(ErrorCode.SORT_DIRECTION_INVALID);
+        }
     }
 }

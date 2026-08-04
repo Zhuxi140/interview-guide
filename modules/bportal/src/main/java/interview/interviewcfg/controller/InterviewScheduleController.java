@@ -13,7 +13,6 @@ import interview.common.enums.RiskLevel;
 import interview.interviewcfg.model.req.*;
 import interview.interviewcfg.model.vo.*;
 import interview.interviewcfg.service.InterviewScheduleService;
-import interview.interviewcfg.service.WorkflowTransitionLogService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -33,7 +32,6 @@ import org.springframework.web.bind.annotation.*;
 public class InterviewScheduleController {
 
     private final InterviewScheduleService interviewScheduleService;
-    private final WorkflowTransitionLogService workflowTransitionLogService;
 
     @Operation(summary = "HR 创建排期")
     @PostMapping("/applications/{applicationId}/interview-schedules")
@@ -97,29 +95,4 @@ public class InterviewScheduleController {
         return Result.success(interviewScheduleService.cancelSchedule(enterpriseId, scheduleId, req));
     }
 
-    @Operation(summary = "HR 流转面试最终状态")
-    @PatchMapping("/interview-schedules/{scheduleId}/status")
-    public Result<InterviewScheduleUpdateVO> updateStatus(
-            @PathVariable Long enterpriseId,
-            @PathVariable Long scheduleId,
-            @Valid @RequestBody InterviewScheduleStatusReq req) {
-        return Result.success(interviewScheduleService.updateStatus(enterpriseId, scheduleId, req));
-    }
-
-    @Operation(summary = "查询人才流转状态机历史日志（分页）")
-    @MaxRiskLevel(RiskLevel.NO_RISK)
-    @RequirePermission(
-            permissions = Perm.ApplicationTransitionLog.LIST,
-            scope = PermissionScope.ENTERPRISE
-    )
-    @GetMapping("/workflow-logs")
-    public Result<IPage<WorkflowLogListItemVO>> listWorkflowLogs(
-            @PathVariable Long enterpriseId,
-            @RequestParam(defaultValue = "1") @Min(1) Integer page,
-            @RequestParam(defaultValue = "20") @Min(1) @Max(100) Integer size,
-            @RequestParam(required = false) Long applicationId) {
-        return Result.success(
-                workflowTransitionLogService.pageLogs(
-                        enterpriseId, page, size, applicationId));
-    }
 }

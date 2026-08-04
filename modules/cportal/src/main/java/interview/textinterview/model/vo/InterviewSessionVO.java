@@ -1,12 +1,12 @@
 package interview.textinterview.model.vo;
 
 import interview.common.enums.InterviewSessionStatus;
+import interview.common.enums.InterviewType;
+import interview.voiceinterview.model.vo.VoiceDetailsVO;
 import io.swagger.v3.oas.annotations.media.Schema;
-import lombok.Builder;
 
 import java.time.OffsetDateTime;
 
-@Builder
 @Schema(description = "面试会话状态")
 public record InterviewSessionVO(
         @Schema(description = "会话ID")
@@ -15,19 +15,25 @@ public record InterviewSessionVO(
         @Schema(description = "排期ID")
         Long scheduleId,
 
-        @Schema(description = "计划提问总数")
-        Integer totalQuestions,
+        @Schema(description = "会话类型", example = "TEXT")
+        InterviewType sessionType,
 
-        @Schema(description = "当前进行到的题目索引")
-        Integer currentQuestionIndex,
+        @Schema(description = "当前尝试次数", example = "1")
+        Short attemptNo,
 
         @Schema(description = "会话状态 CREATED / IN_PROGRESS / COMPLETED")
         InterviewSessionStatus status,
 
-        @Schema(description = "会话最后事件序号，用于识别状态是否已推进")
-        Long sessionVersion,
+        @Schema(description = "会话最后事件序号")
+        Long lastEventSequence,
 
-        @Schema(description = "创建时间")
-        OffsetDateTime createdAt
+        @Schema(description = "语音扩展信息，文本会话为空", nullable = true)
+        VoiceDetailsVO voiceDetails,
+
+        @Schema(description = "开始时间", nullable = true)
+        OffsetDateTime startedAt,
+
+        @Schema(description = "结束时间", nullable = true)
+        OffsetDateTime endedAt
 ) {
 }

@@ -1,9 +1,13 @@
 package interview.interviewcfg.service;
 
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import interview.interviewcfg.model.req.InterviewPlanDraftApplyReq;
 import interview.interviewcfg.model.req.InterviewPlanDraftCreateReq;
+import interview.interviewcfg.model.enums.InterviewPlanDraftStatus;
 import interview.interviewcfg.model.vo.InterviewPlanDraftApplyVO;
 import interview.interviewcfg.model.vo.InterviewPlanDraftCreateVO;
+import interview.interviewcfg.model.vo.InterviewPlanDraftDetailVO;
+import interview.interviewcfg.model.vo.InterviewPlanDraftListItemVO;
 
 /**
  * Agent 面试编排草案服务。
@@ -37,4 +41,34 @@ public interface InterviewPlanDraftService {
                                           Long draftId,
                                           String idempotencyKey,
                                           InterviewPlanDraftApplyReq req);
+
+    /**
+     * 分页查询投递下的编排草案
+     * @param enterpriseId 企业ID
+     * @param applicationId 投递ID
+     * @param page 页码
+     * @param size 每页大小
+     * @param status 状态筛选
+     * @param sort 排序字段
+     * @param order 排序方向
+     * @return 草案分页列表
+     */
+    IPage<InterviewPlanDraftListItemVO> pageDrafts(Long enterpriseId,
+                                                    Long applicationId,
+                                                    Integer page,
+                                                    Integer size,
+                                                    InterviewPlanDraftStatus status,
+                                                    String sort,
+                                                    String order);
+
+    /**
+     * 查询草案详情
+     * @param enterpriseId 企业ID
+     * @param applicationId 投递ID
+     * @param draftId 草案ID
+     * @return 草案详情
+     */
+    InterviewPlanDraftDetailVO getDraftDetail(Long enterpriseId,
+                                               Long applicationId,
+                                               Long draftId);
 }

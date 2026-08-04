@@ -8,6 +8,7 @@ import interview.offer.model.req.OfferSendReq;
 import interview.offer.model.req.OfferUpdateReq;
 import interview.offer.model.req.OfferWithdrawReq;
 import interview.offer.model.vo.OfferCreateVO;
+import interview.offer.model.vo.OfferHistoryVO;
 import interview.offer.model.vo.OfferSendVO;
 import interview.offer.model.vo.OfferUpdateVO;
 import interview.offer.service.OfferService;
@@ -17,6 +18,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -44,6 +46,14 @@ public class EnterpriseOfferController {
             @Valid @RequestBody OfferCreateReq req) {
         return Result.success(offerService.createOffer(
                 enterpriseId, applicationId, idempotencyKey, req));
+    }
+
+    @Operation(summary = "查询投递对应的 Offer 历史")
+    @GetMapping("/applications/{applicationId}/offers")
+    public Result<OfferHistoryVO> listOffers(
+            @PathVariable Long enterpriseId,
+            @PathVariable Long applicationId) {
+        return Result.success(offerService.listOffers(enterpriseId, applicationId));
     }
 
     @Operation(summary = "修改尚未发送的Offer")

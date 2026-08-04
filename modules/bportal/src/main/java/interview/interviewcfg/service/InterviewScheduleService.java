@@ -62,12 +62,4 @@ public interface InterviewScheduleService extends IService<InterviewSchedule> {
      */
     InterviewScheduleUpdateVO cancelSchedule(Long enterpriseId, Long scheduleId, InterviewScheduleCancelReq req);
 
-    /**
-     * HR 流转面试最终状态
-     * @param enterpriseId 企业ID
-     * @param scheduleId 排期ID
-     * @param req 状态流转请求
-     * @return 更新结果
-     */
-    InterviewScheduleUpdateVO updateStatus(Long enterpriseId, Long scheduleId, InterviewScheduleStatusReq req);
 }

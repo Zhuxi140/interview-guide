@@ -10,6 +10,7 @@ import interview.api.system.UserApi;
 import interview.common.enums.ErrorCode;
 import interview.common.enums.InterviewScheduleStatus;
 import interview.common.exception.BusinessException;
+import interview.common.util.TraceUtil;
 import interview.framework.context.AuthContext;
 import interview.interviewcfg.mapper.InterviewScheduleMapper;
 import interview.interviewcfg.model.bo.InterviewScheduleQueryBO;
@@ -51,7 +52,7 @@ public class InterviewScheduleServiceImpl extends ServiceImpl<InterviewScheduleM
     @Override
     @Transactional
     public InterviewScheduleCreateVO createSchedule(Long enterpriseId, Long applicationId, InterviewScheduleCreateReq req, String idempotencyKey) {
-        // 校验企业、幂等键和投递归属。
+        // 1. 校验企业归属、幂等键、投递状态（必须为 PASSED）
         enterpriseValidationApi.validateEnterpriseBelong(
                 enterpriseId, AuthContext.getRequiredUserId());
         boolean exists = lambdaQuery()
@@ -63,10 +64,12 @@ public class InterviewScheduleServiceImpl extends ServiceImpl<InterviewScheduleM
             throw new BusinessException(ErrorCode.IDEMPOTENCY_KEY_CONFLICT);
         }
         jobValidationApi.requirePassedApplication(applicationId, enterpriseId);
+
+        // 2. 解析轮次对应的阶段：首轮生成模板快照，后续轮次复用首轮快照并校验连续性
         ResolvedSchedulePhase resolved = resolveSchedulePhase(
                 enterpriseId, applicationId, req.templateId(), req.roundNo());
 
-        // 校验时间并检查面试官的有效排期冲突。
+        // 3. 校验面试时间合法性、面试官时间冲突（应用层预检，数据库 EXCLUDE 约束兜底）
         OffsetDateTime interviewedTime = req.interviewTime();
         if (interviewedTime.isBefore(OffsetDateTime.now())) {
             throw new BusinessException(ErrorCode.INTERVIEW_TIME_INVALID);
@@ -93,7 +96,7 @@ public class InterviewScheduleServiceImpl extends ServiceImpl<InterviewScheduleM
             throw new BusinessException(ErrorCode.INTERVIEW_TIME_CONFLICT);
         }
 
-        // 将模板快照和由轮次派生的阶段共同固化到排期。
+        // 4. 组装排期实体：固化模板快照、派生阶段、幂等键，初始状态 PENDING_CONFIRMATION
         InterviewSchedule schedule = InterviewSchedule.builder()
                 .enterpriseId(enterpriseId)
                 .applicationId(applicationId)
@@ -110,6 +113,7 @@ public class InterviewScheduleServiceImpl extends ServiceImpl<InterviewScheduleM
                 .version(0)
                 .build();
 
+        // 5. 持久化，捕获唯一约束/排斥约束冲突转为业务错误码
         try {
             save(schedule);
         } catch (DataIntegrityViolationException e) {
@@ -125,7 +129,7 @@ public class InterviewScheduleServiceImpl extends ServiceImpl<InterviewScheduleM
                 throw e;
             }
         }
-        // TODO 事务提交后向候选人发送邀请通知。
+        // TODO [Notification] 事务提交后向候选人发送面试邀请通知（需接入可靠消息/Outbox，失败重试不阻塞主流程）。
         return new InterviewScheduleCreateVO(
                 schedule.getId(), schedule.getApplicationId(), schedule.getRoundNo(),
                 schedule.getPhaseCode(), resolved.stage().phaseName(), schedule.getStatus(),
@@ -133,12 +137,12 @@ public class InterviewScheduleServiceImpl extends ServiceImpl<InterviewScheduleM
                 schedule.getCreatedAt());
     }
 
-    @Override
+@Override
     public IPage<InterviewScheduleListItemVO> pageSchedules(Long enterpriseId, Integer page, Integer size,
-                                                             InterviewScheduleStatus status,
-                                                             String startTime, String endTime,
-                                                             String sort, String order) {
-        // 校验租户、筛选条件和白名单排序。
+                                                              InterviewScheduleStatus status,
+                                                              String startTime, String endTime,
+                                                              String sort, String order) {
+        // 1. 校验租户归属、分页参数、排序白名单、时间范围
         enterpriseValidationApi.validateEnterpriseBelong(
                 enterpriseId, AuthContext.getRequiredUserId());
         validatePage(page, size);
@@ -152,7 +156,7 @@ public class InterviewScheduleServiceImpl extends ServiceImpl<InterviewScheduleM
             throw new BusinessException(ErrorCode.TIME_RANGE_INVALID);
         }
 
-        // 分页关联投递和岗位，并批量补充候选人名称。
+        // 2. 分页查询：关联投递和岗位，按 interviewTime/createdAt 排序
         IPage<InterviewScheduleQueryBO> boPage =
                 interviewScheduleMapper.pageSchedulesWithApplication(
                         new Page<InterviewSchedule>(page, size),
@@ -164,6 +168,8 @@ public class InterviewScheduleServiceImpl extends ServiceImpl<InterviewScheduleM
                         sort,
                         "asc".equalsIgnoreCase(order)
                 );
+
+        // 3. 批量补齐候选人名称（避免 N+1）
         List<Long> candidateIds = boPage.getRecords().stream()
                 .map(InterviewScheduleQueryBO::candidateUserId)
                 .distinct()
@@ -171,6 +177,8 @@ public class InterviewScheduleServiceImpl extends ServiceImpl<InterviewScheduleM
         Map<Long, String> candidateNames = candidateIds.isEmpty()
                 ? Map.of()
                 : userApi.getUserNamesByIds(candidateIds);
+
+        // 4. 组装 VO 列表
         List<InterviewScheduleListItemVO> records = boPage.getRecords().stream()
                 .map(bo -> new InterviewScheduleListItemVO(
                         bo.id(),
@@ -195,8 +203,7 @@ public class InterviewScheduleServiceImpl extends ServiceImpl<InterviewScheduleM
 
     @Override
     public InterviewScheduleDetailVO getScheduleDetail(Long enterpriseId, Long scheduleId) {
-        // 纯CRUD
-        // 校验企业访问范围并通过企业条件读取排期详情。
+        // 纯 CRUD：校验企业访问范围，按企业条件读取排期详情（含投递、岗位、候选人信息）
         enterpriseValidationApi.validateEnterpriseBelong(enterpriseId, AuthContext.getRequiredUserId());
         InterviewScheduleQueryBO schedule =
                 interviewScheduleMapper.getScheduleWithApplication(enterpriseId, scheduleId);
@@ -227,67 +234,64 @@ public class InterviewScheduleServiceImpl extends ServiceImpl<InterviewScheduleM
     @Override
     @Transactional
     public InterviewScheduleUpdateVO reschedule(Long enterpriseId, Long scheduleId, InterviewScheduleRescheduleReq req) {
-        // 查询企业内排期并保留原状态、时间、面试官和 version；校验尚未开始且未进入终态。
+        // 1. 查询基础字段，校验存在性、企业归属
         InterviewSchedule schedule = lambdaQuery()
                 .select(
                         InterviewSchedule::getStatus, InterviewSchedule::getInterviewTime,
-                        InterviewSchedule::getDurationMinutes,InterviewSchedule::getEnterpriseId,
+                        InterviewSchedule::getDurationMinutes, InterviewSchedule::getEnterpriseId,
                         InterviewSchedule::getInterviewerUserId, InterviewSchedule::getVersion
                 )
                 .eq(InterviewSchedule::getId, scheduleId)
                 .one();
-        if (schedule == null){
+        if (schedule == null) {
             throw new BusinessException(ErrorCode.INTERVIEW_SCHEDULE_NOT_FOUND);
         }
-        if (!schedule.getEnterpriseId().equals(enterpriseId)){
+        if (!schedule.getEnterpriseId().equals(enterpriseId)) {
             throw new BusinessException(ErrorCode.INTERVIEW_SCHEDULE_NOT_YOUR_ENTERPRISE);
         }
 
+        // 2. 状态机校验：仅允许非终态且非 IN_PROGRESS 的排期重新安排
         boolean terminal = InterviewScheduleStatus.isTerminal(schedule.getStatus()) || schedule.getStatus().equals(InterviewScheduleStatus.IN_PROGRESS);
         if (terminal) {
             throw new BusinessException(ErrorCode.INTERVIEW_SCHEDULE_ALREADY_TERMINATED);
         }
-        // 校验 expectedVersion，durationMinutes 为空时保留原值。
+        // 3. 乐观锁校验
         if (!schedule.getVersion().equals(req.expectedVersion())) {
             throw new BusinessException(ErrorCode.INTERVIEW_SCHEDULE_VERSION_CONFLICT);
         }
 
-        // 新 interviewTime 必须晚于当前时间, 且需处理排期冲突
+        // 4. 计算新时间、时长，校验时间合法性
         OffsetDateTime newInterviewTime = req.interviewTime() != null ? req.interviewTime() : schedule.getInterviewTime();
-        if ( req.interviewTime() != null && newInterviewTime.isBefore(OffsetDateTime.now())) {
+        if (req.interviewTime() != null && newInterviewTime.isBefore(OffsetDateTime.now())) {
             throw new BusinessException(ErrorCode.INTERVIEW_TIME_INVALID);
         }
-
         Integer newDurationMinutes = req.durationMinutes();
         int finalDurationMinutes = newDurationMinutes == null ? schedule.getDurationMinutes() : newDurationMinutes;
 
+        // 5. 校验新面试官归属、新时间段冲突（应用层预检，数据库 EXCLUDE 约束兜底）
         Long interviewerUserId = req.interviewerUserId() != null ? req.interviewerUserId() : schedule.getInterviewerUserId();
         List<InterviewSchedule> schedules = lambdaQuery()
                 .select(InterviewSchedule::getInterviewTime, InterviewSchedule::getDurationMinutes)
                 .eq(InterviewSchedule::getInterviewerUserId, interviewerUserId)
-                .ne(InterviewSchedule::getId,scheduleId)
+                .ne(InterviewSchedule::getId, scheduleId)
                 .in(InterviewSchedule::getStatus,
                         InterviewScheduleStatus.PENDING_CONFIRMATION,
                         InterviewScheduleStatus.CONFIRMED,
                         InterviewScheduleStatus.IN_PROGRESS)
                 .list();
+        enterpriseValidationApi.validateEnterpriseBelong(enterpriseId, interviewerUserId);
 
-        // 新面试官属于当前企业
-        enterpriseValidationApi.validateEnterpriseBelong(enterpriseId,interviewerUserId);
-
-
-        // 使用最终 durationMinutes 计算新结束时间，检查新时间段冲突；并发场景继续依赖数据库约束兜底。
         boolean hasConflict = schedules.stream()
                 .anyMatch(s -> overlaps(
                         s.getInterviewTime(),
                         s.getDurationMinutes(),
                         newInterviewTime,
                         finalDurationMinutes));
-
-        if (hasConflict){
+        if (hasConflict) {
             throw new BusinessException(ErrorCode.INTERVIEW_TIME_CONFLICT);
         }
-        // 使用 id + enterpriseId + version + 允许源状态执行条件更新，写入新时间、时长、面试官并重置为 PENDING_CONFIRMATION。
+
+        // 6. 条件更新：id + enterpriseId + sourceStatus + version → 新时间/时长/面试官 + 状态重置为 PENDING_CONFIRMATION + version+1
         OffsetDateTime now = OffsetDateTime.now();
         InterviewSchedule update = InterviewSchedule.builder()
                 .interviewTime(newInterviewTime)
@@ -297,13 +301,13 @@ public class InterviewScheduleServiceImpl extends ServiceImpl<InterviewScheduleM
                 .version(schedule.getVersion() + 1)
                 .updatedAt(now)
                 .build();
-        //  同次更新执行 version=version+1 和审计填充；
         boolean result = update(update, new LambdaUpdateWrapper<InterviewSchedule>()
                 .eq(InterviewSchedule::getId, scheduleId)
                 .eq(InterviewSchedule::getEnterpriseId, enterpriseId)
                 .eq(InterviewSchedule::getStatus, schedule.getStatus())
                 .eq(InterviewSchedule::getVersion, schedule.getVersion()));
-        //更新零行时区分状态冲突与版本冲突。
+
+        // 7. 零行更新分支：区分不存在、状态已变、版本冲突
         if (!result) {
             InterviewSchedule current = lambdaQuery()
                     .select(InterviewSchedule::getStatus)
@@ -317,7 +321,7 @@ public class InterviewScheduleServiceImpl extends ServiceImpl<InterviewScheduleM
             }
             throw new BusinessException(ErrorCode.INTERVIEW_SCHEDULE_VERSION_CONFLICT);
         }
-        // TODO ⑦ 事务提交后释放原日历占用并重新通知候选人
+        // TODO [Notification] 事务提交后：释放原日历占用、向候选人/面试官发送重新安排通知（需接入可靠消息/Outbox，失败重试不阻塞主流程）。
         return InterviewScheduleUpdateVO.builder()
                 .id(scheduleId)
                 .status(InterviewScheduleStatus.PENDING_CONFIRMATION)
@@ -331,27 +335,84 @@ public class InterviewScheduleServiceImpl extends ServiceImpl<InterviewScheduleM
     @Override
     @Transactional
     public InterviewScheduleUpdateVO cancelSchedule(Long enterpriseId, Long scheduleId, InterviewScheduleCancelReq req) {
-        // TODO ① 查询企业内排期并校验 expectedVersion，拒绝不存在、已删除或跨企业排期。
-        // TODO ② 仅允许 PENDING_CONFIRMATION/CONFIRMED 且 interviewTime 尚未到达的排期取消，CANCELLED 之后不可恢复。
-        // TODO ③ 使用 id + enterpriseId + version + 源状态条件原子更新为 CANCELLED，同时递增 version 并写入审计字段。
-        // TODO ④ 更新零行时重新判断重复取消、状态已变化或版本冲突，禁止无条件覆盖并发结果。
-        // TODO ⑤ 在同一事务记录 fromStatus→CANCELLED 流转日志和 reason；提交后释放日历并通知相关人员。
-        // TODO ⑥ 返回 id、CANCELLED、新 version 和 updatedAt。
-        return null;
-    }
+        // 1. 查询基础字段，校验存在性、企业归属
+        InterviewSchedule schedule = lambdaQuery()
+                .select(
+                        InterviewSchedule::getStatus, InterviewSchedule::getInterviewTime,
+                        InterviewSchedule::getDurationMinutes, InterviewSchedule::getEnterpriseId,
+                        InterviewSchedule::getVersion)
+                .eq(InterviewSchedule::getId, scheduleId)
+                .one();
+        if (schedule == null) {
+            throw new BusinessException(ErrorCode.INTERVIEW_SCHEDULE_NOT_FOUND);
+        }
+        if (!schedule.getEnterpriseId().equals(enterpriseId)) {
+            throw new BusinessException(ErrorCode.INTERVIEW_SCHEDULE_NOT_YOUR_ENTERPRISE);
+        }
+        // 2. 状态机校验：仅允许 PENDING_CONFIRMATION/CONFIRMED 且未开始的排期取消
+        if (schedule.getStatus() != InterviewScheduleStatus.PENDING_CONFIRMATION
+                && schedule.getStatus() != InterviewScheduleStatus.CONFIRMED) {
+            throw new BusinessException(ErrorCode.INTERVIEW_SCHEDULE_ALREADY_TERMINATED);
+        }
+        if (schedule.getInterviewTime().isBefore(OffsetDateTime.now())) {
+            throw new BusinessException(ErrorCode.INTERVIEW_TIME_INVALID);
+        }
+        // 3. 乐观锁校验
+        if (!schedule.getVersion().equals(req.expectedVersion())) {
+            throw new BusinessException(ErrorCode.INTERVIEW_SCHEDULE_VERSION_CONFLICT);
+        }
 
-    @Override
-    @Transactional
-    public InterviewScheduleUpdateVO updateStatus(Long enterpriseId, Long scheduleId, InterviewScheduleStatusReq req) {
-        // TODO ① 查询企业内排期，解析目标状态并只接受 OFFERED、HIRED、REJECTED，校验 expectedVersion。
-        // TODO ② 按状态机验证 COMPLETED→OFFERED/REJECTED、OFFERED→HIRED/REJECTED，禁止逆向或跨级流转。
-        // TODO ③ OFFERED/HIRED 时校验 offerDetail 的 JSON 结构和必填内容；REJECTED 时按约定清理或保留录用快照。
-        // TODO ④ 使用 id + enterpriseId + version + fromStatus 条件原子更新目标状态、offerDetail、version 和审计字段。
-        // TODO ⑤ 更新零行时区分排期不存在、源状态已变化和乐观锁冲突。
-        // TODO ⑥ 在同一事务插入 workflow_transition_logs，保存 fromStatus、toStatus、操作人和 transitionReason。
-        // TODO ⑦ 事务提交后发布录用/拒绝领域事件；job_applications 继续只表示初筛事实，不反向覆盖其状态。
-        // TODO ⑧ 返回最新 id、status、version 和 updatedAt。
-        return null;
+        // 4. 条件更新：id + enterpriseId + sourceStatus + version → CANCELLED + statusReason + version+1 + 审计字段
+        OffsetDateTime now = OffsetDateTime.now();
+        InterviewSchedule update = InterviewSchedule.builder()
+                .status(InterviewScheduleStatus.CANCELLED)
+                .statusReason(req.reason())
+                .version(schedule.getVersion() + 1)
+                .updatedBy(AuthContext.getRequiredUserId())
+                .traceId(TraceUtil.getTraceId())
+                .updatedAt(now)
+                .build();
+        boolean result = update(update, new LambdaUpdateWrapper<InterviewSchedule>()
+                .eq(InterviewSchedule::getId, scheduleId)
+                .eq(InterviewSchedule::getEnterpriseId, enterpriseId)
+                .eq(InterviewSchedule::getStatus, schedule.getStatus())
+                .eq(InterviewSchedule::getVersion, schedule.getVersion()));
+
+        // 5. 零行更新分支：已 CANCELLED 幂等返回；状态已变/版本冲突/不存在抛错
+        if (!result) {
+            InterviewSchedule current = lambdaQuery()
+                    .select(InterviewSchedule::getStatus, InterviewSchedule::getVersion)
+                    .eq(InterviewSchedule::getId, scheduleId)
+                    .one();
+            if (current == null) {
+                throw new BusinessException(ErrorCode.INTERVIEW_SCHEDULE_NOT_FOUND);
+            }
+            if (current.getStatus() == InterviewScheduleStatus.CANCELLED) {
+                // 幂等：已取消，返回当前状态
+                return InterviewScheduleUpdateVO.builder()
+                        .id(scheduleId)
+                        .status(InterviewScheduleStatus.CANCELLED)
+                        .interviewTime(schedule.getInterviewTime())
+                        .durationMinutes(schedule.getDurationMinutes())
+                        .version(current.getVersion())
+                        .updatedAt(current.getUpdatedAt())
+                        .build();
+            }
+            if (!current.getStatus().equals(schedule.getStatus())) {
+                throw new BusinessException(ErrorCode.INTERVIEW_SCHEDULE_ALREADY_TERMINATED);
+            }
+            throw new BusinessException(ErrorCode.INTERVIEW_SCHEDULE_VERSION_CONFLICT);
+        }
+
+        // TODO [Notification] 事务提交后：释放日历占用、向候选人/面试官发送取消通知（需接入可靠消息/Outbox，失败重试不阻塞主流程）。
+        return InterviewScheduleUpdateVO.builder()
+                .id(scheduleId)
+                .status(InterviewScheduleStatus.CANCELLED)
+                .interviewTime(schedule.getInterviewTime())
+                .durationMinutes(schedule.getDurationMinutes())
+                .version(update.getVersion())
+                .updatedAt(now)
+                .build();
     }
 
     private void validateSort(String sort) {
@@ -390,10 +451,11 @@ public class InterviewScheduleServiceImpl extends ServiceImpl<InterviewScheduleM
         return durationMinutes == null ? DEFAULT_DURATION_MINUTES : durationMinutes;
     }
 
-    private ResolvedSchedulePhase resolveSchedulePhase(Long enterpriseId,
-                                                       Long applicationId,
-                                                       Long templateId,
-                                                       Short roundNo) {
+private ResolvedSchedulePhase resolveSchedulePhase(Long enterpriseId,
+                                                        Long applicationId,
+                                                        Long templateId,
+                                                        Short roundNo) {
+        // 查询该投递现有排期（按轮次升序），用于校验轮次连续性、模板一致性、快照复用
         List<InterviewSchedule> existing = lambdaQuery()
                 .select(InterviewSchedule::getTemplateId, InterviewSchedule::getRoundNo,
                         InterviewSchedule::getPhaseCode, InterviewSchedule::getTemplateSnapshotJson,
@@ -408,12 +470,14 @@ public class InterviewScheduleServiceImpl extends ServiceImpl<InterviewScheduleM
         InterviewTemplateSnapshot snapshot;
         String snapshotJson;
         if (existing.isEmpty()) {
+            // 首轮：必须 roundNo=1，从模板服务生成完整快照
             if (roundNo != 1) {
                 throw new BusinessException(ErrorCode.INTERVIEW_ROUND_SEQUENCE_INVALID);
             }
             snapshot = interviewStageTemplateService.buildTemplateSnapshot(enterpriseId, templateId);
             snapshotJson = writeTemplateSnapshot(snapshot);
         } else {
+            // 后续轮次：校验模板一致性，复用首轮快照
             boolean templateMismatch = existing.stream()
                     .anyMatch(schedule -> !templateId.equals(schedule.getTemplateId()));
             if (templateMismatch) {
@@ -426,7 +490,7 @@ public class InterviewScheduleServiceImpl extends ServiceImpl<InterviewScheduleM
             }
         }
 
-        // 前置轮次必须连续存在，且不能已经拒绝、取消或未到场。
+        // 前置轮次必须连续存在，且不能已拒绝/取消/未到场
         for (short expectedRound = 1; expectedRound < roundNo; expectedRound++) {
             short currentRound = expectedRound;
             InterviewSchedule previous = existing.stream()

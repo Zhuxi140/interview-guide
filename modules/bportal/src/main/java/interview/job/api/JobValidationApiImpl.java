@@ -52,4 +52,11 @@ public class JobValidationApiImpl implements JobValidationApi {
 
         return new JobApplicationSnapshotDTO(enterpriseId1, jobApplications.getJobId(), jobApplications.getCandidateId());
     }
+
+    @Override
+    public JobApplicationSnapshotDTO requirePassedApplicationWithInfo(Long applicationId, Long enterpriseId) {
+        // 复用基础校验，再额外返回 candidateUserId（即 candidateId）
+        JobApplicationSnapshotDTO base = requirePassedApplication(applicationId, enterpriseId);
+        return new JobApplicationSnapshotDTO(base.enterpriseId(), base.jobId(), base.candidateId());
+    }
 }

@@ -26,4 +26,14 @@ public interface JobValidationApi {
      * @throws BusinessException 投递不存在、不属于该企业或状态非 PASSED
      */
     JobApplicationSnapshotDTO requirePassedApplication(Long applicationId, Long enterpriseId);
+
+    /**
+     * 校验投递存在、属于指定企业且状态为 PASSED，返回包含 candidateUserId 的完整快照
+     * （用于 Offer 创建等需要候选人用户 ID 的场景）
+     * @param applicationId 投递 ID
+     * @param enterpriseId 企业 ID
+     * @return 投递快照（enterpriseId/jobId/candidateUserId）
+     * @throws BusinessException 投递不存在、不属于该企业或状态非 PASSED
+     */
+    JobApplicationSnapshotDTO requirePassedApplicationWithInfo(Long applicationId, Long enterpriseId);
 }

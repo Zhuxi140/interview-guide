@@ -1,12 +1,18 @@
 package interview.offer.service;
 
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import interview.offer.model.req.OfferCreateReq;
 import interview.offer.model.req.OfferDecisionReq;
 import interview.offer.model.req.OfferSendReq;
 import interview.offer.model.req.OfferUpdateReq;
 import interview.offer.model.req.OfferWithdrawReq;
+import interview.offer.model.enums.OfferStatus;
+import interview.offer.model.vo.CandidateOfferDetailVO;
+import interview.offer.model.vo.CandidateOfferListItemVO;
 import interview.offer.model.vo.OfferCreateVO;
 import interview.offer.model.vo.OfferDecisionVO;
+import interview.offer.model.vo.OfferDetailVO;
+import interview.offer.model.vo.OfferHistoryVO;
 import interview.offer.model.vo.OfferSendVO;
 import interview.offer.model.vo.OfferUpdateVO;
 
@@ -67,4 +73,42 @@ public interface OfferService {
      * @return 决策结果
      */
     OfferDecisionVO decideOffer(Long offerId, String idempotencyKey, OfferDecisionReq req);
+
+    /**
+     * B端查询投递下的 Offer 历史
+     * @param enterpriseId 企业ID
+     * @param applicationId 投递ID
+     * @return Offer 历史
+     */
+    OfferHistoryVO listOffers(Long enterpriseId, Long applicationId);
+
+    /**
+     * B端查询 Offer 详情
+     * @param enterpriseId 企业ID
+     * @param offerId Offer ID
+     * @return Offer 详情
+     */
+    OfferDetailVO getOfferDetail(Long enterpriseId, Long offerId);
+
+    /**
+     * C端分页查询自己的 Offer
+     * @param page 页码
+     * @param size 每页大小
+     * @param status 状态筛选
+     * @param sort 排序字段
+     * @param order 排序方向
+     * @return Offer 分页列表
+     */
+    IPage<CandidateOfferListItemVO> pageCandidateOffers(Integer page,
+                                                         Integer size,
+                                                         OfferStatus status,
+                                                         String sort,
+                                                         String order);
+
+    /**
+     * C端查询 Offer 详情
+     * @param offerId Offer ID
+     * @return Offer 详情
+     */
+    CandidateOfferDetailVO getCandidateOfferDetail(Long offerId);
 }

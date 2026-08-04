@@ -1,26 +1,52 @@
 package interview.textinterview.service.impl;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import interview.common.enums.ErrorCode;
 import interview.common.exception.BusinessException;
 import interview.framework.context.AuthContext;
 import interview.textinterview.mapper.InterviewSessionMapper;
+import interview.textinterview.mapper.InterviewTimelineEventMapper;
 import interview.textinterview.model.entity.InterviewSession;
+import interview.textinterview.model.entity.InterviewTimelineEvent;
 import interview.textinterview.model.req.InterviewAnswerSubmitReq;
 import interview.textinterview.model.req.InterviewSessionCreateReq;
 import interview.textinterview.model.req.InterviewSessionEndReq;
 import interview.textinterview.model.vo.*;
 import interview.textinterview.service.InterviewSessionService;
+import interview.voiceinterview.mapper.VoiceInterviewSessionMapper;
+import interview.voiceinterview.model.entity.VoiceInterviewSession;
+import interview.voiceinterview.model.vo.VoiceDetailsVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.ObjectMapper;
+
+import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
 public class InterviewSessionServiceImpl
         extends ServiceImpl<InterviewSessionMapper, InterviewSession>
         implements InterviewSessionService {
+
+    private final VoiceInterviewSessionMapper voiceInterviewSessionMapper;
+    private final InterviewTimelineEventMapper interviewTimelineEventMapper;
+    private final ObjectMapper objectMapper;
+
+    @Override
+    @Transactional
+    public InterviewJoinTokenVO generateJoinToken(Long scheduleId, String idempotencyKey) {
+        // TODO ① 从 AuthContext 获取用户，并通过 InterviewScheduleQueryApi 校验其为候选人或当前企业面试官。
+        // TODO ② 校验排期状态为 CONFIRMED、当前时间位于允许进入窗口，并从排期读取 TEXT/VOICE 类型。
+        // TODO ③ 按 scheduleId 查询或幂等创建统一 interview_sessions；VOICE 仅额外创建 voice_interview_sessions 扩展记录。
+        // TODO ④ 首次进入时通过跨模块 API 原子推进排期 CONFIRMED→IN_PROGRESS，断线重连复用原会话。
+        // TODO ⑤ 生成绑定 userId、sessionId、参与者角色且 60 秒内只能消费一次的 connectionToken。
+        // TODO ⑥ 返回统一 wsUrl、会话类型、尝试次数、状态和最后事件序号；不得按文本/语音再暴露两套入口。
+        return null;
+    }
 
     @Override
     @Transactional
@@ -42,33 +68,59 @@ public class InterviewSessionServiceImpl
         // 纯 CRUD
         Long userId = AuthContext.getRequiredUserId();
 
-        // 按会话主键和候选人双重限定，避免越权读取其他候选人的面试进度。
+        // 查询统一会话，再校验当前用户是候选人或当前企业参与者。
         InterviewSession session = lambdaQuery()
                 .select(
                         InterviewSession::getId,
+                        InterviewSession::getEnterpriseId,
+                        InterviewSession::getUserId,
                         InterviewSession::getScheduleId,
-                        InterviewSession::getTotalQuestions,
-                        InterviewSession::getCurrentQuestionIndex,
+                        InterviewSession::getAttemptNo,
+                        InterviewSession::getSessionType,
                         InterviewSession::getStatus,
                         InterviewSession::getLastEventSequence,
-                        InterviewSession::getCreatedAt
+                        InterviewSession::getStartedAt,
+                        InterviewSession::getEndedAt
                 )
                 .eq(InterviewSession::getId, sessionId)
-                .eq(InterviewSession::getUserId, userId)
                 .one();
-        if (session == null) {
+        Long enterpriseId = AuthContext.getEnterpriseId();
+        if (session == null
+                || (!userId.equals(session.getUserId())
+                && !java.util.Objects.equals(enterpriseId, session.getEnterpriseId()))) {
             throw new BusinessException(ErrorCode.INTERVIEW_SESSION_NOT_FOUND);
         }
 
-        // 当前查询只返回持久化的会话状态，不在读接口中隐式修复业务数据。
+        // 语音会话按需补充扩展信息，文本会话返回 null。
+        VoiceDetailsVO voiceDetails = null;
+        if ("VOICE".equals(session.getSessionType())) {
+            VoiceInterviewSession voiceSession = voiceInterviewSessionMapper.selectOne(
+                    com.baomidou.mybatisplus.core.toolkit.Wrappers
+                            .lambdaQuery(VoiceInterviewSession.class)
+                            .select(
+                                    VoiceInterviewSession::getCurrentPhase,
+                                    VoiceInterviewSession::getActualDurationSeconds
+                            )
+                            .eq(VoiceInterviewSession::getInterviewSessionId, sessionId)
+            );
+            if (voiceSession != null) {
+                voiceDetails = new VoiceDetailsVO(
+                        voiceSession.getCurrentPhase(),
+                        voiceSession.getActualDurationSeconds()
+                );
+            }
+        }
+
         return new InterviewSessionVO(
                 session.getId(),
                 session.getScheduleId(),
-                session.getTotalQuestions(),
-                session.getCurrentQuestionIndex(),
+                interview.common.enums.InterviewType.valueOf(session.getSessionType()),
+                session.getAttemptNo(),
                 session.getStatus(),
                 session.getLastEventSequence(),
-                session.getCreatedAt()
+                voiceDetails,
+                session.getStartedAt(),
+                session.getEndedAt()
         );
     }
 
@@ -101,15 +153,66 @@ public class InterviewSessionServiceImpl
     @Override
     @Transactional
     public InterviewSessionEndVO endSession(Long sessionId, InterviewSessionEndReq req) {
-        // TODO ① 从 AuthContext 取得 userId 并接收 Idempotency-Key；查询本人会话及 expectedSessionVersion。
-        // TODO ② 已为 COMPLETED 时按同一幂等请求返回原结束结果；非 IN_PROGRESS 状态拒绝结束。
+        // TODO ① 从 AuthContext 取得 userId，查询统一会话并校验其为候选人或当前企业面试官。
+        // TODO ② 已为 COMPLETED 时返回原结束结果；当前状态必须与 expectedStatus=IN_PROGRESS 一致。
         // TODO ③ 校验当前没有处于评分中的答案；按业务规则决定允许提前结束还是必须完成最低题数。
-        // TODO ④ 使用 id + userId + status=IN_PROGRESS + version 条件原子更新为 COMPLETED，并执行 version=version+1。
-        // TODO ⑤ 更新零行时区分会话不存在、已经结束和版本冲突，禁止并发提交答案覆盖结束状态。
+        // TODO ④ 使用 id + status=IN_PROGRESS 条件原子更新为 COMPLETED，写入 endedAt 和实际持续时间。
+        // TODO ⑤ 更新零行时区分会话不存在、已经结束和状态竞争，禁止并发事件覆盖结束状态。
         // TODO ⑥ 通过 ScheduleApi 条件推进 IN_PROGRESS→COMPLETED，并写入对应流转日志。
         // TODO ⑦ 同一业务事务创建 generationStatus=PENDING 的报告任务和可靠消息，幂等键绑定 sessionId。
         // TODO ⑧ 事务提交后异步生成报告；失败由消息重试收敛，查询接口始终可以看到 PENDING/PROCESSING/FAILED。
-        // TODO ⑨ 返回 COMPLETED、reportStatus=PENDING、新 sessionVersion 和幂等提示；实体/签名需补齐 version 与幂等键。
+        // TODO ⑨ 返回统一的 sessionType、COMPLETED、持续时间、报告状态及可选语音评估状态。
         return null;
+    }
+
+    @Override
+    public InterviewTimelinePageVO getTimeline(Long sessionId, Long afterSequence, Integer size) {
+        // 复用统一会话查询完成候选人或企业参与者归属校验。
+        getSession(sessionId);
+        if (afterSequence == null || afterSequence < 0
+                || size == null || size < 1 || size > 100) {
+            throw new BusinessException(ErrorCode.PAGE_PARAM_INVALID);
+        }
+
+        // 多取一条判断 hasMore，避免额外执行 count 查询。
+        List<InterviewTimelineEvent> rows = interviewTimelineEventMapper.selectPage(
+                new Page<>(1, size + 1L, false),
+                com.baomidou.mybatisplus.core.toolkit.Wrappers
+                        .lambdaQuery(InterviewTimelineEvent.class)
+                        .select(
+                                InterviewTimelineEvent::getEventId,
+                                InterviewTimelineEvent::getSequenceNum,
+                                InterviewTimelineEvent::getEventType,
+                                InterviewTimelineEvent::getPayloadJson,
+                                InterviewTimelineEvent::getOccurredAt
+                        )
+                        .eq(InterviewTimelineEvent::getSessionId, sessionId)
+                        .gt(InterviewTimelineEvent::getSequenceNum, afterSequence)
+                        .orderByAsc(InterviewTimelineEvent::getSequenceNum)
+        ).getRecords();
+        boolean hasMore = rows.size() > size;
+        List<InterviewTimelineEventVO> events = rows.stream()
+                .limit(size)
+                .map(event -> new InterviewTimelineEventVO(
+                        event.getEventId(),
+                        event.getSequenceNum(),
+                        event.getEventType(),
+                        parsePayload(event.getPayloadJson()),
+                        event.getOccurredAt()
+                ))
+                .toList();
+        long lastSequence = events.isEmpty()
+                ? afterSequence
+                : events.getLast().sequence();
+        return new InterviewTimelinePageVO(lastSequence, hasMore, events);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> parsePayload(String payloadJson) {
+        try {
+            return objectMapper.readValue(payloadJson, Map.class);
+        } catch (Exception exception) {
+            throw new BusinessException(ErrorCode.JSON_TO_OBJECT_ERROR);
+        }
     }
 }

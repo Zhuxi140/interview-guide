@@ -148,6 +148,7 @@ public enum ErrorCode {
     INTERVIEW_STAGE_TEMPLATE_NOT_FOUND(50013,"面试阶段模板不存在"),
     INTERVIEW_STAGE_TEMPLATE_NOT_YOUR_ENTERPRISE(50014,"面试阶段模板不属于当前企业"),
     INTERVIEW_TIME_INVALID(50015,"面试时间无效"),
+    INTERVIEW_PLAN_DRAFT_NOT_FOUND(50018,"面试编排草案不存在"),
     CANDIDATE_INTERVIEW_AVAILABILITY_VERSION_CONFLICT(50021,"可面试时间已被修改，请刷新后重试"),
     CANDIDATE_INTERVIEW_AVAILABILITY_INVALID(50022,"可面试时间无效或存在重叠"),
     INTERVIEW_SCHEDULE_ALREADY_TERMINATED(50023,"面试正在进行或已经结束"),
@@ -238,7 +239,7 @@ public enum ErrorCode {
     AI_TOKEN_LIMIT_EXCEEDED(120011, "AI 上下文长度超过限制"),
     AI_SAFETY_GUARDRAIL_TRIGGERED(120012, "AI 安全护栏触发"),
     AI_PROVIDER_ALREADY_EXISTS(120013, "AI Provider ID 已存在"),
-    AI_PROVIDER_VERSION_(120014, "AI Provider 配置版本冲突，请刷新后重试"),
+    AI_PROVIDER_VERSION_CONFLICT(120014, "AI Provider 配置版本冲突，请刷新后重试"),
     AI_PROVIDER_IN_USE(120015, "AI Provider 正被有效路由使用"),
     AI_PROVIDER_CONNECTION_FAILED(120016, "AI Provider 连接测试失败"),
     AI_GLOBAL_ROUTE_VERSION_CONFLICT(120017, "AI 全局默认路由版本冲突，请刷新后重试"),
@@ -258,6 +259,18 @@ public enum ErrorCode {
     LOCAL_MESSAGE_STATUS_INVALID(140002, "本地消息状态不合法，仅允许重试 FAILED 状态的消息"),
     LOCAL_MESSAGE_RETRY_FAILED(140003, "本地消息重试执行失败"),
     LOCAL_MESSAGE_RETRY_LIMIT_EXCEEDED(140004, "本地消息重试次数已达上限"),
+
+    // ------------ 15xxx Offer 录用邀请错误码 ------------
+    OFFER_NOT_FOUND(150001, "Offer 不存在"),
+    OFFER_STATUS_INVALID(150002, "Offer 状态不合法"),
+    OFFER_VERSION_CONFLICT(150003, "Offer 版本冲突，请刷新后重试"),
+    OFFER_EXPIRED(150004, "Offer 已过期"),
+    OFFER_ALREADY_EXISTS(150005, "该投递已存在有效 Offer"),
+    OFFER_IDEMPOTENCY_KEY_CONFLICT(150006, "幂等键冲突，请勿重复提交不同参数"),
+    OFFER_NOT_SENT_YET(150007, "Offer 尚未发送，无法执行该操作"),
+    OFFER_ALREADY_DECIDED(150008, "Offer 已被接受或拒绝"),
+    OFFER_DECISION_CONFLICT(150009, "Offer 决策冲突，可能已被并发操作处理"),
+    OFFER_WITHDRAWN(150010, "Offer 已被撤回"),
     ;
 
     private final Integer code;
