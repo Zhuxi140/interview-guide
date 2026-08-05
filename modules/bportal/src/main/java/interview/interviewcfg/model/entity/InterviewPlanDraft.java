@@ -39,6 +39,17 @@ public class InterviewPlanDraft implements Serializable {
 
     private String idempotencyKey;
 
+    /** HR 应用草案时使用的幂等键；仅 APPLIED 后有值。 */
+    private String applyIdempotencyKey;
+
+    /** HR 应用草案时提交的修订后计划快照（幂等对比与页面刷新恢复用）。 */
+    @TableField(typeHandler = JsonbStringTypeHandler.class)
+    private String appliedPlanJson;
+
+    /** 应用时创建的排期 ID 数组快照（幂等重放时返回原结果）。 */
+    @TableField(typeHandler = JsonbStringTypeHandler.class)
+    private String appliedScheduleIds;
+
     @TableField(typeHandler = JsonbStringTypeHandler.class)
     private String requestJson;
 

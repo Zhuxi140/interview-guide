@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS interview_stage_templates (
     template_name           VARCHAR(64)     NOT NULL,
     stages_sequence_json    JSONB           NOT NULL,
     version                 INT             NOT NULL DEFAULT 0,
+    is_deleted              BOOLEAN         NOT NULL DEFAULT FALSE,
     created_at              TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_by              BIGINT,
     updated_at              TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -28,7 +29,8 @@ CREATE TABLE IF NOT EXISTS interview_stage_templates (
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS uk_interview_template_enterprise_name
-    ON interview_stage_templates (enterprise_id, template_name);
+    ON interview_stage_templates (enterprise_id, template_name)
+    WHERE is_deleted = FALSE;
 CREATE INDEX IF NOT EXISTS idx_interview_template_enterprise_updated
     ON interview_stage_templates (enterprise_id, updated_at DESC, id DESC);
 
@@ -37,6 +39,7 @@ COMMENT ON COLUMN interview_stage_templates.id IS '雪花主键';
 COMMENT ON COLUMN interview_stage_templates.enterprise_id IS '[逻辑外键]→enterprises';
 COMMENT ON COLUMN interview_stage_templates.stages_sequence_json IS '阶段节点编排 JSON 数组';
 COMMENT ON COLUMN interview_stage_templates.version IS '管理端编辑使用的乐观锁版本号';
+COMMENT ON COLUMN interview_stage_templates.is_deleted IS '逻辑删除标识';
 COMMENT ON COLUMN interview_stage_templates.updated_by IS '[逻辑外键]→sys_users';
 
 -- ==================== 2. interview_phase_configs ====================
@@ -48,6 +51,7 @@ CREATE TABLE IF NOT EXISTS interview_phase_configs (
     difficulty_weight       DOUBLE PRECISION    NOT NULL DEFAULT 0.5,
     prompt_override         TEXT,
     version                 INT                 NOT NULL DEFAULT 0,
+    is_deleted              BOOLEAN             NOT NULL DEFAULT FALSE,
     updated_at              TIMESTAMPTZ         NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
     CONSTRAINT ck_interview_phase_question_count
@@ -61,13 +65,15 @@ CREATE TABLE IF NOT EXISTS interview_phase_configs (
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS uk_interview_phase_template_code
-    ON interview_phase_configs (template_id, phase_code);
+    ON interview_phase_configs (template_id, phase_code)
+    WHERE is_deleted = FALSE;
 
 COMMENT ON TABLE interview_phase_configs IS 'AI动态组卷阶段策略配置表';
 COMMENT ON COLUMN interview_phase_configs.id IS '雪花主键';
 COMMENT ON COLUMN interview_phase_configs.template_id IS '[逻辑外键]→interview_stage_templates';
 COMMENT ON COLUMN interview_phase_configs.phase_code IS '模板内的阶段编码';
 COMMENT ON COLUMN interview_phase_configs.version IS '多管理员编辑使用的乐观锁版本号';
+COMMENT ON COLUMN interview_phase_configs.is_deleted IS '逻辑删除标识';
 
 -- ==================== 3. interview_plan_drafts ====================
 CREATE TABLE IF NOT EXISTS interview_plan_drafts (
@@ -86,6 +92,9 @@ CREATE TABLE IF NOT EXISTS interview_plan_drafts (
     version                 INT             NOT NULL DEFAULT 0,
     expires_at              TIMESTAMPTZ,
     applied_at              TIMESTAMPTZ,
+    apply_idempotency_key   VARCHAR(128),
+    applied_plan_json       JSONB,
+    applied_schedule_ids    JSONB,
     created_at              TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_by              BIGINT,
     trace_id                VARCHAR(128),
@@ -100,7 +109,11 @@ CREATE TABLE IF NOT EXISTS interview_plan_drafts (
     CONSTRAINT ck_interview_plan_status
         CHECK (status IN ('PENDING', 'PROCESSING', 'READY', 'APPLIED', 'FAILED', 'EXPIRED')),
     CONSTRAINT ck_interview_plan_version
-        CHECK (version >= 0)
+        CHECK (version >= 0),
+    CONSTRAINT ck_interview_plan_applied_object
+        CHECK (applied_plan_json IS NULL OR jsonb_typeof(applied_plan_json) = 'object'),
+    CONSTRAINT ck_interview_plan_applied_ids
+        CHECK (applied_schedule_ids IS NULL OR jsonb_typeof(applied_schedule_ids) = 'array')
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS uk_interview_plan_idempotency
@@ -122,6 +135,9 @@ COMMENT ON COLUMN interview_plan_drafts.input_snapshot_json IS 'Agent 使用的�
 COMMENT ON COLUMN interview_plan_drafts.plan_json IS '阶段、题纲和排期建议结构化结果';
 COMMENT ON COLUMN interview_plan_drafts.generation_message_id IS '[逻辑引用]→local_message，不建跨模块外键';
 COMMENT ON COLUMN interview_plan_drafts.version IS 'HR 确认草案使用的乐观锁版本';
+COMMENT ON COLUMN interview_plan_drafts.apply_idempotency_key IS 'HR 应用草案时的幂等键，仅 APPLIED 后有值';
+COMMENT ON COLUMN interview_plan_drafts.applied_plan_json IS 'HR 应用时提交的修订后计划快照，用于幂等对比与页面刷新恢复';
+COMMENT ON COLUMN interview_plan_drafts.applied_schedule_ids IS '应用时创建的排期 ID 数组快照，用于幂等重放';
 
 -- ==================== 4. candidate_interview_availability ====================
 CREATE TABLE IF NOT EXISTS candidate_interview_availability (

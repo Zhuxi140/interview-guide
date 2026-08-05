@@ -8,17 +8,23 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import interview.api.system.EnterpriseValidationApi;
 import interview.common.enums.ErrorCode;
+import interview.common.enums.InterviewScheduleStatus;
 import interview.common.exception.BusinessException;
 import interview.framework.context.AuthContext;
 import interview.interviewcfg.mapper.InterviewPhaseConfigMapper;
 import interview.interviewcfg.mapper.InterviewStageTemplateMapper;
 import interview.interviewcfg.model.bo.InterviewTemplateSnapshot;
 import interview.interviewcfg.model.entity.InterviewPhaseConfig;
+import interview.interviewcfg.model.entity.InterviewPlanDraft;
+import interview.interviewcfg.model.entity.InterviewSchedule;
 import interview.interviewcfg.model.entity.InterviewStageTemplate;
+import interview.interviewcfg.model.enums.InterviewPlanDraftStatus;
 import interview.interviewcfg.model.req.InterviewTemplateCreateReq;
 import interview.interviewcfg.model.req.InterviewTemplateUpdateReq;
 import interview.interviewcfg.model.req.PhaseConfigUpsertReq;
 import interview.interviewcfg.model.vo.*;
+import interview.interviewcfg.service.InterviewPlanDraftService;
+import interview.interviewcfg.service.InterviewScheduleService;
 import interview.interviewcfg.service.InterviewStageTemplateService;
 import interview.interviewcfg.service.support.InterviewTemplateStageRules;
 import lombok.RequiredArgsConstructor;
@@ -39,16 +45,16 @@ import java.util.stream.Collectors;
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class InterviewStageTemplateServiceImpl
-        extends ServiceImpl<InterviewStageTemplateMapper, InterviewStageTemplate>
+public class InterviewStageTemplateServiceImpl extends ServiceImpl<InterviewStageTemplateMapper, InterviewStageTemplate>
         implements InterviewStageTemplateService {
 
     private static final String SORT_CREATED_AT = "createdAt";
     private static final String SORT_UPDATED_AT = "updatedAt";
     private static final String SORT_TEMPLATE_NAME = "templateName";
-
     private final EnterpriseValidationApi enterpriseValidationApi;
     private final InterviewPhaseConfigMapper interviewPhaseConfigMapper;
+    private final InterviewScheduleService interviewScheduleService;
+    private final InterviewPlanDraftService interviewPlanDraftService;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -211,13 +217,48 @@ public class InterviewStageTemplateServiceImpl
 
     @Override
     @Transactional
-    public InterviewTemplateDeleteVO deleteTemplate(Long enterpriseId, Long templateId, Integer expectedVersion) {
-        // TODO ① 查询目标企业下未删除模板并校验 expectedVersion；当前实体/表需先补齐 version 与 @TableLogic 字段。
-        // TODO ② 检查是否存在尚未结束的 interview_schedule 引用该模板，存在时禁止删除以保留会话配置一致性。
-        // TODO ③ 使用 id + enterpriseId + version 条件执行逻辑删除，并递增 version、写入 updatedBy/updatedAt/traceId。
-        // TODO ④ 更新零行时区分不存在、已删除和并发版本冲突，保证重复删除具有明确响应语义。
-        // TODO ⑤ 保留历史排期所需的模板快照或配置引用，成功后返回统一删除结果。
-        return null;
+    public void deleteTemplate(Long enterpriseId, Long templateId, Integer expectedVersion) {
+        // 按 id + enterpriseId 查询模板：不存在或（启用了逻辑删除后）is_deleted=TRUE 抛 INTERVIEW_TEMPLATE_NOT_FOUND。
+        InterviewStageTemplate template = lambdaQuery()
+                .select(InterviewStageTemplate::getVersion)
+                .eq(InterviewStageTemplate::getId, templateId)
+                .eq(InterviewStageTemplate::getEnterpriseId, enterpriseId)
+                .one();
+        if (template == null){
+            throw new BusinessException(ErrorCode.INTERVIEW_STAGE_TEMPLATE_NOT_FOUND);
+        }
+        // 乐观锁校验：expectedVersion 必须等于 current.version（含 If-Match 头解析），不一致抛
+        //         INTERVIEW_TEMPLATE_VERSION_CONFLICT（50031）；模板被并发删除/更新时校验仍由条件更新兜底。
+        if (!expectedVersion.equals(template.getVersion())) {
+            throw new BusinessException(ErrorCode.INTERVIEW_TEMPLATE_VERSION_CONFLICT);
+        }
+        // 引用校验：禁止删除仍被使用的模板以保留配置一致性——
+        //         a) interview_schedule 存在 template_id=模板ID 按排期存在+is_deleted=FALSE 从简判定 的排期 → 拒绝删除；
+        //         b) interview_plan_drafts 存在 template_id=模板ID 且 status IN
+        //            (PENDING/PROCESSING/READY) 的未应用/未终结草案 → 拒绝删除；
+        //         已 COMPLETED/EXPIRED/FAILED 的排期与草案可随模板删除（历史内容由 template_snapshot_json 快照自持）。
+        //         命中引用时返回与前缀一致的业务错误（可复用 INTERVIEW_TEMPLATE_MISMATCH 或新增专用码）。
+        boolean exists = interviewScheduleService.lambdaQuery()
+                .eq(InterviewSchedule::getTemplateId, templateId)
+                .exists();
+        boolean exists1 = interviewPlanDraftService.lambdaQuery()
+                .eq(InterviewPlanDraft::getTemplateId, templateId)
+                .in(InterviewPlanDraft::getStatus, InterviewPlanDraftStatus.PENDING, InterviewPlanDraftStatus.PROCESSING, InterviewPlanDraftStatus.READY)
+                .exists();
+        if (exists || exists1){
+            throw new BusinessException(ErrorCode.INTERVIEW_TEMPLATE_IN_USE);
+        }
+        //条件删除：按 id + enterpriseId + version 执行逻辑删除（或物理删除），并同步清理子表
+        //interview_phase_configs 中 template_id=模板ID 的全部组卷配置；子表删除失败须回滚整个事务。
+        boolean remove = lambdaUpdate()
+                .eq(InterviewStageTemplate::getId, templateId)
+                .eq(InterviewStageTemplate::getEnterpriseId, enterpriseId)
+                .remove();
+        if (!remove){
+            throw new BusinessException(ErrorCode.INTERVIEW_TEMPLATE_NULL_OR_VERSION_ERROR);
+        }
+        //快照一致性说明：模板被删除不影响已创建排期（首轮已固化 template_snapshot_json，后续轮次复用快照且
+        //         requireEligibleForSchedule 只依赖投递与排期），因此无需保留模板行作历史引用。
     }
 
     @Override

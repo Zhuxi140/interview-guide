@@ -158,7 +158,8 @@ public class InterviewSessionServiceImpl
         // TODO ③ 校验当前没有处于评分中的答案；按业务规则决定允许提前结束还是必须完成最低题数。
         // TODO ④ 使用 id + status=IN_PROGRESS 条件原子更新为 COMPLETED，写入 endedAt 和实际持续时间。
         // TODO ⑤ 更新零行时区分会话不存在、已经结束和状态竞争，禁止并发事件覆盖结束状态。
-        // TODO ⑥ 通过 ScheduleApi 条件推进 IN_PROGRESS→COMPLETED，并写入对应流转日志。
+        // TODO ⑥ 面试终态阶段说明：会话更新成功后调用 InterviewScheduleCommandApi.completeSchedule(scheduleId,
+        //         enterpriseId) 条件推进 IN_PROGRESS→COMPLETED，面试完成终态由面试流程状态 API 统一判定。
         // TODO ⑦ 同一业务事务创建 generationStatus=PENDING 的报告任务和可靠消息，幂等键绑定 sessionId。
         // TODO ⑧ 事务提交后异步生成报告；失败由消息重试收敛，查询接口始终可以看到 PENDING/PROCESSING/FAILED。
         // TODO ⑨ 返回统一的 sessionType、COMPLETED、持续时间、报告状态及可选语音评估状态。

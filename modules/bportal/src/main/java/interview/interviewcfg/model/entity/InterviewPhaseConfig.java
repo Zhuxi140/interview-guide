@@ -37,6 +37,9 @@ public class InterviewPhaseConfig implements Serializable {
     @Version
     private Integer version;
 
+    @TableLogic
+    private Boolean isDeleted;
+
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private OffsetDateTime updatedAt;
 }

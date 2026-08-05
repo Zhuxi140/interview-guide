@@ -64,7 +64,7 @@ public class InterviewPlanDraftController {
 
     @Operation(summary = "应用 Agent 面试编排草案")
     @RequirePermission(
-            permissions = Perm.InterviewSchedule.AI_SUGGEST,
+            permissions = Perm.InterviewSchedule.CREATE,
             scope = PermissionScope.ENTERPRISE
     )
     @PostMapping("/{draftId}/apply")

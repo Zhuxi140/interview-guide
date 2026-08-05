@@ -1,6 +1,7 @@
 package interview.interviewcfg.service.impl;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
@@ -22,7 +23,13 @@ import interview.interviewcfg.service.InterviewPlanDraftService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+
+import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Agent 面试编排草案实现。
@@ -30,18 +37,15 @@ import tools.jackson.databind.ObjectMapper;
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class InterviewPlanDraftServiceImpl
-        extends ServiceImpl<InterviewPlanDraftMapper, InterviewPlanDraft>
+public class InterviewPlanDraftServiceImpl extends ServiceImpl<InterviewPlanDraftMapper, InterviewPlanDraft>
         implements InterviewPlanDraftService {
 
     private final EnterpriseValidationApi enterpriseValidationApi;
     private final ObjectMapper objectMapper;
 
     @Override
-    public InterviewPlanDraftCreateVO createDraft(Long enterpriseId,
-                                                   Long applicationId,
-                                                   String idempotencyKey,
-                                                   InterviewPlanDraftCreateReq req) {
+    public InterviewPlanDraftCreateVO createDraft(Long enterpriseId, Long applicationId,
+                                                   String idempotencyKey, InterviewPlanDraftCreateReq req) {
         // TODO ① 从 AuthContext 获取发起人，校验企业成员身份、接口权限和 Idempotency-Key 非空。
         // TODO ② 通过投递模块校验 applicationId 属于 enterpriseId、状态允许进入面试，并取得岗位和候选人快照。
         // TODO ③ 校验第三阶段 interviewType 只能为 TEXT；templateId 必填且属于当前企业，候选面试官必须是企业成员。
@@ -56,23 +60,76 @@ public class InterviewPlanDraftServiceImpl
     }
 
     @Override
-    public InterviewPlanDraftApplyVO applyDraft(Long enterpriseId,
-                                                 Long applicationId,
-                                                 Long draftId,
-                                                 String idempotencyKey,
-                                                 InterviewPlanDraftApplyReq req) {
-        // TODO ① 从 AuthContext 获取操作人，校验企业成员身份、接口权限和 Idempotency-Key 非空。
-        // TODO ② 按 enterpriseId + applicationId + draftId 查询草案，要求状态为 READY、未过期且 version=expectedVersion。
-        // TODO ③ 相同幂等键重复提交时返回原 scheduleIds；同键绑定不同选择结果时返回幂等冲突。
-        // TODO ④ 解析并验证 planJson，筛选 selectedSuggestionIds，禁止采用不存在、重复或不属于草案的建议。
-        // TODO ⑤ 重新校验投递状态、面试官、候选人可用时间和当前日历冲突；模板版本必须等于草案快照版本，否则要求重新生成。
-        // TODO ⑥ 校验建议轮次属于模板快照，按 roundNo=1..N 连续排序，禁止 Agent 自创 phaseCode、跳轮或混用模板。
-        // TODO ⑦ 在一个本地事务中按顺序批量创建正式排期，全部复用草案中的同一模板快照，并记录流转信息。
-        // TODO ⑧ 以 draftId + version + READY 条件更新草案为 APPLIED；任一排期插入或条件更新失败时整体回滚。
-        // TODO ⑨ 将轮次、阶段和时间唯一/排斥约束冲突转换为明确业务错误。
-        // TODO ⑩ 事务提交后发送候选人邀请和面试官通知，通知失败交由独立可靠消息重试。
-        // TODO ⑪ 返回草案状态、创建的 scheduleIds 和 appliedAt。
-        return null;
+    @Transactional
+    public InterviewPlanDraftApplyVO applyDraft(Long enterpriseId, Long applicationId,
+                                                 Long draftId, String idempotencyKey,
+                                                InterviewPlanDraftApplyReq req) {
+        // ② 规一化提交计划，先计算一次供各分支复用。
+        String normalizedPlan = normalizePlan(req.plan());
+
+        // ③ 读取草案（仅取幂等与状态机所需列），锁定租户与投递范围。
+        InterviewPlanDraft draft = baseMapper.selectOne(Wrappers.<InterviewPlanDraft>lambdaQuery()
+                .select(
+                        InterviewPlanDraft::getId, InterviewPlanDraft::getStatus,
+                        InterviewPlanDraft::getVersion, InterviewPlanDraft::getExpiresAt,
+                        InterviewPlanDraft::getPlanJson, InterviewPlanDraft::getApplyIdempotencyKey,
+                        InterviewPlanDraft::getAppliedPlanJson, InterviewPlanDraft::getAppliedScheduleIds,
+                        InterviewPlanDraft::getAppliedAt)
+                .eq(InterviewPlanDraft::getId, draftId)
+                .eq(InterviewPlanDraft::getEnterpriseId, enterpriseId)
+                .eq(InterviewPlanDraft::getApplicationId, applicationId));
+        if (draft == null) {
+            throw new BusinessException(ErrorCode.INTERVIEW_PLAN_DRAFT_NOT_FOUND);
+        }
+        if (draft.getStatus() == InterviewPlanDraftStatus.APPLIED) {
+            // 读到即为终态：同键同计划为幂等重放，其余一律拒绝。
+            return resolveReplayOrConflict(idempotencyKey, normalizedPlan, draft);
+        }
+        if (draft.getStatus() != InterviewPlanDraftStatus.READY) {
+            throw new BusinessException(ErrorCode.INTERVIEW_FLOW_NOT_ALLOWED);
+        }
+        if (draft.getExpiresAt() != null && draft.getExpiresAt().isBefore(OffsetDateTime.now())) {
+            throw new BusinessException(ErrorCode.INTERVIEW_FLOW_NOT_ALLOWED);
+        }
+
+        // ④ 校验 HR 修订版计划：阶段结构与顺序必须与草案快照一致（白名单，防绕过模板约束）。
+        validateStageStructure(draft.getPlanJson(), req.plan());
+
+        // TODO [Scheduling] 校验选中建议的面试官成员身份、时间合法性与冲突后，
+        //  在事务内按 roundNo=1..N 创建排期并回填 appliedScheduleIds；当前暂返回空结果。
+
+        // ⑤ CAS 认领：仅 READY + 版本匹配可置 APPLIED，失败说明已被并发请求处理。
+        InterviewPlanDraft update = new InterviewPlanDraft();
+        update.setId(draftId);
+        update.setEnterpriseId(enterpriseId);
+        update.setStatus(InterviewPlanDraftStatus.APPLIED);
+        update.setApplyIdempotencyKey(idempotencyKey);
+        update.setAppliedPlanJson(normalizedPlan);
+        update.setAppliedScheduleIds("[]");
+        update.setAppliedAt(OffsetDateTime.now());
+        update.setUpdatedBy(AuthContext.getRequiredUserId());
+        update.setVersion(draft.getVersion());
+        int affected = baseMapper.update(update, Wrappers.<InterviewPlanDraft>lambdaUpdate()
+                .eq(InterviewPlanDraft::getId, draftId)
+                .eq(InterviewPlanDraft::getEnterpriseId, enterpriseId)
+                .eq(InterviewPlanDraft::getApplicationId, applicationId)
+                .eq(InterviewPlanDraft::getStatus, InterviewPlanDraftStatus.READY));
+        if (affected != 1) {
+            // 并发输家：行锁释放后重读最新状态（仅需幂等判定与结果快照列），同键同计划视为重放，否则报业务冲突。
+            InterviewPlanDraft latest = baseMapper.selectOne(Wrappers.<InterviewPlanDraft>lambdaQuery()
+                    .select(
+                            InterviewPlanDraft::getId, InterviewPlanDraft::getStatus,
+                            InterviewPlanDraft::getApplyIdempotencyKey, InterviewPlanDraft::getAppliedPlanJson,
+                            InterviewPlanDraft::getAppliedScheduleIds, InterviewPlanDraft::getAppliedAt)
+                    .eq(InterviewPlanDraft::getId, draftId)
+                    .eq(InterviewPlanDraft::getEnterpriseId, enterpriseId)
+                    .eq(InterviewPlanDraft::getApplicationId, applicationId));
+            if (latest == null || latest.getStatus() != InterviewPlanDraftStatus.APPLIED) {
+                throw new BusinessException(ErrorCode.INTERVIEW_PLAN_DRAFT_VERSION_CONFLICT);
+            }
+            return resolveReplayOrConflict(idempotencyKey, normalizedPlan, latest);
+        }
+        return buildApplyVO(update);
     }
 
     @Override
@@ -94,14 +151,10 @@ public class InterviewPlanDraftServiceImpl
         boolean ascending = "asc".equalsIgnoreCase(order);
         LambdaQueryChainWrapper<InterviewPlanDraft> query = lambdaQuery()
                 .select(
-                        InterviewPlanDraft::getId,
-                        InterviewPlanDraft::getApplicationId,
-                        InterviewPlanDraft::getTemplateId,
-                        InterviewPlanDraft::getRequestJson,
-                        InterviewPlanDraft::getStatus,
-                        InterviewPlanDraft::getFailureReason,
-                        InterviewPlanDraft::getVersion,
-                        InterviewPlanDraft::getCreatedAt,
+                        InterviewPlanDraft::getId, InterviewPlanDraft::getApplicationId,
+                        InterviewPlanDraft::getTemplateId, InterviewPlanDraft::getRequestJson,
+                        InterviewPlanDraft::getStatus, InterviewPlanDraft::getFailureReason,
+                        InterviewPlanDraft::getVersion, InterviewPlanDraft::getCreatedAt,
                         InterviewPlanDraft::getUpdatedAt
                 )
                 .eq(InterviewPlanDraft::getEnterpriseId, enterpriseId)
@@ -146,6 +199,7 @@ public class InterviewPlanDraftServiceImpl
                         InterviewPlanDraft::getStatus,
                         InterviewPlanDraft::getFailureReason,
                         InterviewPlanDraft::getPlanJson,
+                        InterviewPlanDraft::getAppliedPlanJson,
                         InterviewPlanDraft::getVersion,
                         InterviewPlanDraft::getCreatedAt
                 )
@@ -157,10 +211,13 @@ public class InterviewPlanDraftServiceImpl
             throw new BusinessException(ErrorCode.INTERVIEW_PLAN_DRAFT_NOT_FOUND);
         }
 
-        // 只有生成完成或已应用的草案才向外返回结构化计划。
+        // 已应用的草案返回 HR 提交的修订版计划，保证页面刷新后编辑状态可恢复；
+        // 其余可展示状态返回 Agent 原始计划。
         InterviewPlanDraftDetailVO.PlanVO plan = null;
-        if (draft.getStatus() == InterviewPlanDraftStatus.READY
-                || draft.getStatus() == InterviewPlanDraftStatus.APPLIED) {
+        if (draft.getStatus() == InterviewPlanDraftStatus.APPLIED
+                && draft.getAppliedPlanJson() != null && !draft.getAppliedPlanJson().isBlank()) {
+            plan = parsePlan(draft.getAppliedPlanJson());
+        } else if (draft.getStatus() == InterviewPlanDraftStatus.READY) {
             plan = parsePlan(draft.getPlanJson());
         }
         return new InterviewPlanDraftDetailVO(
@@ -194,6 +251,77 @@ public class InterviewPlanDraftServiceImpl
         } catch (Exception exception) {
             log.error("面试编排草案计划无法解析", exception);
             throw new BusinessException(ErrorCode.JSON_TO_OBJECT_ERROR);
+        }
+    }
+
+    private void validateStageStructure(String snapshotPlanJson, InterviewPlanDraftApplyReq.Plan submitted) {
+        // 阶段编码集合与顺序是组卷、出题和排期唯一约束的锚点，不允许客户端变更。
+        InterviewPlanDraftDetailVO.PlanVO snapshot = parsePlan(snapshotPlanJson);
+        List<String> expected = snapshot.stages().stream()
+                .map(InterviewPlanDraftDetailVO.StagePlanVO::phaseCode)
+                .toList();
+        List<String> actual = submitted.stages().stream()
+                .map(InterviewPlanDraftApplyReq.Stage::phaseCode)
+                .toList();
+        if (!expected.equals(actual)) {
+            throw new BusinessException(ErrorCode.INTERVIEW_TEMPLATE_STAGE_INVALID);
+        }
+    }
+
+    private InterviewPlanDraftApplyVO buildApplyVO(InterviewPlanDraft draft) {
+        return new InterviewPlanDraftApplyVO(
+                draft.getId(),
+                InterviewPlanDraftStatus.APPLIED,
+                parseScheduleIds(draft.getAppliedScheduleIds()),
+                draft.getAppliedAt());
+    }
+
+    private InterviewPlanDraftApplyVO resolveReplayOrConflict(String idempotencyKey,
+                                                              String normalizedPlan,
+                                                              InterviewPlanDraft draft) {
+        // 已应用：同键同计划为幂等重放，返回原结果；其余一律拒绝。
+        if (idempotencyKey.equals(draft.getApplyIdempotencyKey())
+                && samePlan(normalizedPlan, draft.getAppliedPlanJson())) {
+            return buildApplyVO(draft);
+        }
+        throw new BusinessException(ErrorCode.INTERVIEW_PLAN_DRAFT_ALREADY_APPLIED);
+    }
+
+    private List<Long> parseScheduleIds(String appliedScheduleIds) {
+        if (appliedScheduleIds == null || appliedScheduleIds.isBlank()) {
+            return List.of();
+        }
+        try {
+            List<Long> ids = new ArrayList<>();
+            JsonNode array = objectMapper.readTree(appliedScheduleIds);
+            if (array.isArray()) {
+                array.forEach(node -> ids.add(node.asLong()));
+            }
+            return ids;
+        } catch (Exception exception) {
+            log.error("面试编排草案已应用排期快照无法解析", exception);
+            throw new BusinessException(ErrorCode.JSON_TO_OBJECT_ERROR);
+        }
+    }
+
+    private String normalizePlan(InterviewPlanDraftApplyReq.Plan plan) {
+        try {
+            return objectMapper.writeValueAsString(objectMapper.valueToTree(plan));
+        } catch (Exception exception) {
+            log.error("面试编排草案应用计划序列化失败", exception);
+            throw new BusinessException(ErrorCode.JSON_TO_OBJECT_ERROR);
+        }
+    }
+
+    private boolean samePlan(String submitted, String stored) {
+        if (stored == null || stored.isBlank()) {
+            return false;
+        }
+        try {
+            return objectMapper.readTree(submitted).equals(objectMapper.readTree(stored));
+        } catch (Exception exception) {
+            log.error("面试编排草案应用计划对比失败", exception);
+            return false;
         }
     }
 

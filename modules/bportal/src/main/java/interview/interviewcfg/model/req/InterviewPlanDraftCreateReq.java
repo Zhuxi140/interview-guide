@@ -4,7 +4,9 @@ import interview.common.enums.InterviewType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
@@ -34,6 +36,14 @@ public record InterviewPlanDraftCreateReq(
 
         @Size(max = 20, message = "候选面试官不能超过20人")
         @Schema(description = "可选的候选面试官用户ID")
-        List<@Positive(message = "面试官用户ID必须大于0") Long> interviewerUserIds
+        List<@Positive(message = "面试官用户ID必须大于0") Long> interviewerUserIds,
+
+        @Size(max = 20, message = "阶段编码不能超过20个")
+        @Schema(description = "HR 从模板阶段池选定的有序阶段编码子集；为空时按模板全阶段默认顺序", example = "[\"TECHNICAL\",\"HR\"]")
+        List<@NotBlank(message = "阶段编码不能为空") @Pattern(regexp = "^[A-Z][A-Z0-9_]{0,31}$", message = "阶段编码格式无效") String> phaseCodes,
+
+        @Size(max = 1000, message = "编排提示词不能超过1000字")
+        @Schema(description = "选填：对 Agent 的补充编排说明，如候选人特点、考察侧重", example = "候选人偏业务，多考察方案设计")
+        String prompt
 ) {
 }

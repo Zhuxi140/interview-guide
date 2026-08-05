@@ -115,12 +115,12 @@ InterviewGuide 是一个面向未来微服务拆分的模块化单体项目，�
 - 高频业务命令使用数据库原子条件更新，例如 `WHERE status = expectedStatus`，成功时同步 `version = version + 1`。
 - 管理端基于旧页面修改时提交 `expectedVersion`，通过乐观锁拦截“基于过期数据作出的决定”。
 - 状态机、版本号、唯一索引和 `Idempotency-Key` 各自解决不同问题，不能互相替代。
-- 投递状态与面试状态分离：`job_applications` 只表示投递/初筛；`interview_schedule` 表示排期；`interview_sessions` 表示一次实际运行。
+- 投递状态与面试状态分离：`job_applications` 保存招聘结果（投递/初筛 + 面试/录用终态回写）；`interview_schedule` 表示排期；`interview_sessions` 表示一次实际运行。
 
 当前主要状态：
 
 - 简历：`UPLOADING → PENDING → PROCESSING → COMPLETED/FAILED`，上传技术失败为 `UPLOAD_FAILED`。
-- 投递：`APPLIED / REVIEWING / PASSED / REJECTED / WITHDRAWN`。
+- 投递：`APPLIED / REVIEWING / PASSED / REJECTED / WITHDRAWN`，第三阶段起终态回写扩展 `INTERVIEWING / OFFERED / HIRED`（首轮排期创建、Offer 发送、候选人接受时自动推进）。
 - 排期：`PENDING_CONFIRMATION / CONFIRMED / IN_PROGRESS / COMPLETED / DECLINED / CANCELLED / NO_SHOW`。
 - 会话：`CREATED / IN_PROGRESS / COMPLETED / TERMINATED`。
 

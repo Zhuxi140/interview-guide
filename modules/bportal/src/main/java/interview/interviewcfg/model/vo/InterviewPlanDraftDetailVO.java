@@ -2,11 +2,13 @@ package interview.interviewcfg.model.vo;
 
 import interview.interviewcfg.model.enums.InterviewPlanDraftStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
+import lombok.Builder;
 
 import java.time.OffsetDateTime;
 import java.util.List;
 
 @Schema(description = "Agent 面试编排草案详情")
+@Builder
 public record InterviewPlanDraftDetailVO(
         @Schema(description = "草案ID", example = "32001")
         Long draftId,

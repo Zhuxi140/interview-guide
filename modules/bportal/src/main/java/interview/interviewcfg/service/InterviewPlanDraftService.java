@@ -1,6 +1,8 @@
 package interview.interviewcfg.service;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.service.IService;
+import interview.interviewcfg.model.entity.InterviewPlanDraft;
 import interview.interviewcfg.model.req.InterviewPlanDraftApplyReq;
 import interview.interviewcfg.model.req.InterviewPlanDraftCreateReq;
 import interview.interviewcfg.model.enums.InterviewPlanDraftStatus;
@@ -12,7 +14,7 @@ import interview.interviewcfg.model.vo.InterviewPlanDraftListItemVO;
 /**
  * Agent 面试编排草案服务。
  */
-public interface InterviewPlanDraftService {
+public interface InterviewPlanDraftService extends IService<InterviewPlanDraft> {
 
     /**
      * 异步创建面试编排草案

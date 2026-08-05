@@ -330,12 +330,11 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements JobSe
         }
         update.setUpdatedBy(userId);
         update.setUpdatedAt(updatedAt);
-        update.setVersion(req.getExpectedVersion() + 1);
+        update.setVersion(req.getExpectedVersion());
 
         int affected = baseMapper.update(update, Wrappers.<Job>lambdaUpdate()
                 .eq(Job::getId, jobId)
-                .eq(Job::getEnterpriseId, enterpriseId)
-                .eq(Job::getVersion, req.getExpectedVersion()));
+                .eq(Job::getEnterpriseId, enterpriseId));
         if (affected == 0) {
             throw new BusinessException(ErrorCode.JOB_VERSION_CONFLICT);
         }
@@ -350,15 +349,16 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements JobSe
         }
         Long userId = AuthContext.getRequiredUserId();
         OffsetDateTime updatedAt = OffsetDateTime.now();
-        int affected = baseMapper.update(null, Wrappers.<Job>lambdaUpdate()
+        Job update = new Job();
+        update.setId(jobId);
+        update.setEnterpriseId(enterpriseId);
+        update.setStatus(req.getStatus());
+        update.setVersion(req.getExpectedVersion());
+        update.setUpdatedBy(userId);
+        update.setUpdatedAt(updatedAt);
+        int affected = baseMapper.update(update, Wrappers.<Job>lambdaUpdate()
                 .eq(Job::getId, jobId)
-                .eq(Job::getEnterpriseId, enterpriseId)
-                .eq(Job::getVersion, req.getExpectedVersion())
-                .set(Job::getStatus, req.getStatus())
-                .set(Job::getVersion, req.getExpectedVersion() + 1)
-                .set(Job::getUpdatedBy, userId)
-                .set(Job::getTraceId, null)
-                .set(Job::getUpdatedAt, updatedAt));
+                .eq(Job::getEnterpriseId, enterpriseId));
         if (affected == 0) {
             throw new BusinessException(ErrorCode.JOB_VERSION_CONFLICT);
         }
@@ -370,15 +370,16 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements JobSe
     @Transactional(rollbackFor = BusinessException.class)
     public void deleteJob(Long enterpriseId, Long jobId, Integer expectedVersion) {
         Long userId = AuthContext.getRequiredUserId();
-        int affected = baseMapper.update(null, Wrappers.<Job>lambdaUpdate()
+        Job update = new Job();
+        update.setId(jobId);
+        update.setEnterpriseId(enterpriseId);
+        update.setVersion(expectedVersion);
+        update.setUpdatedBy(userId);
+        update.setUpdatedAt(OffsetDateTime.now());
+        int affected = baseMapper.update(update, Wrappers.<Job>lambdaUpdate()
                 .eq(Job::getId, jobId)
                 .eq(Job::getEnterpriseId, enterpriseId)
-                .eq(Job::getVersion, expectedVersion)
-                .set(Job::getIsDeleted, true)
-                .set(Job::getVersion, expectedVersion + 1)
-                .set(Job::getUpdatedBy, userId)
-                .set(Job::getTraceId, null)
-                .set(Job::getUpdatedAt, OffsetDateTime.now()));
+                .set(Job::getIsDeleted, true));
         if (affected == 0) {
             throw new BusinessException(ErrorCode.JOB_VERSION_CONFLICT);
         }

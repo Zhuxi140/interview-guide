@@ -149,6 +149,8 @@ public enum ErrorCode {
     INTERVIEW_STAGE_TEMPLATE_NOT_YOUR_ENTERPRISE(50014,"面试阶段模板不属于当前企业"),
     INTERVIEW_TIME_INVALID(50015,"面试时间无效"),
     INTERVIEW_PLAN_DRAFT_NOT_FOUND(50018,"面试编排草案不存在"),
+    INTERVIEW_PLAN_DRAFT_VERSION_CONFLICT(50019,"面试编排草案已被修改，请刷新后重试"),
+    INTERVIEW_PLAN_DRAFT_ALREADY_APPLIED(50020,"面试编排草案已应用"),
     CANDIDATE_INTERVIEW_AVAILABILITY_VERSION_CONFLICT(50021,"可面试时间已被修改，请刷新后重试"),
     CANDIDATE_INTERVIEW_AVAILABILITY_INVALID(50022,"可面试时间无效或存在重叠"),
     INTERVIEW_SCHEDULE_ALREADY_TERMINATED(50023,"面试正在进行或已经结束"),
@@ -162,6 +164,10 @@ public enum ErrorCode {
     INTERVIEW_TEMPLATE_VERSION_CONFLICT(50031,"面试模板已被修改，请刷新后重试"),
     INTERVIEW_TEMPLATE_STAGE_INVALID(50032,"面试模板阶段编码或顺序无效"),
     INTERVIEW_PHASE_CONFIG_VERSION_CONFLICT(50033,"阶段组卷配置已被修改，请刷新后重试"),
+    INTERVIEW_FLOW_NOT_COMPLETED(50034,"面试流程尚未完成，无法执行该操作"),
+    INTERVIEW_TEMPLATE_IN_USE(50035, "面试模板仍被排期或编排草案引用，无法删除"),
+    INTERVIEW_TEMPLATE_NULL_OR_VERSION_ERROR(50036, "面试模板不存在或数据发送修改，请刷新后重试"),
+
 
     // ------------ 60xxx 计费/钱包错误码 ------------
     SKU_NOT_FOUND(60001, "套餐 SKU 不存在"),

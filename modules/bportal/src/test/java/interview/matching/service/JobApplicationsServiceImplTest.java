@@ -52,6 +52,8 @@ class JobApplicationsServiceImplTest {
     private ResumesService resumesService;
     @Mock
     private ApplicationAiScreeningService applicationAiScreeningService;
+    @Mock
+    private interview.interviewcfg.mapper.WorkflowTransitionLogMapper workflowTransitionLogMapper;
 
     private JobApplicationsServiceImpl service;
 
@@ -59,7 +61,7 @@ class JobApplicationsServiceImplTest {
     void setUp() {
         service = spy(new JobApplicationsServiceImpl(
                 mapper, enterpriseValidationApi, userApi, jobService,
-                resumesService, applicationAiScreeningService));
+                resumesService, applicationAiScreeningService, workflowTransitionLogMapper));
         AuthContext.setAuthContext(AuthContext.AuthUser.builder()
                 .userId(1L)
                 .userType(UserType.CANDIDATE)

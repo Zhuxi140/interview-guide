@@ -19,6 +19,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
@@ -86,11 +87,12 @@ public class InterviewTemplateController {
 
     @Operation(summary = "删除模板")
     @DeleteMapping("/{templateId}")
-    public Result<InterviewTemplateDeleteVO> deleteTemplate(
+    public Result<Void> deleteTemplate(
             @PathVariable Long enterpriseId,
             @PathVariable Long templateId,
-            @RequestHeader("If-Match") Integer expectedVersion) {
-        return Result.success(interviewStageTemplateService.deleteTemplate(enterpriseId, templateId, expectedVersion));
+            @RequestHeader("If-Match") @NotNull Integer expectedVersion) {
+        interviewStageTemplateService.deleteTemplate(enterpriseId, templateId, expectedVersion);
+        return Result.success();
     }
 
     @Operation(summary = "创建或完整替换某阶段组卷策略")

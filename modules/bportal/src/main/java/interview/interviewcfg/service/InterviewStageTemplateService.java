@@ -55,7 +55,7 @@ public interface InterviewStageTemplateService extends IService<InterviewStageTe
      * @param templateId 模板ID
      * @param expectedVersion 期望版本号
      */
-    InterviewTemplateDeleteVO deleteTemplate(Long enterpriseId, Long templateId, Integer expectedVersion);
+    void deleteTemplate(Long enterpriseId, Long templateId, Integer expectedVersion);
 
     /**
      * 创建或完整替换某阶段组卷策略

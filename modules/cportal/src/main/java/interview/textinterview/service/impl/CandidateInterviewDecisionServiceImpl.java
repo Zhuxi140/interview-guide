@@ -1,48 +1,62 @@
 package interview.textinterview.service.impl;
 
+import interview.api.bportal.InterviewScheduleCommandApi;
+import interview.api.bportal.dto.InterviewScheduleCommandResultDTO;
+import interview.common.enums.ErrorCode;
+import interview.common.exception.BusinessException;
+import interview.framework.context.AuthContext;
 import interview.textinterview.model.req.InterviewDecisionReq;
 import interview.textinterview.model.req.InterviewScheduleCancelReq;
 import interview.textinterview.model.vo.InterviewDecisionVO;
 import interview.textinterview.model.vo.InterviewScheduleUpdateVO;
 import interview.textinterview.service.CandidateInterviewDecisionService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 候选人面试邀请决策实现。
  */
 @Service
+@RequiredArgsConstructor
 public class CandidateInterviewDecisionServiceImpl implements CandidateInterviewDecisionService {
 
+    private final InterviewScheduleCommandApi interviewScheduleCommandApi;
+
     @Override
+    @Transactional(rollbackFor = BusinessException.class)
     public InterviewDecisionVO confirmSchedule(Long scheduleId, InterviewDecisionReq req) {
-        // TODO ① 从 AuthContext 获取候选人 userId，通过排期查询 API 校验排期属于当前候选人。
-        // TODO ② 校验 expectedStatus 为待确认状态、expectedVersion 与当前版本一致，且面试尚未开始。
-        // TODO ③ 通过 bportal 暴露的排期命令 API，按 scheduleId + candidateUserId + status + version 原子更新为 CONFIRMED。
-        // TODO ④ 更新零行时区分排期不存在、重复确认、状态竞争和版本冲突，禁止直接覆盖 HR 的取消或调整结果。
-        // TODO ⑤ 在排期所属模块记录状态流转日志，并在事务提交后向企业面试官发送确认通知。
-        // TODO ⑥ 读取最新排期并返回 id、CONFIRMED、新 version 和 updatedAt。
-        return null;
+        // 校验候选人归属与期望状态，原子推进排期至 CONFIRMED。
+        InterviewScheduleCommandResultDTO result = interviewScheduleCommandApi.candidateConfirm(
+                scheduleId, AuthContext.getRequiredUserId(), req.expectedVersion());
+        return toDecisionVO(result);
     }
 
     @Override
+    @Transactional(rollbackFor = BusinessException.class)
     public InterviewDecisionVO declineSchedule(Long scheduleId, InterviewDecisionReq req) {
-        // TODO ① 从 AuthContext 获取候选人 userId，通过排期查询 API 校验排期属于当前候选人。
-        // TODO ② 校验 expectedStatus 为待确认状态、expectedVersion 与当前版本一致，并规范化可选拒绝原因。
-        // TODO ③ 通过 bportal 暴露的排期命令 API，按 scheduleId + candidateUserId + status + version 原子更新为 DECLINED。
-        // TODO ④ 更新零行时区分排期不存在、重复拒绝、状态竞争和版本冲突，禁止覆盖 HR 已取消或已调整的排期。
-        // TODO ⑤ 在排期所属模块记录状态流转日志，并在事务提交后向企业面试官发送拒绝通知。
-        // TODO ⑥ 读取最新排期并返回 id、DECLINED、新 version 和 updatedAt。
-        return null;
+        // 候选人拒绝面试：排期终结并自动淘汰投递。
+        InterviewScheduleCommandResultDTO result = interviewScheduleCommandApi.candidateDecline(
+                scheduleId, AuthContext.getRequiredUserId(), req.expectedVersion(), req.reason());
+        return toDecisionVO(result);
     }
 
     @Override
+    @Transactional(rollbackFor = BusinessException.class)
     public InterviewScheduleUpdateVO cancelSchedule(Long scheduleId, InterviewScheduleCancelReq req) {
-        // TODO ① 从 AuthContext 获取候选人 userId，通过排期查询 API 校验排期属于当前候选人。
-        // TODO ② 校验 expectedStatus 为 CONFIRMED、expectedVersion 与当前版本一致，且面试尚未开始。
-        // TODO ③ 通过 bportal 暴露的排期命令 API，按 scheduleId + candidateUserId + status + version 原子更新为 CANCELLED。
-        // TODO ④ 更新零行时区分排期不存在、重复取消、状态竞争和版本冲突，禁止覆盖 HR 已调整的排期。
-        // TODO ⑤ 在排期所属模块记录状态流转日志，并在事务提交后向企业面试官发送取消通知。
-        // TODO ⑥ 读取最新排期并返回 id、CANCELLED、新 version 和 updatedAt。
-        return null;
+        // 候选人取消已确认面试：排期终结并自动淘汰投递。
+        InterviewScheduleCommandResultDTO result = interviewScheduleCommandApi.candidateCancel(
+                scheduleId, AuthContext.getRequiredUserId(), req.expectedVersion(), req.reason());
+        return InterviewScheduleUpdateVO.builder()
+                .id(result.scheduleId())
+                .status(result.status())
+                .version(result.version())
+                .updatedAt(result.updatedAt())
+                .build();
+    }
+
+    private InterviewDecisionVO toDecisionVO(InterviewScheduleCommandResultDTO result) {
+        return new InterviewDecisionVO(
+                result.scheduleId(), result.status(), result.version(), result.updatedAt());
     }
 }

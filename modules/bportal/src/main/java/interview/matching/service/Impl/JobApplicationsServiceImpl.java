@@ -10,7 +10,10 @@ import interview.common.enums.AiTaskStatus;
 import interview.common.enums.ErrorCode;
 import interview.common.enums.UserType;
 import interview.common.exception.BusinessException;
+import interview.common.util.TraceUtil;
 import interview.framework.context.AuthContext;
+import interview.interviewcfg.mapper.WorkflowTransitionLogMapper;
+import interview.interviewcfg.model.entity.WorkflowTransitionLog;
 import interview.job.model.entity.Job;
 import interview.job.model.enums.JobStatus;
 import interview.job.service.JobService;
@@ -50,6 +53,7 @@ public class JobApplicationsServiceImpl extends ServiceImpl<JobApplicationsMappe
     private final JobService jobService;
     private final ResumesService resumesService;
     private final ApplicationAiScreeningService applicationAiScreeningService;
+    private final WorkflowTransitionLogMapper workflowTransitionLogMapper;
 
     @Override
     @Transactional(rollbackFor = BusinessException.class)
@@ -343,6 +347,94 @@ public class JobApplicationsServiceImpl extends ServiceImpl<JobApplicationsMappe
                 .status(application.getStatus())
                 .createdAt(application.getCreatedAt())
                 .build();
+    }
+
+    @Override
+    @Transactional(rollbackFor = BusinessException.class)
+    public JobApplicationStatus markInterviewing(
+            Long enterpriseId, Long applicationId, Long operatorUserId) {
+        return transitionByAllowedSources(enterpriseId, applicationId,
+                JobApplicationStatus.INTERVIEWING, operatorUserId, null,
+                JobApplicationStatus.PASSED);
+    }
+
+    @Override
+    @Transactional(rollbackFor = BusinessException.class)
+    public JobApplicationStatus markRejectedByInterview(
+            Long enterpriseId, Long applicationId, Long operatorUserId, String reason) {
+        return transitionByAllowedSources(enterpriseId, applicationId,
+                JobApplicationStatus.REJECTED, operatorUserId, reason,
+                JobApplicationStatus.PASSED, JobApplicationStatus.INTERVIEWING);
+    }
+
+    @Override
+    @Transactional(rollbackFor = BusinessException.class)
+    public JobApplicationStatus markOffered(
+            Long enterpriseId, Long applicationId, Long operatorUserId) {
+        return transitionByAllowedSources(enterpriseId, applicationId,
+                JobApplicationStatus.OFFERED, operatorUserId, null,
+                JobApplicationStatus.INTERVIEWING);
+    }
+
+    @Override
+    @Transactional(rollbackFor = BusinessException.class)
+    public JobApplicationStatus markHired(
+            Long enterpriseId, Long applicationId, Long operatorUserId) {
+        return transitionByAllowedSources(enterpriseId, applicationId,
+                JobApplicationStatus.HIRED, operatorUserId, null,
+                JobApplicationStatus.OFFERED);
+    }
+
+    private JobApplicationStatus transitionByAllowedSources(
+            Long enterpriseId, Long applicationId, JobApplicationStatus target,
+            Long operatorUserId, String reason,
+            JobApplicationStatus... allowedSources) {
+        // 按 id + enterpriseId 读取当前状态，校验存在性与租户隔离
+        JobApplications current = lambdaQuery()
+                .select(JobApplications::getStatus)
+                .eq(JobApplications::getId, applicationId)
+                .eq(JobApplications::getEnterpriseId, enterpriseId)
+                .one();
+        if (current == null) {
+            throw new BusinessException(ErrorCode.APPLICATION_NOT_FOUND);
+        }
+        JobApplicationStatus currentStatus = current.getStatus();
+        if (currentStatus == target) {
+            // 幂等：已处于目标状态直接返回
+            return currentStatus;
+        }
+        boolean allowed = java.util.Arrays.asList(allowedSources).contains(currentStatus);
+        if (!allowed) {
+            throw new BusinessException(ErrorCode.JOB_APPLICATION_STATUS_INVALID);
+        }
+
+        // 条件原子更新：id + enterpriseId + 源状态 → 目标状态，防止并发覆盖
+        OffsetDateTime updatedAt = OffsetDateTime.now();
+        boolean updated = lambdaUpdate()
+                .eq(JobApplications::getId, applicationId)
+                .eq(JobApplications::getEnterpriseId, enterpriseId)
+                .eq(JobApplications::getStatus, currentStatus)
+                .set(JobApplications::getStatus, target)
+                .set(JobApplications::getUpdatedBy, operatorUserId)
+                .set(JobApplications::getTraceId, TraceUtil.getTraceId())
+                .set(JobApplications::getUpdatedAt, updatedAt)
+                .update();
+        if (!updated) {
+            throw new BusinessException(ErrorCode.JOB_APPLICATION_STATUS_INVALID);
+        }
+
+        // 记录招聘状态流转日志，系统自动推进时 operatorUserId 为 0
+        WorkflowTransitionLog transitionLog = WorkflowTransitionLog.builder()
+                .enterpriseId(enterpriseId)
+                .applicationId(applicationId)
+                .fromStatus(currentStatus)
+                .toStatus(target)
+                .operatorUserId(operatorUserId)
+                .transitionReason(reason)
+                .traceId(TraceUtil.getTraceId())
+                .build();
+        workflowTransitionLogMapper.insert(transitionLog);
+        return target;
     }
 
     private boolean isHrTransitionAllowed(

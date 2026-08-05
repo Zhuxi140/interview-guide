@@ -63,7 +63,7 @@ public class InterviewScheduleServiceImpl extends ServiceImpl<InterviewScheduleM
         if (exists) {
             throw new BusinessException(ErrorCode.IDEMPOTENCY_KEY_CONFLICT);
         }
-        jobValidationApi.requirePassedApplication(applicationId, enterpriseId);
+        jobValidationApi.requireEligibleForSchedule(applicationId, enterpriseId);
 
         // 2. 解析轮次对应的阶段：首轮生成模板快照，后续轮次复用首轮快照并校验连续性
         ResolvedSchedulePhase resolved = resolveSchedulePhase(
@@ -129,6 +129,11 @@ public class InterviewScheduleServiceImpl extends ServiceImpl<InterviewScheduleM
                 throw e;
             }
         }
+        // 6. 首轮排期创建成功后，投递进入面试阶段（PASSED → INTERVIEWING，幂等）
+        if (Short.valueOf((short) 1).equals(req.roundNo())) {
+            jobValidationApi.markInterviewing(applicationId, enterpriseId);
+        }
+
         // TODO [Notification] 事务提交后向候选人发送面试邀请通知（需接入可靠消息/Outbox，失败重试不阻塞主流程）。
         return new InterviewScheduleCreateVO(
                 schedule.getId(), schedule.getApplicationId(), schedule.getRoundNo(),
@@ -298,14 +303,13 @@ public class InterviewScheduleServiceImpl extends ServiceImpl<InterviewScheduleM
                 .durationMinutes(finalDurationMinutes)
                 .interviewerUserId(interviewerUserId)
                 .status(InterviewScheduleStatus.PENDING_CONFIRMATION)
-                .version(schedule.getVersion() + 1)
+                .version(schedule.getVersion())
                 .updatedAt(now)
                 .build();
         boolean result = update(update, new LambdaUpdateWrapper<InterviewSchedule>()
                 .eq(InterviewSchedule::getId, scheduleId)
                 .eq(InterviewSchedule::getEnterpriseId, enterpriseId)
-                .eq(InterviewSchedule::getStatus, schedule.getStatus())
-                .eq(InterviewSchedule::getVersion, schedule.getVersion()));
+                .eq(InterviewSchedule::getStatus, schedule.getStatus()));
 
         // 7. 零行更新分支：区分不存在、状态已变、版本冲突
         if (!result) {
@@ -367,7 +371,7 @@ public class InterviewScheduleServiceImpl extends ServiceImpl<InterviewScheduleM
         InterviewSchedule update = InterviewSchedule.builder()
                 .status(InterviewScheduleStatus.CANCELLED)
                 .statusReason(req.reason())
-                .version(schedule.getVersion() + 1)
+                .version(schedule.getVersion())
                 .updatedBy(AuthContext.getRequiredUserId())
                 .traceId(TraceUtil.getTraceId())
                 .updatedAt(now)
@@ -375,8 +379,7 @@ public class InterviewScheduleServiceImpl extends ServiceImpl<InterviewScheduleM
         boolean result = update(update, new LambdaUpdateWrapper<InterviewSchedule>()
                 .eq(InterviewSchedule::getId, scheduleId)
                 .eq(InterviewSchedule::getEnterpriseId, enterpriseId)
-                .eq(InterviewSchedule::getStatus, schedule.getStatus())
-                .eq(InterviewSchedule::getVersion, schedule.getVersion()));
+                .eq(InterviewSchedule::getStatus, schedule.getStatus()));
 
         // 5. 零行更新分支：已 CANCELLED 幂等返回；状态已变/版本冲突/不存在抛错
         if (!result) {

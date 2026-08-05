@@ -11,9 +11,12 @@ import lombok.Getter;
 @AllArgsConstructor
 public enum JobApplicationStatus {
 
-    APPLIED("已投递"),
+APPLIED("已投递"),
     REVIEWING("审核中"),
     PASSED("筛选通过"),
+    INTERVIEWING("面试中"),
+    OFFERED("已发放录用意向"),
+    HIRED("已录用"),
     REJECTED("淘汰"),
     WITHDRAWN("候选人已撤回");
 

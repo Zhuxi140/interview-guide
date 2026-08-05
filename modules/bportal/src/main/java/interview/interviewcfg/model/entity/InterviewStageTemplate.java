@@ -32,6 +32,9 @@ public class InterviewStageTemplate implements Serializable {
     @Version
     private Integer version;
 
+    @TableLogic
+    private Boolean isDeleted;
+
     @TableField(fill = FieldFill.INSERT)
     private OffsetDateTime createdAt;
 

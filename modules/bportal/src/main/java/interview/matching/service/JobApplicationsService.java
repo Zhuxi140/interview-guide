@@ -79,4 +79,45 @@ public interface JobApplicationsService extends IService<JobApplications> {
      */
     JobApplicationStatusVO withdrawApplication(
             Long applicationId, JobApplicationWithdrawReq req);
+
+    /**
+     * 面试阶段回写：PASSED → INTERVIEWING（首轮排期创建成功后调用）
+     *
+     * @param enterpriseId 企业 ID
+     * @param applicationId 投递 ID
+     * @param operatorUserId 操作人（系统自动推进时为 0）
+     * @return 更新后的投递状态
+     */
+    JobApplicationStatus markInterviewing(Long enterpriseId, Long applicationId, Long operatorUserId);
+
+    /**
+     * 面试环节淘汰回写：PASSED/INTERVIEWING → REJECTED
+     *
+     * @param enterpriseId 企业 ID
+     * @param applicationId 投递 ID
+     * @param operatorUserId 操作人（系统自动推进时为 0）
+     * @param reason 淘汰原因
+     * @return 更新后的投递状态
+     */
+    JobApplicationStatus markRejectedByInterview(Long enterpriseId, Long applicationId, Long operatorUserId, String reason);
+
+    /**
+     * Offer 发送回写：INTERVIEWING → OFFERED
+     *
+     * @param enterpriseId 企业 ID
+     * @param applicationId 投递 ID
+     * @param operatorUserId 操作人（系统自动推进时为 0）
+     * @return 更新后的投递状态
+     */
+    JobApplicationStatus markOffered(Long enterpriseId, Long applicationId, Long operatorUserId);
+
+    /**
+     * 候选人接受 Offer 回写：OFFERED → HIRED
+     *
+     * @param enterpriseId 企业 ID
+     * @param applicationId 投递 ID
+     * @param operatorUserId 操作人（候选人本人）
+     * @return 更新后的投递状态
+     */
+    JobApplicationStatus markHired(Long enterpriseId, Long applicationId, Long operatorUserId);
 }
