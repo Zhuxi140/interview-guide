@@ -31,6 +31,7 @@ import interview.offer.model.vo.OfferHistoryVO;
 import interview.offer.model.vo.OfferListItemVO;
 import interview.offer.model.vo.OfferSendVO;
 import interview.offer.model.vo.OfferUpdateVO;
+import interview.job.service.JobService;
 import interview.offer.service.OfferService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
@@ -52,6 +53,7 @@ public class OfferServiceImpl extends ServiceImpl<OfferMapper, Offer> implements
     private final EnterpriseValidationApi enterpriseValidationApi;
     private final JobValidationApi jobValidationApi;
     private final InterviewFlowStatusApi interviewFlowStatusApi;
+    private final JobService jobService;
 
     @Override
     @Transactional(rollbackFor = BusinessException.class)
@@ -496,10 +498,15 @@ public class OfferServiceImpl extends ServiceImpl<OfferMapper, Offer> implements
         Map<Long, String> enterpriseNames = enterpriseIds.isEmpty()
                 ? Map.of()
                 : enterpriseValidationApi.getNameList(enterpriseIds);
+        List<Long> jobIds = boPage.getRecords().stream()
+                .map(CandidateOfferQueryBO::jobId)
+                .distinct()
+                .toList();
+        Map<Long, String> jobTitles = jobService.getJobTitlesByIds(jobIds);
         return boPage.convert(offer -> new CandidateOfferListItemVO(
                 offer.id(),
                 enterpriseNames.get(offer.enterpriseId()),
-                offer.jobTitle(),
+                jobTitles.get(offer.jobId()),
                 offer.status(),
                 offer.expiresAt(),
                 offer.createdAt()
@@ -516,10 +523,12 @@ public class OfferServiceImpl extends ServiceImpl<OfferMapper, Offer> implements
         }
         Map<Long, String> enterpriseNames = enterpriseValidationApi.getNameList(
                 List.of(offer.enterpriseId()));
+        String jobTitle = jobService.getJobTitlesByIds(List.of(offer.jobId()))
+                .get(offer.jobId());
         return new CandidateOfferDetailVO(
                 offer.id(),
                 enterpriseNames.get(offer.enterpriseId()),
-                offer.jobTitle(),
+                jobTitle,
                 offer.offerTitle(),
                 offer.salaryMin(),
                 offer.salaryMax(),

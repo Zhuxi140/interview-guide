@@ -20,6 +20,7 @@ import interview.interviewcfg.model.req.*;
 import interview.interviewcfg.model.vo.*;
 import interview.interviewcfg.service.InterviewScheduleService;
 import interview.interviewcfg.service.InterviewStageTemplateService;
+import interview.job.service.JobService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.postgresql.util.PSQLException;
@@ -47,6 +48,7 @@ public class InterviewScheduleServiceImpl extends ServiceImpl<InterviewScheduleM
     private final EnterpriseValidationApi enterpriseValidationApi;
     private final JobValidationApi jobValidationApi;
     private final UserApi userApi;
+    private final JobService jobService;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -55,6 +57,9 @@ public class InterviewScheduleServiceImpl extends ServiceImpl<InterviewScheduleM
         // 1. 校验企业归属、幂等键、投递状态（必须为 PASSED）
         enterpriseValidationApi.validateEnterpriseBelong(
                 enterpriseId, AuthContext.getRequiredUserId());
+        // 面试官必须是当前企业成员（文档约束：模板和面试官必须属于当前企业）。
+        enterpriseValidationApi.validateEnterpriseBelong(
+                enterpriseId, req.interviewerUserId());
         boolean exists = lambdaQuery()
                 .eq(InterviewSchedule::getEnterpriseId, enterpriseId)
                 .eq(InterviewSchedule::getUpdatedBy, AuthContext.getRequiredUserId())
@@ -108,6 +113,7 @@ public class InterviewScheduleServiceImpl extends ServiceImpl<InterviewScheduleM
                 .interviewerUserId(req.interviewerUserId())
                 .interviewTime(req.interviewTime())
                 .durationMinutes(durationMinutes)
+                .interviewType(req.interviewType())
                 .idempotencyKey(idempotencyKey)
                 .status(InterviewScheduleStatus.PENDING_CONFIRMATION)
                 .version(0)
@@ -174,7 +180,7 @@ public class InterviewScheduleServiceImpl extends ServiceImpl<InterviewScheduleM
                         "asc".equalsIgnoreCase(order)
                 );
 
-        // 3. 批量补齐候选人名称（避免 N+1）
+        // 3. 批量补齐候选人名称与岗位标题（避免 N+1）
         List<Long> candidateIds = boPage.getRecords().stream()
                 .map(InterviewScheduleQueryBO::candidateUserId)
                 .distinct()
@@ -182,6 +188,11 @@ public class InterviewScheduleServiceImpl extends ServiceImpl<InterviewScheduleM
         Map<Long, String> candidateNames = candidateIds.isEmpty()
                 ? Map.of()
                 : userApi.getUserNamesByIds(candidateIds);
+        List<Long> jobIds = boPage.getRecords().stream()
+                .map(InterviewScheduleQueryBO::jobId)
+                .distinct()
+                .toList();
+        Map<Long, String> jobTitles = jobService.getJobTitlesByIds(jobIds);
 
         // 4. 组装 VO 列表
         List<InterviewScheduleListItemVO> records = boPage.getRecords().stream()
@@ -192,7 +203,7 @@ public class InterviewScheduleServiceImpl extends ServiceImpl<InterviewScheduleM
                         bo.phaseCode(),
                         bo.phaseName(),
                         candidateNames.get(bo.candidateUserId()),
-                        bo.jobTitle(),
+                        jobTitles.get(bo.jobId()),
                         bo.interviewTime(),
                         bo.durationMinutes(),
                         bo.interviewType(),

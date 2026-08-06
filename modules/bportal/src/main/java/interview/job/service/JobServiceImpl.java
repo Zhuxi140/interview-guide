@@ -385,6 +385,23 @@ public class JobServiceImpl extends ServiceImpl<JobMapper, Job> implements JobSe
         }
     }
 
+    @Override
+    public Map<Long, String> getJobTitlesByIds(List<Long> jobIds) {
+        // 单表查询补齐标题；jobIds 为空时直接返回，避免不必要的 IN 查询。
+        if (jobIds == null || jobIds.isEmpty()) {
+            return Map.of();
+        }
+        return lambdaQuery()
+                .select(Job::getId, Job::getTitle)
+                .in(Job::getId, jobIds)
+                .list()
+                .stream()
+                .collect(Collectors.toMap(
+                        Job::getId,
+                        Job::getTitle,
+                        (left, right) -> left));
+    }
+
     private String writeSkills(List<String> skills) {
         if (skills == null) {
             return null;

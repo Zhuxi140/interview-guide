@@ -15,11 +15,14 @@ import interview.interviewcfg.model.entity.InterviewPlanDraft;
 import interview.interviewcfg.model.enums.InterviewPlanDraftStatus;
 import interview.interviewcfg.model.req.InterviewPlanDraftApplyReq;
 import interview.interviewcfg.model.req.InterviewPlanDraftCreateReq;
+import interview.interviewcfg.model.req.InterviewScheduleCreateReq;
 import interview.interviewcfg.model.vo.InterviewPlanDraftApplyVO;
 import interview.interviewcfg.model.vo.InterviewPlanDraftCreateVO;
 import interview.interviewcfg.model.vo.InterviewPlanDraftDetailVO;
 import interview.interviewcfg.model.vo.InterviewPlanDraftListItemVO;
+import interview.interviewcfg.model.vo.InterviewScheduleCreateVO;
 import interview.interviewcfg.service.InterviewPlanDraftService;
+import interview.interviewcfg.service.InterviewScheduleService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -30,6 +33,7 @@ import tools.jackson.databind.ObjectMapper;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Agent 面试编排草案实现。
@@ -42,6 +46,7 @@ public class InterviewPlanDraftServiceImpl extends ServiceImpl<InterviewPlanDraf
 
     private final EnterpriseValidationApi enterpriseValidationApi;
     private final ObjectMapper objectMapper;
+    private final InterviewScheduleService interviewScheduleService;
 
     @Override
     public InterviewPlanDraftCreateVO createDraft(Long enterpriseId, Long applicationId,
@@ -72,7 +77,8 @@ public class InterviewPlanDraftServiceImpl extends ServiceImpl<InterviewPlanDraf
                 .select(
                         InterviewPlanDraft::getId, InterviewPlanDraft::getStatus,
                         InterviewPlanDraft::getVersion, InterviewPlanDraft::getExpiresAt,
-                        InterviewPlanDraft::getPlanJson, InterviewPlanDraft::getApplyIdempotencyKey,
+                        InterviewPlanDraft::getTemplateId, InterviewPlanDraft::getPlanJson,
+                        InterviewPlanDraft::getApplyIdempotencyKey,
                         InterviewPlanDraft::getAppliedPlanJson, InterviewPlanDraft::getAppliedScheduleIds,
                         InterviewPlanDraft::getAppliedAt)
                 .eq(InterviewPlanDraft::getId, draftId)
@@ -95,8 +101,11 @@ public class InterviewPlanDraftServiceImpl extends ServiceImpl<InterviewPlanDraf
         // ④ 校验 HR 修订版计划：阶段结构与顺序必须与草案快照一致（白名单，防绕过模板约束）。
         validateStageStructure(draft.getPlanJson(), req.plan());
 
-        // TODO [Scheduling] 校验选中建议的面试官成员身份、时间合法性与冲突后，
-        //  在事务内按 roundNo=1..N 创建排期并回填 appliedScheduleIds；当前暂返回空结果。
+        // ⑤ 排期建议与阶段一一对应（每轮一条，可为空表示本轮不建排期）；复用 createSchedule
+        // 的全部校验（租户归属、投递状态、面试官成员身份、时间合法性、日历冲突、轮次连续性），
+        // 按 roundNo=1..N 在事务内创建排期。
+        List<Long> createdScheduleIds = createScheduleFromPlan(
+                enterpriseId, applicationId, draft, req.plan(), idempotencyKey);
 
         // ⑤ CAS 认领：仅 READY + 版本匹配可置 APPLIED，失败说明已被并发请求处理。
         InterviewPlanDraft update = new InterviewPlanDraft();
@@ -105,7 +114,7 @@ public class InterviewPlanDraftServiceImpl extends ServiceImpl<InterviewPlanDraf
         update.setStatus(InterviewPlanDraftStatus.APPLIED);
         update.setApplyIdempotencyKey(idempotencyKey);
         update.setAppliedPlanJson(normalizedPlan);
-        update.setAppliedScheduleIds("[]");
+        update.setAppliedScheduleIds(serializeScheduleIds(createdScheduleIds));
         update.setAppliedAt(OffsetDateTime.now());
         update.setUpdatedBy(AuthContext.getRequiredUserId());
         update.setVersion(draft.getVersion());
@@ -276,6 +285,49 @@ public class InterviewPlanDraftServiceImpl extends ServiceImpl<InterviewPlanDraf
                 draft.getAppliedAt());
     }
 
+    private List<Long> createScheduleFromPlan(Long enterpriseId,
+                                              Long applicationId,
+                                              InterviewPlanDraft draft,
+                                              InterviewPlanDraftApplyReq.Plan plan,
+                                              String applyIdempotencyKey) {
+        // 未选中任何排期建议时按“本轮不建排期”处理，仍可完成草案认领。
+        List<InterviewPlanDraftApplyReq.Suggestion> suggestions = plan.scheduleSuggestions();
+        if (suggestions == null || suggestions.isEmpty()) {
+            return List.of();
+        }
+        // 非空建议必须与阶段一一对应：每轮一条，roundNo 从 1 连续递增。
+        if (suggestions.size() != plan.stages().size()) {
+            throw new BusinessException(ErrorCode.INTERVIEW_SCHEDULE_SUGGESTION_MISMATCH);
+        }
+        List<Long> scheduleIds = new ArrayList<>(suggestions.size());
+        for (int i = 0; i < suggestions.size(); i++) {
+            InterviewPlanDraftApplyReq.Stage stage = plan.stages().get(i);
+            InterviewPlanDraftApplyReq.Suggestion suggestion = suggestions.get(i);
+            InterviewScheduleCreateReq createReq = new InterviewScheduleCreateReq(
+                    draft.getTemplateId(),
+                    (short) (i + 1),
+                    suggestion.interviewerUserId(),
+                    suggestion.interviewTime(),
+                    stage.durationMinutes(),
+                    InterviewType.TEXT);
+            // 排期幂等键由应用幂等键派生，同一 apply 内每轮唯一；重试同键同计划时走草案重放分支，不会重复建排期。
+            InterviewScheduleCreateVO created = interviewScheduleService.createSchedule(
+                    enterpriseId, applicationId, createReq,
+                    applyIdempotencyKey + ":round:" + (i + 1));
+            scheduleIds.add(created.id());
+        }
+        return scheduleIds;
+    }
+
+    private String serializeScheduleIds(List<Long> scheduleIds) {
+        try {
+            return objectMapper.writeValueAsString(scheduleIds);
+        } catch (Exception exception) {
+            log.error("面试编排草案已应用排期 ID 序列化失败", exception);
+            throw new BusinessException(ErrorCode.OBJECT_TO_JSON_ERROR);
+        }
+    }
+
     private InterviewPlanDraftApplyVO resolveReplayOrConflict(String idempotencyKey,
                                                               String normalizedPlan,
                                                               InterviewPlanDraft draft) {
@@ -318,11 +370,47 @@ public class InterviewPlanDraftServiceImpl extends ServiceImpl<InterviewPlanDraf
             return false;
         }
         try {
-            return objectMapper.readTree(submitted).equals(objectMapper.readTree(stored));
+            return jsonEquals(objectMapper.readTree(submitted), objectMapper.readTree(stored));
         } catch (Exception exception) {
             log.error("面试编排草案应用计划对比失败", exception);
             return false;
         }
+    }
+
+    /**
+     * 递归比较两棵 JSON 树；数值统一按十进制比较，容忍 int/long 序列化差异。
+     */
+    private boolean jsonEquals(JsonNode left, JsonNode right) {
+        if (left == null || right == null) {
+            return left == right;
+        }
+        if (left.isNumber() && right.isNumber()) {
+            return left.decimalValue().compareTo(right.decimalValue()) == 0;
+        }
+        if (left.isObject() && right.isObject()) {
+            if (left.size() != right.size()) {
+                return false;
+            }
+            for (Map.Entry<String, JsonNode> entry : left.properties()) {
+                JsonNode rightValue = right.get(entry.getKey());
+                if (rightValue == null || !jsonEquals(entry.getValue(), rightValue)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        if (left.isArray() && right.isArray()) {
+            if (left.size() != right.size()) {
+                return false;
+            }
+            for (int i = 0; i < left.size(); i++) {
+                if (!jsonEquals(left.get(i), right.get(i))) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        return left.equals(right);
     }
 
     private void validatePage(Integer page, Integer size) {

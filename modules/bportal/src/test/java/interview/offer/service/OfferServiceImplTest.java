@@ -26,6 +26,7 @@ import interview.offer.model.vo.OfferDetailVO;
 import interview.offer.model.vo.OfferSendVO;
 import interview.offer.model.vo.OfferUpdateVO;
 import interview.offer.service.impl.OfferServiceImpl;
+import interview.job.service.JobService;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -72,6 +73,8 @@ class OfferServiceImplTest {
     private JobValidationApi jobValidationApi;
     @Mock
     private InterviewFlowStatusApi interviewFlowStatusApi;
+    @Mock
+    private JobService jobService;
 
     private OfferServiceImpl service;
 
@@ -82,7 +85,7 @@ class OfferServiceImplTest {
                 new MapperBuilderAssistant(new MybatisConfiguration(), "Offer"),
                 Offer.class);
         service = spy(new OfferServiceImpl(
-                enterpriseValidationApi, jobValidationApi, interviewFlowStatusApi));
+                enterpriseValidationApi, jobValidationApi, interviewFlowStatusApi, jobService));
         ReflectionTestUtils.setField(service, "baseMapper", mapper);
         AuthContext.setAuthContext(AuthContext.AuthUser.builder()
                 .userId(1L)

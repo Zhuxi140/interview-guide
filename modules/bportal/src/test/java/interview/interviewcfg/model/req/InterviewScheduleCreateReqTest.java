@@ -1,5 +1,6 @@
 package interview.interviewcfg.model.req;
 
+import interview.common.enums.InterviewType;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import org.junit.jupiter.api.Test;
@@ -20,7 +21,7 @@ class InterviewScheduleCreateReqTest {
                 3001L,
                 OffsetDateTime.now().plusDays(1),
                 60,
-                "TEXT"
+                InterviewType.TEXT
         );
 
         assertTrue(validator.validate(req).stream()

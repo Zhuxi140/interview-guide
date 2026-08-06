@@ -1,6 +1,7 @@
 package interview.textinterview.model.vo;
 
 import interview.common.enums.InterviewScheduleStatus;
+import interview.common.enums.InterviewType;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.OffsetDateTime;
@@ -31,8 +32,8 @@ public record InterviewScheduleCandidateListItemVO(
         @Schema(description = "预计面试时长（分钟）", example = "60")
         Integer durationMinutes,
 
-        @Schema(description = "面试类型 TEXT / VOICE / CODE")
-        String interviewType,
+        @Schema(description = "面试类型 TEXT / VOICE")
+        InterviewType interviewType,
 
         @Schema(description = "排期状态")
         InterviewScheduleStatus status,

@@ -10,6 +10,9 @@ import interview.job.model.req.JobStatusReq;
 import interview.job.model.req.JobUpdateReq;
 import interview.job.model.vo.*;
 
+import java.util.List;
+import java.util.Map;
+
 /**
  * @author zhuxi
  */
@@ -78,7 +81,7 @@ public interface JobService extends IService<Job> {
      */
     JobStatusUpdateVO updateJobStatus(Long enterpriseId, Long jobId, JobStatusReq req);
 
-    /**
+/**
      * 删除岗位（逻辑删除）
      *
      * @param enterpriseId 企业 ID
@@ -86,4 +89,12 @@ public interface JobService extends IService<Job> {
      * @param expectedVersion 客户端读取到的岗位版本
      */
     void deleteJob(Long enterpriseId, Long jobId, Integer expectedVersion);
+
+    /**
+     * 批量查询岗位标题，供关联模块按外键补齐展示字段（避免三表 JOIN）。
+     *
+     * @param jobIds 岗位 ID 集合
+     * @return 岗位 ID → 标题 映射；jobIds 为空时返回空 Map
+     */
+    Map<Long, String> getJobTitlesByIds(List<Long> jobIds);
 }

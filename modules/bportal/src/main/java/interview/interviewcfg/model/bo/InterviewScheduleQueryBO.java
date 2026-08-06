@@ -1,11 +1,12 @@
 package interview.interviewcfg.model.bo;
 
 import interview.common.enums.InterviewScheduleStatus;
+import interview.common.enums.InterviewType;
 
 import java.time.OffsetDateTime;
 
 /**
- * 面试排期关联查询结果。
+ * 面试排期关联查询结果（两表互联：排期 + 投递）。
  */
 public record InterviewScheduleQueryBO(
         Long id,
@@ -18,10 +19,9 @@ public record InterviewScheduleQueryBO(
         String phaseCode,
         String phaseName,
         Long interviewerUserId,
-        String jobTitle,
         OffsetDateTime interviewTime,
         Integer durationMinutes,
-        String interviewType,
+        InterviewType interviewType,
         InterviewScheduleStatus status,
         String statusReason,
         Integer version,

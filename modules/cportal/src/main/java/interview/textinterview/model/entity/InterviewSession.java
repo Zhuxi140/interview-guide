@@ -2,6 +2,7 @@ package interview.textinterview.model.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
 import interview.common.enums.InterviewSessionStatus;
+import interview.common.enums.InterviewType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -31,7 +32,8 @@ public class InterviewSession implements Serializable {
     @Builder.Default
     private Short attemptNo = 1;
 
-    private String sessionType;
+    @Builder.Default
+    private InterviewType sessionType = InterviewType.TEXT;
 
     private String idempotencyKey;
 

@@ -13,7 +13,6 @@
         s.phase_code,
         s.template_snapshot_json -> 'stages' -> (s.round_no - 1) ->> 'phaseName' AS phase_name,
         s.interviewer_user_id,
-        j.title AS job_title,
         s.interview_time,
         s.duration_minutes,
         s.interview_type,
@@ -24,14 +23,12 @@
         s.updated_at
     </sql>
 
+    <!-- 两表互联：排期 + 投递；job_title 等岗位字段由 Service 层单表查询批量补齐 -->
     <sql id="scheduleRelations">
         FROM interview_schedule s
         JOIN job_applications ja
           ON ja.id = s.application_id
          AND ja.is_deleted = FALSE
-        JOIN jobs j
-          ON j.id = ja.job_id
-         AND j.is_deleted = FALSE
     </sql>
 
     <select id="pageSchedulesWithApplication"
@@ -82,8 +79,7 @@
           AND s.is_deleted = FALSE
     </select>
 
-    <select id="getScheduleWithApplicationById"
-            resultType="interview.interviewcfg.model.bo.InterviewScheduleQueryBO">
+    <select id="getScheduleWithApplicationById" resultType="interview.interviewcfg.model.bo.InterviewScheduleQueryBO">
         SELECT
         <include refid="scheduleColumns"/>
         <include refid="scheduleRelations"/>

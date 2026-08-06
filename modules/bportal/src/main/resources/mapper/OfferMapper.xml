@@ -6,7 +6,7 @@
         o.id,
         o.enterprise_id,
         o.application_id,
-        j.title AS job_title,
+        ja.job_id AS job_id,
         o.title AS offer_title,
         o.salary_min,
         o.salary_max,
@@ -20,13 +20,13 @@
         o.created_at
     </sql>
 
+    <!-- 两表互联：Offer + 投递；job_title 等岗位字段由 Service 层单表查询批量补齐 -->
     <select id="pageCandidateOffers"
             resultType="interview.offer.model.bo.CandidateOfferQueryBO">
         SELECT
         <include refid="candidateOfferColumns"/>
         FROM offers o
-        LEFT JOIN job_applications ja ON ja.id = o.application_id
-        LEFT JOIN jobs j ON j.id = ja.job_id
+        JOIN job_applications ja ON ja.id = o.application_id
         WHERE o.candidate_user_id = #{candidateUserId}
           AND o.status &lt;&gt; 'DRAFT'
         <if test="status != null">
@@ -48,8 +48,7 @@
         SELECT
         <include refid="candidateOfferColumns"/>
         FROM offers o
-        LEFT JOIN job_applications ja ON ja.id = o.application_id
-        LEFT JOIN jobs j ON j.id = ja.job_id
+        JOIN job_applications ja ON ja.id = o.application_id
         WHERE o.id = #{offerId}
           AND o.candidate_user_id = #{candidateUserId}
           AND o.status &lt;&gt; 'DRAFT'

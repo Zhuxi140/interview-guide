@@ -45,6 +45,14 @@ public interface InterviewScheduleCommandApi {
                                                       String reason);
 
     /**
+     * 首次进入面试时开始排期：CONFIRMED → IN_PROGRESS（幂等，已处于 IN_PROGRESS 时直接返回当前状态）
+     * @param scheduleId 排期 ID
+     * @param enterpriseId 企业 ID
+     * @return 变更后的排期信息
+     */
+    InterviewScheduleCommandResultDTO startSchedule(Long scheduleId, Long enterpriseId);
+
+    /**
      * 面试会话结束自动完成排期：IN_PROGRESS → COMPLETED
      * @param scheduleId 排期 ID
      * @param enterpriseId 企业 ID

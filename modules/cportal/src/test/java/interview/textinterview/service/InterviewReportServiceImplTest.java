@@ -6,6 +6,7 @@ import interview.api.bportal.dto.InterviewScheduleQueryDTO;
 import interview.api.system.EnterpriseValidationApi;
 import interview.common.enums.ErrorCode;
 import interview.common.enums.InterviewScheduleStatus;
+import interview.common.enums.InterviewType;
 import interview.common.enums.UserType;
 import interview.common.exception.BusinessException;
 import interview.framework.context.AuthContext;
@@ -117,7 +118,7 @@ class InterviewReportServiceImplTest {
                 "岗位",
                 OffsetDateTime.now().plusDays(1),
                 60,
-                "TEXT",
+                InterviewType.TEXT,
                 InterviewScheduleStatus.CONFIRMED,
                 null,
                 0,

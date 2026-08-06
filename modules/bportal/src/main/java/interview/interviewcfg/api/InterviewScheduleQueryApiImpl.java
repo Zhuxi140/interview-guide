@@ -13,6 +13,8 @@ import interview.common.exception.BusinessException;
 import interview.interviewcfg.mapper.InterviewScheduleMapper;
 import interview.interviewcfg.model.bo.InterviewScheduleQueryBO;
 import interview.interviewcfg.model.entity.InterviewSchedule;
+import interview.interviewcfg.service.InterviewScheduleService;
+import interview.job.service.JobService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -28,15 +30,14 @@ public class InterviewScheduleQueryApiImpl implements InterviewScheduleQueryApi 
 
     private final InterviewScheduleMapper interviewScheduleMapper;
     private final EnterpriseValidationApi enterpriseValidationApi;
+    private final InterviewScheduleService interviewScheduleService;
     private final UserApi userApi;
+    private final JobService jobService;
 
     @Override
-    public InterviewSchedulePageDTO pageCandidateSchedules(Long candidateUserId,
-                                                           Integer page,
-                                                           Integer size,
-                                                           InterviewScheduleStatus status,
-                                                           String sort,
-                                                           String order) {
+    public InterviewSchedulePageDTO pageCandidateSchedules(Long candidateUserId, Integer page,
+                                                           Integer size, InterviewScheduleStatus status,
+                                                           String sort, String order) {
         // 校验跨模块查询参数，拒绝任意排序字段。
         validatePage(page, size);
         if (!"interviewTime".equals(sort)) {
@@ -51,20 +52,14 @@ public class InterviewScheduleQueryApiImpl implements InterviewScheduleQueryApi 
         IPage<InterviewScheduleQueryBO> boPage =
                 interviewScheduleMapper.pageSchedulesWithApplication(
                         new Page<InterviewSchedule>(page, size),
-                        null,
-                        candidateUserId,
-                        status,
-                        null,
-                        null,
-                        sort,
-                        "asc".equalsIgnoreCase(order)
+                        null, candidateUserId,
+                        status, null, null,
+                        sort, "asc".equalsIgnoreCase(order)
                 );
         List<InterviewScheduleQueryDTO> records = enrich(boPage.getRecords());
         return new InterviewSchedulePageDTO(
-                boPage.getCurrent(),
-                boPage.getSize(),
-                boPage.getTotal(),
-                boPage.getPages(),
+                boPage.getCurrent(), boPage.getSize(),
+                boPage.getTotal(), boPage.getPages(),
                 records
         );
     }
@@ -96,6 +91,7 @@ public class InterviewScheduleQueryApiImpl implements InterviewScheduleQueryApi 
         return interviewScheduleMapper.listScheduleIdsByCandidate(candidateUserId);
     }
 
+
     private List<InterviewScheduleQueryDTO> enrich(List<InterviewScheduleQueryBO> schedules) {
         if (schedules.isEmpty()) {
             return List.of();
@@ -108,42 +104,39 @@ public class InterviewScheduleQueryApiImpl implements InterviewScheduleQueryApi 
                 .map(InterviewScheduleQueryBO::enterpriseId)
                 .distinct()
                 .toList();
+        List<Long> jobIds = schedules.stream()
+                .map(InterviewScheduleQueryBO::jobId)
+                .distinct()
+                .toList();
         Map<Long, String> candidateNames = userApi.getUserNamesByIds(candidateIds);
         Map<Long, String> enterpriseNames =
                 enterpriseValidationApi.getNameList(enterpriseIds);
+        Map<Long, String> jobTitles = jobService.getJobTitlesByIds(jobIds);
         return schedules.stream()
                 .map(schedule -> toDto(
                         schedule,
                         candidateNames.get(schedule.candidateUserId()),
-                        enterpriseNames.get(schedule.enterpriseId())
+                        enterpriseNames.get(schedule.enterpriseId()),
+                        jobTitles.get(schedule.jobId())
                 ))
                 .toList();
     }
 
     private InterviewScheduleQueryDTO toDto(InterviewScheduleQueryBO schedule,
                                             String candidateName,
-                                            String enterpriseName) {
+                                            String enterpriseName,
+                                            String jobTitle) {
         return new InterviewScheduleQueryDTO(
-                schedule.id(),
-                schedule.enterpriseId(),
-                schedule.applicationId(),
-                schedule.candidateUserId(),
-                schedule.jobId(),
-                schedule.templateId(),
-                schedule.roundNo(),
-                schedule.phaseCode(),
-                schedule.phaseName(),
-                schedule.interviewerUserId(),
-                candidateName,
-                enterpriseName,
-                schedule.jobTitle(),
-                schedule.interviewTime(),
-                schedule.durationMinutes(),
-                schedule.interviewType(),
-                schedule.status(),
-                schedule.statusReason(),
-                schedule.version(),
-                schedule.createdAt(),
+                schedule.id(), schedule.enterpriseId(),
+                schedule.applicationId(), schedule.candidateUserId(),
+                schedule.jobId(), schedule.templateId(),
+                schedule.roundNo(), schedule.phaseCode(),
+                schedule.phaseName(), schedule.interviewerUserId(),
+                candidateName, enterpriseName,
+                jobTitle, schedule.interviewTime(),
+                schedule.durationMinutes(), schedule.interviewType(),
+                schedule.status(), schedule.statusReason(),
+                schedule.version(), schedule.createdAt(),
                 schedule.updatedAt()
         );
     }

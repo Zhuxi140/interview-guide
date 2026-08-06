@@ -66,6 +66,23 @@ public class InterviewScheduleCommandApiImpl implements InterviewScheduleCommand
 
     @Override
     @Transactional(rollbackFor = BusinessException.class)
+    public InterviewScheduleCommandResultDTO startSchedule(Long scheduleId, Long enterpriseId) {
+        // 首次进入开始面试：排期须属于该企业；幂等容忍已处于 IN_PROGRESS 的并发进入。
+        InterviewScheduleQueryBO schedule = getSchedule(scheduleId);
+        if (schedule == null) {
+            throw new BusinessException(ErrorCode.INTERVIEW_SCHEDULE_NOT_FOUND);
+        }
+        if (schedule.status() == InterviewScheduleStatus.IN_PROGRESS) {
+            return new InterviewScheduleCommandResultDTO(
+                    schedule.id(), InterviewScheduleStatus.IN_PROGRESS,
+                    schedule.version(), schedule.updatedAt());
+        }
+        return transitionByEnterprise(scheduleId, enterpriseId,
+                InterviewScheduleStatus.CONFIRMED, InterviewScheduleStatus.IN_PROGRESS, null);
+    }
+
+    @Override
+    @Transactional(rollbackFor = BusinessException.class)
     public InterviewScheduleCommandResultDTO completeSchedule(Long scheduleId, Long enterpriseId) {
         // 面试会话结束自动完成排期：IN_PROGRESS → COMPLETED。
         return transitionByEnterprise(scheduleId, enterpriseId,

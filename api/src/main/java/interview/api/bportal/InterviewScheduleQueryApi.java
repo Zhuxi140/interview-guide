@@ -48,4 +48,5 @@ public interface InterviewScheduleQueryApi {
      * @return 排期 ID 列表
      */
     List<Long> listScheduleIdsByCandidate(Long candidateUserId);
+
 }

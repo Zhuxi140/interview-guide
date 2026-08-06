@@ -89,6 +89,17 @@ Use four-space indentation and UTF-8. Keep packages lowercase under `interview.*
 | 更新（非实体） | LambdaUpdate | 自动填充失效，需显式 set；自动追加 `isDeleted=false` |
 | 非查询接口返回 | BO + MapStruct | VO 与 BO 不一致时强制转换 |
 | 复杂手写 SQL | XML | 所有自动注解失效，自行处理 |
+| 三表及以上互联 | 禁止 | 拆为"两表 JOIN(XML) + 单表 LambdaQuery(Service 层组装)" |
+| 批量补展示字段（名称/标题） | 模块内 Service 单表 LambdaQuery | `IN` 批量查询，避免 N+1 |
+
+### 6. 数据互联（JOIN 上限）—— 硬性约束
+- 一条 SQL **最多关联两张表**（1 个 JOIN）。禁止三表及以上互联，包括标量子查询跨表引用
+  （FROM 只留两表但 `(SELECT ... FROM third_table)` 同样禁止）。
+- 需要第三张表的数据（如 `job_title` 等展示字段）时，采用两层组装：
+  - 两表 JOIN 写在 **XML**（仅取主表 + 最近邻一张表，带上所需外键）；
+  - 缺失字段由关联模块的 Service 提供**单表 LambdaQuery** 批量方法（如 `getJobTitlesByIds`），
+    在 Service 层以 Map 按外键合并补齐。
+- 单表查询一律 **LambdaQuery**；只有 JOIN 才写 XML。批量补齐必须用 `IN` 查询，禁止 N+1 逐条调用。
 
 ## Testing Guidelines
 

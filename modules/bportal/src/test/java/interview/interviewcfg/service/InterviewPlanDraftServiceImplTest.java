@@ -8,6 +8,7 @@ import org.apache.ibatis.builder.MapperBuilderAssistant;
 import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
 import interview.api.system.EnterpriseValidationApi;
 import interview.common.enums.ErrorCode;
+import interview.common.enums.InterviewType;
 import interview.common.enums.UserType;
 import interview.common.exception.BusinessException;
 import interview.framework.context.AuthContext;
@@ -15,7 +16,10 @@ import interview.interviewcfg.mapper.InterviewPlanDraftMapper;
 import interview.interviewcfg.model.entity.InterviewPlanDraft;
 import interview.interviewcfg.model.enums.InterviewPlanDraftStatus;
 import interview.interviewcfg.model.req.InterviewPlanDraftApplyReq;
+import interview.interviewcfg.model.req.InterviewScheduleCreateReq;
 import interview.interviewcfg.model.vo.InterviewPlanDraftApplyVO;
+import interview.interviewcfg.model.vo.InterviewScheduleCreateVO;
+import interview.interviewcfg.service.InterviewScheduleService;
 import interview.interviewcfg.service.impl.InterviewPlanDraftServiceImpl;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,6 +39,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -54,6 +60,8 @@ class InterviewPlanDraftServiceImplTest {
     private InterviewPlanDraftMapper mapper;
     @Mock
     private EnterpriseValidationApi enterpriseValidationApi;
+    @Mock
+    private InterviewScheduleService interviewScheduleService;
 
     private InterviewPlanDraftServiceImpl service;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -64,7 +72,8 @@ class InterviewPlanDraftServiceImplTest {
         TableInfoHelper.initTableInfo(
                 new MapperBuilderAssistant(new MybatisConfiguration(), "InterviewPlanDraft"),
                 InterviewPlanDraft.class);
-        service = spy(new InterviewPlanDraftServiceImpl(enterpriseValidationApi, objectMapper));
+        service = spy(new InterviewPlanDraftServiceImpl(
+                enterpriseValidationApi, objectMapper, interviewScheduleService));
         ReflectionTestUtils.setField(service, "baseMapper", mapper);
         AuthContext.setAuthContext(AuthContext.AuthUser.builder()
                 .userId(1L)
@@ -80,10 +89,17 @@ class InterviewPlanDraftServiceImplTest {
     private InterviewPlanDraftApplyReq request(String key, String outline, String phaseCode) {
         InterviewPlanDraftApplyReq.Plan plan = new InterviewPlanDraftApplyReq.Plan(
                 List.of(new InterviewPlanDraftApplyReq.Stage(
-                        phaseCode, "鑰冨療涓氬姟璁捐", outline, 60)),
+                        phaseCode, "鑰冨療涓氬姟璁捐", outline, 60)),
                 List.of(new InterviewPlanDraftApplyReq.Suggestion(
                         1L, 5001L, OffsetDateTime.parse("2026-08-06T10:00:00+08:00"), "鏃堕棿绌洪棽")));
         return new InterviewPlanDraftApplyReq(3, plan);
+    }
+
+    private InterviewScheduleCreateVO scheduleVO(Long id) {
+        return new InterviewScheduleCreateVO(
+                id, 20L, (short) 1, "TECHNICAL", "技术面",
+                interview.common.enums.InterviewScheduleStatus.PENDING_CONFIRMATION,
+                0, OffsetDateTime.now(), 60, OffsetDateTime.now());
     }
 
     private InterviewPlanDraft readyDraft() {
@@ -98,10 +114,20 @@ class InterviewPlanDraftServiceImplTest {
                 .build();
     }
 
+    private String appliedPlanJsonOf(InterviewPlanDraftApplyReq req) {
+        try {
+            return objectMapper.writeValueAsString(objectMapper.valueToTree(req.plan()));
+        } catch (Exception exception) {
+            throw new IllegalStateException(exception);
+        }
+    }
+
     @Test
     void apply_shouldMarkAppliedWhenReady() {
         when(mapper.selectOne(any())).thenReturn(readyDraft());
         when(mapper.update(any(), any())).thenReturn(1);
+        when(interviewScheduleService.createSchedule(anyLong(), anyLong(), any(), anyString()))
+                .thenReturn(scheduleVO(32001L));
 
         InterviewPlanDraftApplyVO result = service.applyDraft(
                 10L, 20L, 100L, "apply-key-1", request("apply-key-1", "1. 鏂规璁捐", "TECHNICAL"));
@@ -116,20 +142,111 @@ class InterviewPlanDraftServiceImplTest {
         assertEquals("apply-key-1", update.getApplyIdempotencyKey());
         assertEquals(3, update.getVersion());
         assertNotNull(update.getAppliedPlanJson());
+        assertEquals("[32001]", update.getAppliedScheduleIds());
+        verify(interviewScheduleService).createSchedule(anyLong(), anyLong(), any(), anyString());
     }
 
     @Test
+    void apply_shouldCreateSchedulePerRoundAndPersistIds() {
+        InterviewPlanDraft twoStageDraft = readyDraft();
+        twoStageDraft.setPlanJson("""
+                {"stages":[
+                {"phaseCode":"TECHNICAL","objectives":"考察目标","questionOutline":"题纲","durationMinutes":60},
+                {"phaseCode":"HR","objectives":"考察目标","questionOutline":"题纲","durationMinutes":30}],
+                "scheduleSuggestions":[
+                {"suggestionId":1,"interviewerUserId":5001,"interviewTime":"2026-08-06T10:00:00+08:00","reason":"reason"},
+                {"suggestionId":2,"interviewerUserId":5002,"interviewTime":"2026-08-07T10:00:00+08:00","reason":"reason"}]}
+                """);
+        when(mapper.selectOne(any())).thenReturn(twoStageDraft);
+        when(mapper.update(any(), any())).thenReturn(1);
+        when(interviewScheduleService.createSchedule(anyLong(), anyLong(), any(), anyString()))
+                .thenReturn(scheduleVO(32001L), scheduleVO(32002L));
+
+        // 两个阶段 + 两条排期建议，服务端按 roundNo=1..2 各建一个排期。
+        InterviewPlanDraftApplyReq twoRound = new InterviewPlanDraftApplyReq(3,
+                new InterviewPlanDraftApplyReq.Plan(
+                        List.of(
+                                new InterviewPlanDraftApplyReq.Stage("TECHNICAL", "考察目标", "题纲", 60),
+                                new InterviewPlanDraftApplyReq.Stage("HR", "考察目标", "题纲", 30)),
+                        List.of(
+                                new InterviewPlanDraftApplyReq.Suggestion(
+                                        1L, 5001L, OffsetDateTime.parse("2026-08-06T10:00:00+08:00"), "reason"),
+                                new InterviewPlanDraftApplyReq.Suggestion(
+                                        2L, 5002L, OffsetDateTime.parse("2026-08-07T10:00:00+08:00"), "reason"))));
+        InterviewPlanDraftApplyVO result = service.applyDraft(10L, 20L, 100L, "apply-key-1", twoRound);
+
+        assertEquals(InterviewPlanDraftStatus.APPLIED, result.status());
+        assertEquals(List.of(32001L, 32002L), result.scheduleIds());
+
+        ArgumentCaptor<InterviewScheduleCreateReq> reqCaptor =
+                ArgumentCaptor.forClass(InterviewScheduleCreateReq.class);
+        verify(interviewScheduleService, org.mockito.Mockito.times(2))
+                .createSchedule(anyLong(), anyLong(), reqCaptor.capture(), anyString());
+        assertEquals((short) 1, reqCaptor.getAllValues().get(0).roundNo());
+        assertEquals((short) 2, reqCaptor.getAllValues().get(1).roundNo());
+        assertEquals(60, reqCaptor.getAllValues().get(0).durationMinutes());
+        assertEquals(30, reqCaptor.getAllValues().get(1).durationMinutes());
+        assertEquals(InterviewType.TEXT, reqCaptor.getAllValues().get(0).interviewType());
+    }
+
+    @Test
+    void apply_shouldRejectSuggestionCountMismatch() {
+        when(mapper.selectOne(any())).thenReturn(readyDraft());
+
+        // 一个阶段却提交两条排期建议，与阶段处理不存在一一对应。
+        InterviewPlanDraftApplyReq mismatch = new InterviewPlanDraftApplyReq(3,
+                new InterviewPlanDraftApplyReq.Plan(
+                        List.of(new InterviewPlanDraftApplyReq.Stage("TECHNICAL", "考察目标", "题纲", 60)),
+                        List.of(
+                                new InterviewPlanDraftApplyReq.Suggestion(
+                                        1L, 5001L, OffsetDateTime.parse("2026-08-06T10:00:00+08:00"), "reason"),
+                                new InterviewPlanDraftApplyReq.Suggestion(
+                                        2L, 5002L, OffsetDateTime.parse("2026-08-07T10:00:00+08:00"), "reason"))));
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.applyDraft(10L, 20L, 100L, "apply-key-1", mismatch));
+
+        assertEquals(ErrorCode.INTERVIEW_SCHEDULE_SUGGESTION_MISMATCH.getCode(), exception.getCode());
+        verify(mapper, never()).update(any(), any());
+        verify(interviewScheduleService, never()).createSchedule(anyLong(), anyLong(), any(), anyString());
+    }
+
+    @Test
+    void apply_shouldSkipScheduleCreationWhenNoSuggestions() {
+        InterviewPlanDraft draft = readyDraft();
+        draft.setPlanJson("{\"stages\":[{\"phaseCode\":\"TECHNICAL\",\"objectives\":\"objective\",\"questionOutline\":\"outline\",\"durationMinutes\":60}],\"scheduleSuggestions\":[]}");
+        when(mapper.selectOne(any())).thenReturn(draft);
+        when(mapper.update(any(), any())).thenReturn(1);
+
+        InterviewPlanDraftApplyReq noSuggestion = new InterviewPlanDraftApplyReq(3,
+                new InterviewPlanDraftApplyReq.Plan(
+                        List.of(new InterviewPlanDraftApplyReq.Stage("TECHNICAL", "objective", "outline", 60)),
+                        List.of()));
+        InterviewPlanDraftApplyVO result = service.applyDraft(10L, 20L, 100L, "apply-key-1", noSuggestion);
+
+        assertEquals(InterviewPlanDraftStatus.APPLIED, result.status());
+        assertTrue(result.scheduleIds().isEmpty());
+        verify(interviewScheduleService, never()).createSchedule(anyLong(), anyLong(), any(), anyString());
+
+        ArgumentCaptor<InterviewPlanDraft> captor = ArgumentCaptor.forClass(InterviewPlanDraft.class);
+        verify(mapper).update(captor.capture(), any());
+        assertEquals("[]", captor.getValue().getAppliedScheduleIds());
+    }
+
+@Test
     void apply_shouldReplayWhenSameKeyAndSamePlan() {
+        InterviewPlanDraftApplyReq sameReq =
+                request("apply-key-1", "1. 鏂规璁捐", "TECHNICAL");
         InterviewPlanDraft applied = readyDraft();
         applied.setStatus(InterviewPlanDraftStatus.APPLIED);
         applied.setApplyIdempotencyKey("apply-key-1");
-        applied.setAppliedPlanJson("{\"stages\":[{\"phaseCode\":\"TECHNICAL\",\"objectives\":\"鑰冨療涓氬姟璁捐\",\"questionOutline\":\"1. 鏂规璁捐\",\"durationMinutes\":60}],\"scheduleSuggestions\":[{\"suggestionId\":1,\"interviewerUserId\":5001,\"interviewTime\":\"2026-08-06T10:00:00+08:00\",\"reason\":\"鏃堕棿绌洪棽\"}]}");
+        applied.setAppliedPlanJson(appliedPlanJsonOf(sameReq));
         applied.setAppliedScheduleIds("[32001,32002]");
         applied.setAppliedAt(OffsetDateTime.parse("2026-08-06T11:00:00+08:00"));
         when(mapper.selectOne(any())).thenReturn(applied);
 
         InterviewPlanDraftApplyVO result = service.applyDraft(
-                10L, 20L, 100L, "apply-key-1", request("apply-key-1", "1. 鏂规璁捐", "TECHNICAL"));
+                10L, 20L, 100L, "apply-key-1", sameReq);
 
         assertEquals(InterviewPlanDraftStatus.APPLIED, result.status());
         assertEquals(List.of(32001L, 32002L), result.scheduleIds());
@@ -195,17 +312,21 @@ class InterviewPlanDraftServiceImplTest {
 
     @Test
     void apply_shouldReplayAfterLostCasRace() {
+        InterviewPlanDraftApplyReq sameReq =
+                request("apply-key-1", "1. 鏂规璁捐", "TECHNICAL");
         InterviewPlanDraft applied = readyDraft();
         applied.setStatus(InterviewPlanDraftStatus.APPLIED);
         applied.setApplyIdempotencyKey("apply-key-1");
-        applied.setAppliedPlanJson(PLAN_JSON);
+        applied.setAppliedPlanJson(appliedPlanJsonOf(sameReq));
         applied.setAppliedScheduleIds("[32001]");
         applied.setAppliedAt(OffsetDateTime.parse("2026-08-06T11:00:00+08:00"));
         when(mapper.selectOne(any())).thenReturn(readyDraft(), applied);
         when(mapper.update(any(), any())).thenReturn(0);
+        when(interviewScheduleService.createSchedule(anyLong(), anyLong(), any(), anyString()))
+                .thenReturn(scheduleVO(32001L));
 
         InterviewPlanDraftApplyVO result = service.applyDraft(
-                10L, 20L, 100L, "apply-key-1", request("apply-key-1", "1. 鏂规璁捐", "TECHNICAL"));
+                10L, 20L, 100L, "apply-key-1", sameReq);
 
         assertEquals(List.of(32001L), result.scheduleIds());
         assertEquals(applied.getAppliedAt(), result.appliedAt());
@@ -217,6 +338,8 @@ class InterviewPlanDraftServiceImplTest {
         newer.setVersion(4);
         when(mapper.selectOne(any())).thenReturn(readyDraft(), newer);
         when(mapper.update(any(), any())).thenReturn(0);
+        when(interviewScheduleService.createSchedule(anyLong(), anyLong(), any(), anyString()))
+                .thenReturn(scheduleVO(32001L));
 
         BusinessException exception = assertThrows(BusinessException.class,
                 () -> service.applyDraft(10L, 20L, 100L, "apply-key-1",

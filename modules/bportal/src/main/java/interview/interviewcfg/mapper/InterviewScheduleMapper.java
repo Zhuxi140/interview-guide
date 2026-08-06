@@ -15,7 +15,7 @@ import java.util.List;
 public interface InterviewScheduleMapper extends BaseMapper<InterviewSchedule> {
 
     /**
-     * 分页查询排期及投递、岗位关联信息
+     * 分页查询排期及投递关联信息（两表互联；岗位字段由 Service 层补齐）
      * @param page 分页对象
      * @param enterpriseId 企业 ID
      * @param candidateUserId 候选人用户 ID

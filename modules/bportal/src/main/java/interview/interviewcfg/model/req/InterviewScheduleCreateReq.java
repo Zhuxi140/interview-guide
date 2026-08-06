@@ -1,9 +1,9 @@
 package interview.interviewcfg.model.req;
 
+import interview.common.enums.InterviewType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
 import java.time.OffsetDateTime;
@@ -32,8 +32,8 @@ public record InterviewScheduleCreateReq(
         @Schema(description = "预计面试时长（分钟），不传时默认60", example = "60")
         Integer durationMinutes,
 
-        @NotBlank(message = "面试类型不能为空")
-        @Schema(description = "面试类型 TEXT / VOICE / CODE", example = "TEXT")
-        String interviewType
+        @NotNull(message = "面试类型不能为空")
+        @Schema(description = "面试类型 TEXT / VOICE", example = "TEXT")
+        InterviewType interviewType
 ) {
 }

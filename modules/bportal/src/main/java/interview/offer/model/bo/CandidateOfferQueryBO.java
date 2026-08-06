@@ -7,13 +7,13 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 
 /**
- * 候选人 Offer 与岗位信息关联查询结果。
+ * 候选人 Offer 与投递关联查询结果（两表互联；岗位标题由 Service 层补齐）。
  */
 public record CandidateOfferQueryBO(
         Long id,
         Long enterpriseId,
         Long applicationId,
-        String jobTitle,
+        Long jobId,
         String offerTitle,
         BigDecimal salaryMin,
         BigDecimal salaryMax,

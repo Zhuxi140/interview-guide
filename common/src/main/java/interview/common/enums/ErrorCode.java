@@ -167,6 +167,12 @@ public enum ErrorCode {
     INTERVIEW_FLOW_NOT_COMPLETED(50034,"面试流程尚未完成，无法执行该操作"),
     INTERVIEW_TEMPLATE_IN_USE(50035, "面试模板仍被排期或编排草案引用，无法删除"),
     INTERVIEW_TEMPLATE_NULL_OR_VERSION_ERROR(50036, "面试模板不存在或数据发送修改，请刷新后重试"),
+    USER_NOT_PARTICIPANT(50037, "你不是该面试的参与者，无权进入"),
+    INTERVIEW_SCHEDULE_NOT_CONFIRMED(50038, "面试排期尚未确认，无法进入"),
+    INTERVIEW_TIME_NOT_SET(50039, "尚未到面试时间，无法进入面试"),
+    INTERVIEW_SESSION_STATUS_INVALID(50040, "面试会话状态不合法"),
+    INTERVIEW_SCHEDULE_SUGGESTION_MISMATCH(50041, "排期建议必须与面试阶段一一对应"),
+    INTERVIEW_TAKEOVER_NOT_FOUND(50042, "面试接管记录不存在"),
 
 
     // ------------ 60xxx 计费/钱包错误码 ------------

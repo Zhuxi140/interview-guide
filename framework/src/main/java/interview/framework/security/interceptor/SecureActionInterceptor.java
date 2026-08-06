@@ -8,11 +8,11 @@ import interview.common.constant.SecureActionContext;
 import interview.common.enums.ErrorCode;
 import interview.common.exception.BusinessException;
 import interview.framework.context.AuthContext;
+import interview.framework.redis.RedisScripts;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
 
@@ -27,22 +27,6 @@ import java.util.Objects;
  */
 @RequiredArgsConstructor
 public class SecureActionInterceptor implements HandlerInterceptor {
-
-    private static final DefaultRedisScript<Long> CONSUME_TOKEN_SCRIPT;
-
-    // 比较令牌内容后再删除，保证校验与消费原子完成。
-    static {
-        CONSUME_TOKEN_SCRIPT = new DefaultRedisScript<>();
-        CONSUME_TOKEN_SCRIPT.setScriptText("""
-                local value = redis.call('get', KEYS[1])
-                if not value or value ~= ARGV[1] then
-                    return 0
-                end
-                redis.call('del', KEYS[1])
-                return 1
-                """);
-        CONSUME_TOKEN_SCRIPT.setResultType(Long.class);
-    }
 
     private final StringRedisTemplate stringRedisTemplate;
 
@@ -85,7 +69,7 @@ public class SecureActionInterceptor implements HandlerInterceptor {
 
         // 原子比较并删除令牌，保证令牌只能被一个请求消费一次
         Long consumed = stringRedisTemplate.execute(
-                CONSUME_TOKEN_SCRIPT,
+                RedisScripts.CONSUME_ONCE,
                 Collections.singletonList(secureActionTokenKey),
                 json);
         if (consumed == null || consumed != 1L) {
