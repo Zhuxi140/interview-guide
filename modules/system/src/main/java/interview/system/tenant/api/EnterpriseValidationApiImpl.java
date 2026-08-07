@@ -44,7 +44,7 @@ public class EnterpriseValidationApiImpl implements EnterpriseValidationApi {
                 .exists();
 
         if (!exists1) {
-            throw new BusinessException(ErrorCode.CURREMT_USER_NOT_ENTERPRISE_MEMBER);
+            throw new BusinessException(ErrorCode.CURRENT_USER_NOT_ENTERPRISE_MEMBER);
         }
 
     }
@@ -79,7 +79,7 @@ public class EnterpriseValidationApiImpl implements EnterpriseValidationApi {
                 .eq(EnterpriseTeamMember::getUserId, userId)
                 .exists();
         if (!member) {
-            throw new BusinessException(ErrorCode.CURREMT_USER_NOT_ENTERPRISE_MEMBER);
+            throw new BusinessException(ErrorCode.CURRENT_USER_NOT_ENTERPRISE_MEMBER);
         }
 
         // 正式经营接口只允许已认证且未暂停的企业调用。
@@ -147,5 +147,17 @@ public class EnterpriseValidationApiImpl implements EnterpriseValidationApi {
                 enterprise.getScale(),
                 enterprise.getLogoUrl()
         );
+    }
+
+    @Override
+    public void validateEnterpriseMembers(Long enterpriseId, List<Long> userIds) {
+        Long count = enterpriseTeamMembersService.lambdaQuery()
+                .eq(EnterpriseTeamMember::getEnterpriseId, enterpriseId)
+                .in(EnterpriseTeamMember::getUserId, userIds)
+                .count();
+
+        if (count != userIds.size()) {
+            throw new BusinessException(ErrorCode.INTERVIEWER_NOT_ENTERPRISE_MEMBER);
+        }
     }
 }

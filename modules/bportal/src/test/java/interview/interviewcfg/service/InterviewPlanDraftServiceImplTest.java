@@ -2,20 +2,27 @@ package interview.interviewcfg.service;
 
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
+import cn.hutool.json.JSONObject;
+import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
+import interview.api.bportal.JobValidationApi;
+import interview.api.infra.LocalMessageApi;
 import interview.api.system.EnterpriseValidationApi;
 import interview.common.enums.ErrorCode;
 import interview.common.enums.InterviewType;
 import interview.common.enums.UserType;
 import interview.common.exception.BusinessException;
 import interview.framework.context.AuthContext;
+import interview.framework.config.CustomIdGenerator;
 import interview.interviewcfg.mapper.InterviewPlanDraftMapper;
+import interview.interviewcfg.model.bo.InterviewTemplateSnapshot;
 import interview.interviewcfg.model.entity.InterviewPlanDraft;
 import interview.interviewcfg.model.enums.InterviewPlanDraftStatus;
 import interview.interviewcfg.model.req.InterviewPlanDraftApplyReq;
+import interview.interviewcfg.model.req.InterviewPlanDraftCreateReq;
 import interview.interviewcfg.model.req.InterviewScheduleCreateReq;
 import interview.interviewcfg.model.vo.InterviewPlanDraftApplyVO;
 import interview.interviewcfg.model.vo.InterviewScheduleCreateVO;
@@ -28,6 +35,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 import tools.jackson.databind.ObjectMapper;
 
@@ -61,7 +69,17 @@ class InterviewPlanDraftServiceImplTest {
     @Mock
     private EnterpriseValidationApi enterpriseValidationApi;
     @Mock
+    private JobValidationApi jobValidationApi;
+    @Mock
+    private InterviewStageTemplateService interviewStageTemplateService;
+    @Mock
     private InterviewScheduleService interviewScheduleService;
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+    @Mock
+    private LocalMessageApi localMessageApi;
+    @Mock
+    private CustomIdGenerator customIdGenerator;
 
     private InterviewPlanDraftServiceImpl service;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -73,7 +91,9 @@ class InterviewPlanDraftServiceImplTest {
                 new MapperBuilderAssistant(new MybatisConfiguration(), "InterviewPlanDraft"),
                 InterviewPlanDraft.class);
         service = spy(new InterviewPlanDraftServiceImpl(
-                enterpriseValidationApi, objectMapper, interviewScheduleService));
+                enterpriseValidationApi, jobValidationApi, interviewStageTemplateService,
+                interviewScheduleService, eventPublisher, localMessageApi,
+                customIdGenerator));
         ReflectionTestUtils.setField(service, "baseMapper", mapper);
         AuthContext.setAuthContext(AuthContext.AuthUser.builder()
                 .userId(1L)
@@ -311,6 +331,60 @@ class InterviewPlanDraftServiceImplTest {
     }
 
     @Test
+    void apply_shouldRejectWhenTemplateVersionChanged() {
+        InterviewPlanDraft ready = readyDraft();
+        ready.setTemplateId(3L);
+        ready.setInputSnapshotJson("{\"templateId\":3,\"templateVersion\":1,\"templateName\":\"t\",\"stages\":[]}");
+        when(mapper.selectOne(any())).thenReturn(ready);
+        when(interviewStageTemplateService.buildTemplateSnapshotWithoutAuth(10L, 3L))
+                .thenReturn(new InterviewTemplateSnapshot(3L, 2, "t", List.of()));
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.applyDraft(10L, 20L, 100L, "apply-key-1",
+                        request("apply-key-1", "1. 鏂规璁捐", "TECHNICAL")));
+
+        assertEquals(ErrorCode.INTERVIEW_PLAN_TEMPLATE_CHANGED.getCode(), exception.getCode());
+        verify(mapper, never()).update(any(), any());
+        verify(interviewScheduleService, never()).createSchedule(anyLong(), anyLong(), any(), anyString());
+    }
+
+    @Test
+    void apply_shouldRejectWhenTemplateDeleted() {
+        InterviewPlanDraft ready = readyDraft();
+        ready.setTemplateId(3L);
+        ready.setInputSnapshotJson("{\"templateId\":3,\"templateVersion\":1,\"templateName\":\"t\",\"stages\":[]}");
+        when(mapper.selectOne(any())).thenReturn(ready);
+        when(interviewStageTemplateService.buildTemplateSnapshotWithoutAuth(10L, 3L))
+                .thenReturn(null);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.applyDraft(10L, 20L, 100L, "apply-key-1",
+                        request("apply-key-1", "1. 鏂规璁", "TECHNICAL")));
+
+        assertEquals(ErrorCode.INTERVIEW_TEMPLATE_NOT_FOUND.getCode(), exception.getCode());
+        verify(mapper, never()).update(any(), any());
+    }
+
+    @Test
+    void apply_shouldProceedWhenTemplateVersionMatches() {
+        InterviewPlanDraft ready = readyDraft();
+        ready.setTemplateId(3L);
+        ready.setInputSnapshotJson("{\"templateId\":3,\"templateVersion\":1,\"templateName\":\"t\",\"stages\":[]}");
+        when(mapper.selectOne(any())).thenReturn(ready);
+        when(mapper.update(any(), any())).thenReturn(1);
+        when(interviewStageTemplateService.buildTemplateSnapshotWithoutAuth(10L, 3L))
+                .thenReturn(new InterviewTemplateSnapshot(3L, 1, "t", List.of()));
+        when(interviewScheduleService.createSchedule(anyLong(), anyLong(), any(), anyString()))
+                .thenReturn(scheduleVO(32001L));
+
+        InterviewPlanDraftApplyVO result = service.applyDraft(10L, 20L, 100L, "apply-key-1",
+                request("apply-key-1", "1. 鏂规璁", "TECHNICAL"));
+
+        assertEquals(InterviewPlanDraftStatus.APPLIED, result.status());
+        verify(interviewStageTemplateService).buildTemplateSnapshotWithoutAuth(10L, 3L);
+    }
+
+    @Test
     void apply_shouldReplayAfterLostCasRace() {
         InterviewPlanDraftApplyReq sameReq =
                 request("apply-key-1", "1. 鏂规璁捐", "TECHNICAL");
@@ -366,5 +440,78 @@ class InterviewPlanDraftServiceImplTest {
         assertNotNull(result.plan());
         assertEquals("HR淇鐩爣", result.plan().stages().getFirst().objectives());
         assertTrue(result.plan().scheduleSuggestions().isEmpty());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void create_shouldRestrictSnapshotToSelectedPhaseCodes() {
+        when(interviewStageTemplateService.buildTemplateSnapshotWithoutAuth(10L, 3L))
+                .thenReturn(threeStageSnapshot());
+        doReturn(9001L).when(customIdGenerator).nextId(any(Class.class));
+        when(localMessageApi.saveInCurrentTransaction(any())).thenReturn(55501L);
+        LambdaQueryChainWrapper<InterviewPlanDraft> query = mock(LambdaQueryChainWrapper.class);
+        doReturn(query).when(service).lambdaQuery();
+        when(query.select(any(SFunction[].class))).thenReturn(query);
+        when(query.eq(any(), any())).thenReturn(query);
+        doReturn(query).when(query).in(any(), any(Object[].class));
+        when(query.one()).thenReturn(null);
+        when(query.exists()).thenReturn(false);
+
+        InterviewPlanDraftCreateReq req = new InterviewPlanDraftCreateReq(
+                3L, InterviewType.TEXT, 60, null, List.of(),
+                List.of("HR", "TECHNICAL"), "多考察业务");
+        service.createDraft(10L, 20L, "create-key-1", req);
+
+        ArgumentCaptor<InterviewPlanDraft> captor = ArgumentCaptor.forClass(InterviewPlanDraft.class);
+        verify(mapper).insert(captor.capture());
+        InterviewPlanDraft saved = captor.getValue();
+        JSONObject snapshot = JSONUtil.parseObj(saved.getInputSnapshotJson());
+        List<String> codes = snapshot.getJSONArray("stages").stream()
+                .map(item -> ((JSONObject) item).getStr("phaseCode"))
+                .toList();
+        assertEquals(List.of("HR", "TECHNICAL"), codes);
+        assertNotNull(saved.getGenerationMessageId());
+    }
+
+    @Test
+    void create_shouldRejectUnknownPhaseCode() {
+        InterviewPlanDraftCreateReq req = new InterviewPlanDraftCreateReq(
+                3L, InterviewType.TEXT, 100, null, List.of(),
+                List.of("TECHNICAL", "NOT_EXIST"), null);
+        when(interviewStageTemplateService.buildTemplateSnapshotWithoutAuth(10L, 3L))
+                .thenReturn(threeStageSnapshot());
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.createDraft(10L, 20L, "create-key-2", req));
+
+        assertEquals(ErrorCode.INTERVIEW_TEMPLATE_STAGE_INVALID.getCode(), exception.getCode());
+        verify(mapper, never()).insert(any(InterviewPlanDraft.class));
+    }
+
+    @Test
+    void create_shouldRejectSubsetExceedingMaxRounds() {
+        InterviewPlanDraftCreateReq req = new InterviewPlanDraftCreateReq(
+                3L, InterviewType.TEXT, 100, 1, List.of(),
+                List.of("TECHNICAL", "HR"), null);
+        when(interviewStageTemplateService.buildTemplateSnapshotWithoutAuth(10L, 3L))
+                .thenReturn(threeStageSnapshot());
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.createDraft(10L, 20L, "create-key-3", req));
+
+        assertEquals(ErrorCode.INTERVIEW_FLOW_NOT_ALLOWED.getCode(), exception.getCode());
+        verify(mapper, never()).insert(any(InterviewPlanDraft.class));
+    }
+
+    private InterviewTemplateSnapshot threeStageSnapshot() {
+        return new InterviewTemplateSnapshot(
+                3L, 1, "三阶段模板",
+                List.of(
+                        new InterviewTemplateSnapshot.StageSnapshot(
+                                "TECHNICAL", "技术面", 1, 5, 0.6, null, 1),
+                        new InterviewTemplateSnapshot.StageSnapshot(
+                                "HR", "HR面", 2, 3, 0.4, null, 1),
+                        new InterviewTemplateSnapshot.StageSnapshot(
+                                "ASSESSMENT", "评估面", 3, 2, 0.3, null, 1)));
     }
 }

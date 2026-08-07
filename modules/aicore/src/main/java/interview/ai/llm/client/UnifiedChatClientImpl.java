@@ -13,6 +13,7 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.tokenizer.JTokkitTokenCountEstimator;
 import org.springframework.ai.tokenizer.TokenCountEstimator;
+import org.springframework.ai.tool.ToolCallback;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 import java.io.IOException;
@@ -66,6 +67,28 @@ public class UnifiedChatClientImpl implements UnifiedChatClient {
                 .content();
         return new AiResult<>(
                 content,
+                LlmConfigSnapshot.from(route, systemPrompt)
+        );
+    }
+
+    @Override
+    public <T> AiResult<T> callWithAgent(AiSceneCode sceneCode, String userPrompt, Class<T> responseType, ToolCallback... toolCallbacks) {
+        // 解析路由和版本化系统提示词，并在模型调用前检查输入预算。
+        RouteResult route = routeService.route(sceneCode);
+        String systemPrompt = getSystemPrompt(sceneCode, route.getPromptVersion());
+        checkInputTokens(route, systemPrompt, userPrompt);
+        ChatModel chatModel = factory.createChatModel(route);
+
+        // 执行结构化调用，并为业务持久化返回不含密钥的配置快照。
+        T entity = ChatClient.builder(chatModel).build()
+                .prompt()
+                .system(systemPrompt)
+                .user(userPrompt)
+                .toolCallbacks(toolCallbacks)
+                .call()
+                .entity(responseType);
+        return new AiResult<>(
+                entity,
                 LlmConfigSnapshot.from(route, systemPrompt)
         );
     }

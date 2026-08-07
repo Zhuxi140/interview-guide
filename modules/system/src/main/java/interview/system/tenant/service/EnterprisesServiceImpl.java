@@ -61,7 +61,6 @@ public class EnterprisesServiceImpl extends ServiceImpl<EnterprisesMapper, Enter
     private static final long ENTERPRISE_CONTACT_LOCK_NAMESPACE = 0x454E54434F4E5443L;
 
     private final CustomIdGenerator customIdGenerator;
-    private final UserRolesService userRolesService;
     private final EnterpriseTeamMembersService enterpriseTeamMembersService;
     private final EnterprisesMapper enterprisesMapper;
     private final RolesService rolesService;

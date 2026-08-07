@@ -333,12 +333,27 @@ public class InterviewStageTemplateServiceImpl extends ServiceImpl<InterviewStag
     public InterviewTemplateSnapshot buildTemplateSnapshot(Long enterpriseId, Long templateId) {
         enterpriseValidationApi.validateEnterpriseBelong(
                 enterpriseId, AuthContext.getRequiredUserId());
+        InterviewTemplateSnapshot snapshot =
+                buildSnapshotWithoutAuth(enterpriseId, templateId);
+        if (snapshot == null) {
+            throw new BusinessException(ErrorCode.INTERVIEW_TEMPLATE_NOT_FOUND);
+        }
+        return snapshot;
+    }
+
+    @Override
+    public InterviewTemplateSnapshot buildTemplateSnapshotWithoutAuth(Long enterpriseId, Long templateId) {
+        return buildSnapshotWithoutAuth(enterpriseId, templateId);
+    }
+
+    private InterviewTemplateSnapshot buildSnapshotWithoutAuth(Long enterpriseId, Long templateId) {
         InterviewStageTemplate template = lambdaQuery()
+                .select(InterviewStageTemplate::getStagesSequenceJson, InterviewStageTemplate::getVersion)
                 .eq(InterviewStageTemplate::getId, templateId)
                 .eq(InterviewStageTemplate::getEnterpriseId, enterpriseId)
                 .one();
         if (template == null) {
-            throw new BusinessException(ErrorCode.INTERVIEW_TEMPLATE_NOT_FOUND);
+            return null;
         }
 
         Map<String, InterviewPhaseConfig> configs = interviewPhaseConfigMapper.selectList(

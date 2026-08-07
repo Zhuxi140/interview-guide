@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="interview.interviewcfg.mapper.InterviewPlanDraftMapper">
+
+    <resultMap id="generationExecutionMap"
+               type="interview.interviewcfg.model.bo.InterviewPlanGenerationExecutionBO">
+        <constructor>
+            <arg column="draft_id" javaType="java.lang.Long"/>
+            <arg column="message_id" javaType="java.lang.Long"/>
+            <arg column="enterprise_id" javaType="java.lang.Long"/>
+            <arg column="application_id" javaType="java.lang.Long"/>
+            <arg column="template_id" javaType="java.lang.Long"/>
+            <arg column="request_json" javaType="java.lang.String"/>
+            <arg column="input_snapshot_json" javaType="java.lang.String"/>
+            <arg column="attempt_count" javaType="java.lang.Integer"/>
+        </constructor>
+    </resultMap>
+
+    <select id="claimGeneration" resultMap="generationExecutionMap"
+            affectData="true">
+        UPDATE interview_plan_drafts
+        SET status = 'PROCESSING',
+            attempt_count = COALESCE(attempt_count, 0) + 1,
+            generation_deadline_at = #{deadline},
+            updated_by = requested_by,
+            trace_id = #{traceId},
+            updated_at = #{now}
+        WHERE id = #{draftId}
+          AND generation_message_id = #{messageId}
+          AND COALESCE(attempt_count, 0) &lt; #{maxAttempts}
+          AND (
+              status = 'PENDING'
+              OR (
+                  status = 'PROCESSING'
+                  AND (generation_deadline_at IS NULL OR generation_deadline_at &lt;= #{now})
+              )
+          )
+        RETURNING id AS draft_id,
+                  generation_message_id AS message_id,
+                  enterprise_id,
+                  application_id,
+                  template_id,
+                  request_json::TEXT AS request_json,
+                  input_snapshot_json::TEXT AS input_snapshot_json,
+                  attempt_count
+    </select>
+
+    <update id="completeGeneration">
+        UPDATE interview_plan_drafts
+        SET status = 'READY',
+            plan_json = #{planJson}::jsonb,
+            llm_config_snapshot = #{snapshotJson}::jsonb,
+            expires_at = #{expiresAt},
+            generation_deadline_at = NULL,
+            failure_reason = NULL,
+            updated_by = requested_by,
+            trace_id = #{traceId},
+            updated_at = #{now}
+        WHERE id = #{draftId}
+          AND generation_message_id = #{messageId}
+          AND attempt_count = #{attemptCount}
+          AND status = 'PROCESSING'
+    </update>
+
+    <update id="failExhaustedGeneration">
+        UPDATE interview_plan_drafts
+        SET status = 'FAILED',
+            failure_reason = LEFT(#{failureReason}, 512),
+            generation_deadline_at = NULL,
+            updated_by = requested_by,
+            trace_id = #{traceId},
+            updated_at = #{now}
+        WHERE id = #{draftId}
+          AND generation_message_id = #{messageId}
+          AND COALESCE(attempt_count, 0) &gt;= #{maxAttempts}
+          AND (
+              status = 'PENDING'
+              OR (
+                  status = 'PROCESSING'
+                  AND (generation_deadline_at IS NULL OR generation_deadline_at &lt;= #{now})
+              )
+          )
+    </update>
+
+    <update id="failGeneration">
+        UPDATE interview_plan_drafts
+        SET status = 'FAILED',
+            failure_reason = LEFT(#{failureReason}, 512),
+            generation_deadline_at = NULL,
+            updated_by = requested_by,
+            trace_id = #{traceId},
+            updated_at = #{now}
+        WHERE id = #{draftId}
+          AND generation_message_id = #{messageId}
+          AND attempt_count = #{attemptCount}
+          AND status = 'PROCESSING'
+    </update>
+
+    <update id="releaseGenerationForRetry">
+        UPDATE interview_plan_drafts
+        SET status = 'PENDING',
+            generation_deadline_at = NULL,
+            updated_by = requested_by,
+            trace_id = #{traceId},
+            updated_at = #{now}
+        WHERE id = #{draftId}
+          AND generation_message_id = #{messageId}
+          AND attempt_count = #{attemptCount}
+          AND status = 'PROCESSING'
+    </update>
+
+    <update id="expireDraft">
+        UPDATE interview_plan_drafts
+        SET status = 'EXPIRED',
+            updated_at = #{now},
+            trace_id = #{traceId}
+        WHERE id = #{draftId}
+          AND status IN ('PENDING', 'PROCESSING', 'READY')
+          AND expires_at IS NOT NULL
+          AND expires_at &lt;= #{now}
+    </update>
+
+</mapper>

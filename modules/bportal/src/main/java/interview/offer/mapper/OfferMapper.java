@@ -8,11 +8,25 @@ import interview.offer.model.enums.OfferStatus;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.time.OffsetDateTime;
+
 /**
  * Offer 持久化 Mapper。
  */
 @Mapper
 public interface OfferMapper extends BaseMapper<Offer> {
+
+    /**
+     * 将一条已发送且超过决定截止时间的 Offer 原子推进为 EXPIRED。
+     *
+     * @param offerId Offer ID
+     * @param now 当前时间
+     * @param traceId 链路 ID
+     * @return 影响行数；已决策/已撤回/非 SENT 时返回 0
+     */
+    int expireDueOffer(@Param("offerId") Long offerId,
+                       @Param("now") OffsetDateTime now,
+                       @Param("traceId") String traceId);
 
     /**
      * 分页查询候选人可见的 Offer

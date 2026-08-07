@@ -95,7 +95,7 @@ public enum ErrorCode {
     MEMBER_ALREADY_EXISTS(20027,"用户已在企业中"),
     NO_OPERATE_ENTERPRISE_OWNER(20028,"不能操作企业所有人"),
     NO_DELETE_OWNER(20029,"不能移除自己"),
-    CURREMT_USER_NOT_ENTERPRISE_MEMBER(20030,"当前登录账户不属于该企业成员"),
+    CURRENT_USER_NOT_ENTERPRISE_MEMBER(20030,"当前登录账户不属于该企业成员"),
 
 
     // ------------ 40xxx 岗位/简历/候选人错误码 ------------
@@ -173,6 +173,10 @@ public enum ErrorCode {
     INTERVIEW_SESSION_STATUS_INVALID(50040, "面试会话状态不合法"),
     INTERVIEW_SCHEDULE_SUGGESTION_MISMATCH(50041, "排期建议必须与面试阶段一一对应"),
     INTERVIEW_TAKEOVER_NOT_FOUND(50042, "面试接管记录不存在"),
+    INTERVIEW_TYPE_NOT_ALLOWED(50043, "当前阶段仅支持文本面试（TEXT），语音面试功能尚未上线"),
+    INTERVIEWER_NOT_ENTERPRISE_MEMBER(50044, "候选面试官不属于当前企业,请重新选择"),
+    INTERVIEW_PLAN_TEMPLATE_CHANGED(50045, "面试编排草案基于的模板已变更，请重新生成"),
+
 
 
     // ------------ 60xxx 计费/钱包错误码 ------------

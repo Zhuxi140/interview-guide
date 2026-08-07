@@ -82,4 +82,13 @@ public interface InterviewStageTemplateService extends IService<InterviewStageTe
      * @return 模板快照
      */
     InterviewTemplateSnapshot buildTemplateSnapshot(Long enterpriseId, Long templateId);
+
+    /**
+     * 免鉴权生成完整模板快照；调用方已完成企业归属与模板校验。
+     *
+     * @param enterpriseId 企业ID
+     * @param templateId 模板ID
+     * @return 模板快照；模板不存在时返回 null
+     */
+    InterviewTemplateSnapshot buildTemplateSnapshotWithoutAuth(Long enterpriseId, Long templateId);
 }

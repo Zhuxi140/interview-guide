@@ -2,6 +2,7 @@ package interview.ai.llm.client;
 
 import interview.ai.llm.model.AiResult;
 import interview.common.enums.AiSceneCode;
+import org.springframework.ai.tool.ToolCallback;
 
 /**
  * 统一 LLM 调用入口：业务代码只依赖本接口
@@ -31,4 +32,21 @@ public interface UnifiedChatClient {
      * @return 模型文本及非敏感配置快照
      */
     AiResult<String> callText(AiSceneCode sceneCode, String userPrompt);
+
+    /**
+     * 带代理的调用：支持工具调用
+     *
+     * @param sceneCode  场景编码
+     * @param userPrompt 用户提示词
+     * @param responseType 期望返回的 Java 类型
+     * @param toolCallbacks 工具回调
+     * @param <T>          结构化结果类型
+     * @return 模型结果及非敏感配置快照
+     */
+    <T> AiResult<T> callWithAgent(
+            AiSceneCode sceneCode,
+            String userPrompt,
+            Class<T> responseType,
+            ToolCallback... toolCallbacks
+    );
 }

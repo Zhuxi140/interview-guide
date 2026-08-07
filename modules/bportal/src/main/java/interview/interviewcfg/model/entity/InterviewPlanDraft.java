@@ -59,11 +59,21 @@ public class InterviewPlanDraft implements Serializable {
     @TableField(typeHandler = JsonbStringTypeHandler.class)
     private String planJson;
 
+    /** 本次 Agent 生成实际使用的 LLM 配置快照，不含密钥。 */
+    @TableField(typeHandler = JsonbStringTypeHandler.class)
+    private String llmConfigSnapshot;
+
     private InterviewPlanDraftStatus status;
 
     private String failureReason;
 
     private Long generationMessageId;
+
+    /** Agent 生成已领取次数，用于租约重试栅栏。 */
+    private Integer attemptCount;
+
+    /** Agent 生成本次执行截止时间，PROCESSING 期间有效。 */
+    private OffsetDateTime generationDeadlineAt;
 
     @Version
     private Integer version;

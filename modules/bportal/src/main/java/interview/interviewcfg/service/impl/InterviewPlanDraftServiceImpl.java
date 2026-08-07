@@ -1,16 +1,31 @@
 package interview.interviewcfg.service.impl;
 
+import cn.hutool.json.JSONArray;
+import cn.hutool.json.JSONObject;
+import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
+import interview.api.aicore.dto.JobApplicationSnapshotDTO;
+import interview.api.bportal.JobValidationApi;
+import interview.api.infra.LocalMessageApi;
+import interview.api.infra.dto.MessageDTO;
 import interview.api.system.EnterpriseValidationApi;
 import interview.common.enums.ErrorCode;
+import interview.common.enums.InterviewScheduleStatus;
 import interview.common.enums.InterviewType;
+import interview.common.enums.MsgPriority;
+import interview.common.enums.MsgStatus;
+import interview.common.enums.MsgTopic;
 import interview.common.exception.BusinessException;
+import interview.common.util.IdGeneratorUtil;
+import interview.framework.config.CustomIdGenerator;
 import interview.framework.context.AuthContext;
+import interview.interviewcfg.event.AgentPlanDraftEvent;
 import interview.interviewcfg.mapper.InterviewPlanDraftMapper;
+import interview.interviewcfg.model.bo.InterviewTemplateSnapshot;
 import interview.interviewcfg.model.entity.InterviewPlanDraft;
 import interview.interviewcfg.model.enums.InterviewPlanDraftStatus;
 import interview.interviewcfg.model.req.InterviewPlanDraftApplyReq;
@@ -23,17 +38,22 @@ import interview.interviewcfg.model.vo.InterviewPlanDraftListItemVO;
 import interview.interviewcfg.model.vo.InterviewScheduleCreateVO;
 import interview.interviewcfg.service.InterviewPlanDraftService;
 import interview.interviewcfg.service.InterviewScheduleService;
+import interview.interviewcfg.service.InterviewStageTemplateService;
+import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
 
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Agent 面试编排草案实现。
@@ -44,24 +64,117 @@ import java.util.Map;
 public class InterviewPlanDraftServiceImpl extends ServiceImpl<InterviewPlanDraftMapper, InterviewPlanDraft>
         implements InterviewPlanDraftService {
 
+    private static final String GENERATION_BIZ_PREFIX = "INTERVIEW_PLAN_GENERATION:";
+    private static final int GENERATION_TIMEOUT_SECONDS = 300;
+    private static final DateTimeFormatter ISO_TIME_WITH_SECONDS =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX");
+
     private final EnterpriseValidationApi enterpriseValidationApi;
-    private final ObjectMapper objectMapper;
+    private final JobValidationApi jobValidationApi;
+    private final InterviewStageTemplateService interviewStageTemplateService;
     private final InterviewScheduleService interviewScheduleService;
+    private final ApplicationEventPublisher eventPublisher;
+    private final LocalMessageApi localMessageApi;
+    private final CustomIdGenerator customIdGenerator;
+
 
     @Override
+    @Transactional
     public InterviewPlanDraftCreateVO createDraft(Long enterpriseId, Long applicationId,
                                                    String idempotencyKey, InterviewPlanDraftCreateReq req) {
-        // TODO ① 从 AuthContext 获取发起人，校验企业成员身份、接口权限和 Idempotency-Key 非空。
-        // TODO ② 通过投递模块校验 applicationId 属于 enterpriseId、状态允许进入面试，并取得岗位和候选人快照。
-        // TODO ③ 校验第三阶段 interviewType 只能为 TEXT；templateId 必填且属于当前企业，候选面试官必须是企业成员。
-        // TODO ④ 按企业+投递+发起人+幂等键查询历史草案；相同请求返回原结果，不同请求复用键返回幂等冲突。
-        // TODO ⑤ 读取模板及全部阶段配置，检查阶段顺序，并把模板 ID、版本和完整阶段配置写入 inputSnapshotJson。
-        // TODO ⑥ 检查同一投递没有 PENDING/PROCESSING/READY 活动草案；约束 Agent 只能在快照阶段内生成考察点、题纲和排期建议。
-        // TODO ⑦ 在同一事务插入 PENDING 草案和 Agent 生成 Outbox 消息，保存 generationMessageId；禁止远程写中央消息表破坏本地事务。
-        // TODO ⑧ 事务提交后立即派发消息；Handler 原子领取草案、调用 Agent，并按执行栅栏写入 READY 或 FAILED。
-        // TODO ⑨ 模型调用失败由消息租约和有限重试收敛，重复消费不得重复计费或覆盖新一轮执行结果。
-        // TODO ⑩ 返回 draftId、applicationId、PENDING 和初始 version，Controller 使用 HTTP 202。
-        return null;
+        //  通过投递模块校验 applicationId 属于 enterpriseId、状态允许进入面试，并取得岗位和候选人快照。
+        JobApplicationSnapshotDTO jobApplicationSnapshotDTO = jobValidationApi.requirePassedApplication(enterpriseId, applicationId);
+        // 校验面试官与模板归属：模板必须属于当前企业。
+        // interviewType 校验：本阶段仅接受 TEXT——待 Phase 07（代码与语音面试）语音排期上线后放开为 TEXT/VOICE。
+        //       注意：草案按 requestJson.interviewType 整单单选，无法表达「R1 文本 + R2 语音」的轮次混排；
+        //       放开语音时需在 CreateRequest 与 plan.scheduleSuggestions 补充 per-round interviewType 并调整 apply 透传（见阶段三接口文档.md：87 行 Phase 5 扩展点）。
+        if (! req.interviewType().equals(InterviewType.TEXT)) {
+            throw new BusinessException(ErrorCode.INTERVIEW_TYPE_NOT_ALLOWED);
+        }
+        // 免鉴权生成模板快照（调用方已通过投递模块校验企业归属），同时约束 Agent 只能在快照阶段内生成考察点、题纲和排期建议。
+        InterviewTemplateSnapshot templateSnapshot =
+                interviewStageTemplateService.buildTemplateSnapshotWithoutAuth(enterpriseId, req.templateId());
+        if (templateSnapshot == null) {
+            throw new BusinessException(ErrorCode.INTERVIEW_STAGE_TEMPLATE_NOT_FOUND);
+        }
+        // HR 可选定有序阶段子集：快照按子集裁剪后再交给 Agent，保证「快照即 Agent 生成边界」成立，无需在执行校验层二次换算。
+        InterviewTemplateSnapshot planSnapshot = filterSnapshotStages(templateSnapshot, req);
+        String inputSnapshotJson = writeSnapshotJson(planSnapshot);
+
+        // 候选面试官必须是企业成员
+        List<Long>  interviewUserIds = req.interviewerUserIds().isEmpty() ? null : req.interviewerUserIds().stream().distinct().toList();
+        if (interviewUserIds != null){
+            enterpriseValidationApi.validateEnterpriseMembers(enterpriseId,interviewUserIds);
+        }
+
+        // 按企业+投递+发起人+幂等键查询历史草案；相同请求返回原结果，不同请求复用键返回幂等冲突。
+        Long userId = AuthContext.getRequiredUserId();
+        InterviewPlanDraft draft = lambdaQuery()
+                .select(
+                        InterviewPlanDraft::getId, InterviewPlanDraft::getApplicationId,
+                        InterviewPlanDraft::getStatus, InterviewPlanDraft::getVersion)
+                .eq(InterviewPlanDraft::getEnterpriseId, enterpriseId)
+                .eq(InterviewPlanDraft::getApplicationId, applicationId)
+                .eq(InterviewPlanDraft::getRequestedBy,userId)
+                .eq(InterviewPlanDraft::getIdempotencyKey, idempotencyKey)
+                .one();
+        if (draft != null) {
+            return new InterviewPlanDraftCreateVO(draft.getId(), draft.getApplicationId(), draft.getStatus(), draft.getVersion());
+        }
+        // 检查同一投递没有 PENDING/PROCESSING/READY 活动草案；约束 Agent 只能在快照阶段内生成考察点、题纲和排期建议。
+        boolean exists = lambdaQuery()
+                .eq(InterviewPlanDraft::getEnterpriseId, enterpriseId)
+                .eq(InterviewPlanDraft::getApplicationId, applicationId)
+                .in(InterviewPlanDraft::getStatus,
+                        InterviewPlanDraftStatus.PENDING,
+                        InterviewPlanDraftStatus.PROCESSING,
+                        InterviewPlanDraftStatus.READY)
+                .exists();
+        if (exists) {
+            throw new BusinessException(ErrorCode.INTERVIEW_FLOW_NOT_ALLOWED);
+        }
+        // 先保存本地生成消息取得 messageId，再一次性插入 PENDING 草案（含 generationMessageId），省去一次 UPDATE。
+        try {
+            Long draftId = (Long) customIdGenerator.nextId(InterviewPlanDraft.class);
+            OffsetDateTime now = OffsetDateTime.now();
+            MessageDTO message = MessageDTO.builder()
+                    .bizKey(GENERATION_BIZ_PREFIX + draftId)
+                    .topic(MsgTopic.INTERVIEW_PLAN_GENERATION)
+                    .schemaVersion(1)
+                    .payload(String.valueOf(draftId))
+                    .status(MsgStatus.PENDING)
+                    .priority(MsgPriority.HIGH)
+                    .maxRetries(5)
+                    .nextRetryAt(now.plusSeconds(GENERATION_TIMEOUT_SECONDS))
+                    .build();
+            Long messageId = localMessageApi.saveInCurrentTransaction(message);
+
+            OffsetDateTime expiresAt = now.plusDays(DRAFT_VALIDITY_DAYS);
+            InterviewPlanDraft newDraft = InterviewPlanDraft.builder()
+                    .id(draftId)
+                    .enterpriseId(enterpriseId)
+                    .applicationId(applicationId)
+                    .templateId(req.templateId())
+                    .requestJson(writeRequestJson(req))
+                    .inputSnapshotJson(inputSnapshotJson)
+                    .status(InterviewPlanDraftStatus.PENDING)
+                    .idempotencyKey(idempotencyKey)
+                    .requestedBy(userId)
+                    .generationMessageId(messageId)
+                    .version(0)
+                    .expiresAt(expiresAt)
+                    .build();
+            save(newDraft);
+
+            eventPublisher.publishEvent(new AgentPlanDraftEvent(
+                    messageId, draftId, enterpriseId, applicationId));
+            // ⑩ 返回 draftId、applicationId、PENDING 和初始 version，Controller 使用 HTTP 202。
+            return new InterviewPlanDraftCreateVO(
+                    draftId, applicationId, InterviewPlanDraftStatus.PENDING, 0);
+        } catch (DuplicateKeyException ignored) {
+            // 并发同键：PostgreSQL 事务已中止，本事务内不可再查询；统一按幂等冲突拒绝，客户端重试命中幂等查询后拿到原结果。
+            throw new BusinessException(ErrorCode.INTERVIEW_FLOW_NOT_ALLOWED);
+        }
     }
 
     @Override
@@ -77,7 +190,8 @@ public class InterviewPlanDraftServiceImpl extends ServiceImpl<InterviewPlanDraf
                 .select(
                         InterviewPlanDraft::getId, InterviewPlanDraft::getStatus,
                         InterviewPlanDraft::getVersion, InterviewPlanDraft::getExpiresAt,
-                        InterviewPlanDraft::getTemplateId, InterviewPlanDraft::getPlanJson,
+                        InterviewPlanDraft::getTemplateId, InterviewPlanDraft::getInputSnapshotJson,
+                        InterviewPlanDraft::getPlanJson,
                         InterviewPlanDraft::getApplyIdempotencyKey,
                         InterviewPlanDraft::getAppliedPlanJson, InterviewPlanDraft::getAppliedScheduleIds,
                         InterviewPlanDraft::getAppliedAt)
@@ -98,7 +212,10 @@ public class InterviewPlanDraftServiceImpl extends ServiceImpl<InterviewPlanDraf
             throw new BusinessException(ErrorCode.INTERVIEW_FLOW_NOT_ALLOWED);
         }
 
-        // ④ 校验 HR 修订版计划：阶段结构与顺序必须与草案快照一致（白名单，防绕过模板约束）。
+        // ④ 校验草案基于的模板版本仍是当前版本；模板变更后旧草案不可落地，需重新生成。
+        validateCurrentTemplateVersion(enterpriseId, draft);
+
+        // ⑤ 校验 HR 修订版计划：阶段结构与顺序必须与草案快照一致（白名单，防绕过模板约束）。
         validateStageStructure(draft.getPlanJson(), req.plan());
 
         // ⑤ 排期建议与阶段一一对应（每轮一条，可为空表示本轮不建排期）；复用 createSchedule
@@ -242,11 +359,82 @@ public class InterviewPlanDraftServiceImpl extends ServiceImpl<InterviewPlanDraf
 
     private InterviewType parseInterviewType(String requestJson) {
         try {
-            return objectMapper.readValue(
-                    requestJson, InterviewPlanDraftCreateReq.class).interviewType();
+            return InterviewType.valueOf(JSONUtil.parseObj(requestJson).getStr("interviewType"));
         } catch (Exception exception) {
             log.error("面试编排草案请求快照无法解析", exception);
             throw new BusinessException(ErrorCode.JSON_TO_OBJECT_ERROR);
+        }
+    }
+
+    private InterviewTemplateSnapshot filterSnapshotStages(
+            InterviewTemplateSnapshot templateSnapshot, InterviewPlanDraftCreateReq req) {
+        List<String> phaseCodes = req.phaseCodes();
+        if (phaseCodes == null || phaseCodes.isEmpty()) {
+            return templateSnapshot;
+        }
+        // 阶段编码必须存在于模板且保持 HR 指定顺序，超 maxRounds 的请求提前拦截，避免 AI 阶段数与模板快照对不上。
+        Map<String, InterviewTemplateSnapshot.StageSnapshot> byCode = new java.util.LinkedHashMap<>();
+        for (InterviewTemplateSnapshot.StageSnapshot stage : templateSnapshot.stages()) {
+            byCode.put(stage.phaseCode(), stage);
+        }
+        List<InterviewTemplateSnapshot.StageSnapshot> selected = new ArrayList<>();
+        for (String code : phaseCodes) {
+            InterviewTemplateSnapshot.StageSnapshot stage = byCode.get(code);
+            if (stage == null) {
+                throw new BusinessException(ErrorCode.INTERVIEW_TEMPLATE_STAGE_INVALID);
+            }
+            selected.add(stage);
+        }
+        if (req.maxRounds() != null && selected.size() > req.maxRounds()) {
+            throw new BusinessException(ErrorCode.INTERVIEW_FLOW_NOT_ALLOWED);
+        }
+        return new InterviewTemplateSnapshot(
+                templateSnapshot.templateId(),
+                templateSnapshot.templateVersion(),
+                templateSnapshot.templateName(),
+                selected);
+    }
+
+    private String writeRequestJson(InterviewPlanDraftCreateReq req) {
+        try {
+            JSONObject json = new JSONObject();
+            json.put("templateId", req.templateId());
+            json.put("interviewType", req.interviewType());
+            json.put("durationMinutes", req.durationMinutes());
+            json.put("maxRounds", req.maxRounds());
+            json.put("interviewerUserIds", req.interviewerUserIds());
+            json.put("phaseCodes", req.phaseCodes());
+            json.put("prompt", req.prompt());
+            return json.toString();
+        } catch (Exception exception) {
+            log.error("面试编排草案请求快照序列化失败", exception);
+            throw new BusinessException(ErrorCode.OBJECT_TO_JSON_ERROR);
+        }
+    }
+
+    private String writeSnapshotJson(InterviewTemplateSnapshot snapshot) {
+        try {
+            JSONObject root = new JSONObject();
+            root.put("templateId", snapshot.templateId());
+            root.put("templateVersion", snapshot.templateVersion());
+            root.put("templateName", snapshot.templateName());
+            JSONArray stages = new JSONArray();
+            for (InterviewTemplateSnapshot.StageSnapshot stage : snapshot.stages()) {
+                JSONObject item = new JSONObject();
+                item.put("phaseCode", stage.phaseCode());
+                item.put("phaseName", stage.phaseName());
+                item.put("sortOrder", stage.sortOrder());
+                item.put("questionCount", stage.questionCount());
+                item.put("difficultyWeight", stage.difficultyWeight());
+                item.put("promptOverride", stage.promptOverride());
+                item.put("phaseConfigVersion", stage.phaseConfigVersion());
+                stages.add(item);
+            }
+            root.put("stages", stages);
+            return root.toString();
+        } catch (Exception exception) {
+            log.error("面试模板快照序列化失败", exception);
+            throw new BusinessException(ErrorCode.OBJECT_TO_JSON_ERROR);
         }
     }
 
@@ -255,11 +443,51 @@ public class InterviewPlanDraftServiceImpl extends ServiceImpl<InterviewPlanDraf
             throw new BusinessException(ErrorCode.JSON_TO_OBJECT_ERROR);
         }
         try {
-            return objectMapper.readValue(
-                    planJson, InterviewPlanDraftDetailVO.PlanVO.class);
+            JSONObject plan = JSONUtil.parseObj(planJson);
+            List<InterviewPlanDraftDetailVO.StagePlanVO> stages = plan.getJSONArray("stages")
+                    .stream().map(item -> {
+                        JSONObject stage = (JSONObject) item;
+                        return new InterviewPlanDraftDetailVO.StagePlanVO(
+                                stage.getStr("phaseCode"),
+                                stage.getStr("objectives"),
+                                stage.getStr("questionOutline"),
+                                stage.getInt("durationMinutes"));
+                    }).toList();
+            JSONArray suggestionsArray = plan.getJSONArray("scheduleSuggestions");
+            List<InterviewPlanDraftDetailVO.ScheduleSuggestionVO> suggestions =
+                    suggestionsArray == null
+                            ? List.of()
+                            : suggestionsArray.stream().map(item -> {
+                                JSONObject suggestion = (JSONObject) item;
+                                String interviewTime = suggestion.getStr("interviewTime");
+                                return new InterviewPlanDraftDetailVO.ScheduleSuggestionVO(
+                                        suggestion.getLong("suggestionId"),
+                                        suggestion.getLong("interviewerUserId"),
+                                        interviewTime == null ? null : OffsetDateTime.parse(interviewTime),
+                                        suggestion.getStr("reason"));
+                            }).toList();
+            return new InterviewPlanDraftDetailVO.PlanVO(stages, suggestions);
+        } catch (BusinessException businessException) {
+            throw businessException;
         } catch (Exception exception) {
             log.error("面试编排草案计划无法解析", exception);
             throw new BusinessException(ErrorCode.JSON_TO_OBJECT_ERROR);
+        }
+    }
+
+    private void validateCurrentTemplateVersion(Long enterpriseId, InterviewPlanDraft draft) {
+        // 旧数据或早期创建未带输入快照的草案无法比对版本，直接放行（不掌握模板版本即不拦截）。
+        if (draft.getInputSnapshotJson() == null || draft.getInputSnapshotJson().isBlank()) {
+            return;
+        }
+        InterviewTemplateSnapshot current = interviewStageTemplateService
+                .buildTemplateSnapshotWithoutAuth(enterpriseId, draft.getTemplateId());
+        if (current == null) {
+            throw new BusinessException(ErrorCode.INTERVIEW_TEMPLATE_NOT_FOUND);
+        }
+        Integer snapshotVersion = JSONUtil.parseObj(draft.getInputSnapshotJson()).getInt("templateVersion");
+        if (snapshotVersion == null || !snapshotVersion.equals(current.templateVersion())) {
+            throw new BusinessException(ErrorCode.INTERVIEW_PLAN_TEMPLATE_CHANGED);
         }
     }
 
@@ -321,7 +549,7 @@ public class InterviewPlanDraftServiceImpl extends ServiceImpl<InterviewPlanDraf
 
     private String serializeScheduleIds(List<Long> scheduleIds) {
         try {
-            return objectMapper.writeValueAsString(scheduleIds);
+            return JSONUtil.toJsonStr(scheduleIds);
         } catch (Exception exception) {
             log.error("面试编排草案已应用排期 ID 序列化失败", exception);
             throw new BusinessException(ErrorCode.OBJECT_TO_JSON_ERROR);
@@ -345,9 +573,9 @@ public class InterviewPlanDraftServiceImpl extends ServiceImpl<InterviewPlanDraf
         }
         try {
             List<Long> ids = new ArrayList<>();
-            JsonNode array = objectMapper.readTree(appliedScheduleIds);
-            if (array.isArray()) {
-                array.forEach(node -> ids.add(node.asLong()));
+            JSONArray array = JSONUtil.parseArray(appliedScheduleIds);
+            for (int i = 0; i < array.size(); i++) {
+                ids.add(((Number) array.get(i)).longValue());
             }
             return ids;
         } catch (Exception exception) {
@@ -358,7 +586,31 @@ public class InterviewPlanDraftServiceImpl extends ServiceImpl<InterviewPlanDraf
 
     private String normalizePlan(InterviewPlanDraftApplyReq.Plan plan) {
         try {
-            return objectMapper.writeValueAsString(objectMapper.valueToTree(plan));
+            JSONObject root = new JSONObject();
+            JSONArray stages = new JSONArray();
+            for (InterviewPlanDraftApplyReq.Stage stage : plan.stages()) {
+                JSONObject item = new JSONObject();
+                item.put("phaseCode", stage.phaseCode());
+                item.put("objectives", stage.objectives());
+                item.put("questionOutline", stage.questionOutline());
+                item.put("durationMinutes", stage.durationMinutes());
+                stages.add(item);
+            }
+            root.put("stages", stages);
+            JSONArray suggestionsArray = new JSONArray();
+            if (plan.scheduleSuggestions() != null) {
+                for (InterviewPlanDraftApplyReq.Suggestion suggestion : plan.scheduleSuggestions()) {
+                    JSONObject item = new JSONObject();
+                    item.put("suggestionId", suggestion.suggestionId());
+                    item.put("interviewerUserId", suggestion.interviewerUserId());
+                    item.put("interviewTime", suggestion.interviewTime() == null
+                            ? null : suggestion.interviewTime().format(ISO_TIME_WITH_SECONDS));
+                    item.put("reason", suggestion.reason());
+                    suggestionsArray.add(item);
+                }
+            }
+            root.put("scheduleSuggestions", suggestionsArray);
+            return root.toString();
         } catch (Exception exception) {
             log.error("面试编排草案应用计划序列化失败", exception);
             throw new BusinessException(ErrorCode.JSON_TO_OBJECT_ERROR);
@@ -370,7 +622,7 @@ public class InterviewPlanDraftServiceImpl extends ServiceImpl<InterviewPlanDraf
             return false;
         }
         try {
-            return jsonEquals(objectMapper.readTree(submitted), objectMapper.readTree(stored));
+            return jsonEquals(JSONUtil.parse(submitted), JSONUtil.parse(stored));
         } catch (Exception exception) {
             log.error("面试编排草案应用计划对比失败", exception);
             return false;
@@ -380,37 +632,38 @@ public class InterviewPlanDraftServiceImpl extends ServiceImpl<InterviewPlanDraf
     /**
      * 递归比较两棵 JSON 树；数值统一按十进制比较，容忍 int/long 序列化差异。
      */
-    private boolean jsonEquals(JsonNode left, JsonNode right) {
+    private boolean jsonEquals(Object left, Object right) {
         if (left == null || right == null) {
             return left == right;
         }
-        if (left.isNumber() && right.isNumber()) {
-            return left.decimalValue().compareTo(right.decimalValue()) == 0;
-        }
-        if (left.isObject() && right.isObject()) {
-            if (left.size() != right.size()) {
+        if (left instanceof JSONObject leftObject && right instanceof JSONObject rightObject) {
+            if (leftObject.size() != rightObject.size()) {
                 return false;
             }
-            for (Map.Entry<String, JsonNode> entry : left.properties()) {
-                JsonNode rightValue = right.get(entry.getKey());
+            for (Map.Entry<String, Object> entry : leftObject.entrySet()) {
+                Object rightValue = rightObject.get(entry.getKey());
                 if (rightValue == null || !jsonEquals(entry.getValue(), rightValue)) {
                     return false;
                 }
             }
             return true;
         }
-        if (left.isArray() && right.isArray()) {
-            if (left.size() != right.size()) {
+        if (left instanceof JSONArray leftArray && right instanceof JSONArray rightArray) {
+            if (leftArray.size() != rightArray.size()) {
                 return false;
             }
-            for (int i = 0; i < left.size(); i++) {
-                if (!jsonEquals(left.get(i), right.get(i))) {
+            for (int i = 0; i < leftArray.size(); i++) {
+                if (!jsonEquals(leftArray.get(i), rightArray.get(i))) {
                     return false;
                 }
             }
             return true;
         }
-        return left.equals(right);
+        if (left instanceof Number leftNumber && right instanceof Number rightNumber) {
+            return new BigDecimal(leftNumber.toString())
+                    .compareTo(new BigDecimal(rightNumber.toString())) == 0;
+        }
+        return Objects.equals(left, right);
     }
 
     private void validatePage(Integer page, Integer size) {

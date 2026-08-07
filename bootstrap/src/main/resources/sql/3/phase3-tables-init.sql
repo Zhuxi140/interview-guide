@@ -89,6 +89,8 @@ CREATE TABLE IF NOT EXISTS interview_plan_drafts (
     status                  VARCHAR(16)     NOT NULL DEFAULT 'PENDING',
     failure_reason          VARCHAR(512),
     generation_message_id   BIGINT,
+    attempt_count           INT             NOT NULL DEFAULT 0,
+    generation_deadline_at  TIMESTAMPTZ,
     version                 INT             NOT NULL DEFAULT 0,
     expires_at              TIMESTAMPTZ,
     applied_at              TIMESTAMPTZ,
@@ -113,7 +115,9 @@ CREATE TABLE IF NOT EXISTS interview_plan_drafts (
     CONSTRAINT ck_interview_plan_applied_object
         CHECK (applied_plan_json IS NULL OR jsonb_typeof(applied_plan_json) = 'object'),
     CONSTRAINT ck_interview_plan_applied_ids
-        CHECK (applied_schedule_ids IS NULL OR jsonb_typeof(applied_schedule_ids) = 'array')
+        CHECK (applied_schedule_ids IS NULL OR jsonb_typeof(applied_schedule_ids) = 'array'),
+    CONSTRAINT ck_interview_plan_generation_attempt
+        CHECK (attempt_count >= 0)
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS uk_interview_plan_idempotency
@@ -126,6 +130,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_interview_plan_generation_message
     WHERE generation_message_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_interview_plan_application_created
     ON interview_plan_drafts (enterprise_id, application_id, created_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_interview_plan_generation_timeout
+    ON interview_plan_drafts (generation_deadline_at, id)
+    WHERE status = 'PROCESSING';
 
 COMMENT ON TABLE interview_plan_drafts IS 'Agent 面试编排业务草案表';
 COMMENT ON COLUMN interview_plan_drafts.application_id IS '[逻辑外键]→job_applications';

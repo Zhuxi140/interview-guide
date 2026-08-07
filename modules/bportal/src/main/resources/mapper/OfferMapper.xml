@@ -54,4 +54,17 @@
           AND o.status &lt;&gt; 'DRAFT'
     </select>
 
+    <!-- 过期任务推进：SENT + 超过决定截止时间才命中；与候选人决策/HR 撤回条件竞争，谁先到谁赢 -->
+    <update id="expireDueOffer">
+        UPDATE offers
+        SET status = 'EXPIRED',
+            version = version + 1,
+            updated_at = #{now},
+            trace_id = #{traceId}
+        WHERE id = #{offerId}
+          AND status = 'SENT'
+          AND expires_at IS NOT NULL
+          AND expires_at &lt;= #{now}
+    </update>
+
 </mapper>

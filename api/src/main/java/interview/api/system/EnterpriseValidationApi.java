@@ -51,4 +51,12 @@ public interface EnterpriseValidationApi {
      * @return 企业公开信息；企业不可用时返回 null
      */
     EnterprisePublicProfileDTO getPublicEnterprise(Long enterpriseId);
+
+
+    /**
+     *  批量校验企业成员是否存在，且在同一个企业
+     * @param enterpriseId 企业 ID
+     * @param userIds 用户 ID 列表
+     */
+    void validateEnterpriseMembers(Long enterpriseId, List<Long> userIds);
 }

@@ -53,6 +53,9 @@ app:
       # 默认不缓存已领取消息，避免任务排队期间租约过期。
       queue-capacity: 0
       shutdown-await-seconds: 30
+  offer:
+    # Offer 过期 Task 推进间隔。
+    expiry-delay-ms: 60000
   storage:
     endpoint: http://localhost:9000    # RustFS 服务地址
     access-key: tJ4NevbNcFckxi4af8Uq   # 访问密钥（建议使用环境变量）

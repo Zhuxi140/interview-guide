@@ -17,6 +17,12 @@ import interview.interviewcfg.model.vo.InterviewPlanDraftListItemVO;
 public interface InterviewPlanDraftService extends IService<InterviewPlanDraft> {
 
     /**
+     * READY 草案有效期（天）。面试通常在几天内约好并开始，超期草案不可应用，
+     * 由到期任务推进 EXPIRED 以释放同投递的活动草案位。
+     */
+    int DRAFT_VALIDITY_DAYS = 3;
+
+    /**
      * 异步创建面试编排草案
      * @param enterpriseId 企业ID
      * @param applicationId 投递ID
