@@ -79,7 +79,7 @@ class EnterprisesServiceImplTest {
     @BeforeEach
     void setUp() {
         enterprisesService = spy(new EnterprisesServiceImpl(
-            customIdGenerator, userRolesService, enterpriseTeamMembersService,
+            customIdGenerator, enterpriseTeamMembersService,
             enterprisesMapper, rolesService, secureChallengeApi, jobValidationApi,
             usersService
         ));
