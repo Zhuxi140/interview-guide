@@ -978,8 +978,9 @@ INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
 (2005, 412, NOW()), (2005, 413, NOW())
 ON CONFLICT (role_id, permission_id) DO NOTHING;
 
--- CANDIDATE (3001) — 管理本人简历、投递岗位、查看并撤回本人投递
+-- CANDIDATE (3001) — 管理本人简历、投递岗位、查看并撤回本人投递；可创建企业（创建者自动成为该企业 OWNER）
 INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
+(3001, 101, NOW()),
 (3001, 401, NOW()), (3001, 402, NOW()), (3001, 403, NOW()),
 (3001, 404, NOW()), (3001, 405, NOW()), (3001, 406, NOW()),
 (3001, 407, NOW()),

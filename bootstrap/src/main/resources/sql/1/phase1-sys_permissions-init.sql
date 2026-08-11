@@ -88,6 +88,9 @@ INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
 (2005, 302, NOW()), (2005, 303, NOW())
 ON CONFLICT (role_id, permission_id) DO NOTHING;
 
--- CANDIDATE (3001) — Phase 1 无对应 API 权限，认证接口走 JWT 拦截器
+-- CANDIDATE (3001) — 可创建企业（创建者自动成为该企业 OWNER）；认证接口走 JWT 拦截器
+INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
+(3001, 101, NOW())
+ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 
