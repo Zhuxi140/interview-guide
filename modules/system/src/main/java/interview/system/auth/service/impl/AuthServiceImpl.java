@@ -215,6 +215,7 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
 
             boolean updated = lambdaUpdate()
                     .eq(UserToken::getUserId, userId)
+                    .eq(UserToken::getDeviceInfo, token.getDeviceInfo())
                     .set(UserToken::getIsRevoked, true)
                     .set(UserToken::getTraceId, TraceUtil.getTraceId())
                     .update();
@@ -223,6 +224,14 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
                 log.warn("重放撤销未影响任何记录: userId [{}]", userId);
             }
 
+            throw new BusinessException(ErrorCode.RISK_CONTROL);
+        }
+
+        // 原子核销当前 Refresh Token：并发复用同一 token 时仅首个请求能核销成功，其余按重放处理。
+        if (!consumeRefreshToken(refreshToken)) {
+            log.error("检测到 Refresh Token 并发复用或状态异常, 触发族吊销! userId:[{}], IP:[{}], deviceInfo:[{}]",
+                    userId, ipAddress, token.getDeviceInfo());
+            revokeUserDeviceTokens(userId, token.getDeviceInfo());
             throw new BusinessException(ErrorCode.RISK_CONTROL);
         }
 
@@ -670,6 +679,31 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
 
             save(userToken);
         return raw;
+    }
+
+    /**
+     * 原子核销指定 Refresh Token。
+     * 仅在目标记录未被撤销时返回 true，用于拦截同一 token 的并发复用（TOCTOU）。
+     */
+    private boolean consumeRefreshToken(String refreshToken) {
+        return lambdaUpdate()
+                .eq(UserToken::getRefreshTokenHash, DigestUtil.sha256Hex(refreshToken))
+                .eq(UserToken::getIsRevoked, false)
+                .set(UserToken::getIsRevoked, true)
+                .set(UserToken::getTraceId, TraceUtil.getTraceId())
+                .update();
+    }
+
+    /**
+     * 吊销指定用户在指定设备上的全部 Refresh Token（token 族）。
+     */
+    private void revokeUserDeviceTokens(Long userId, String deviceInfo) {
+        lambdaUpdate()
+                .eq(UserToken::getUserId, userId)
+                .eq(UserToken::getDeviceInfo, deviceInfo)
+                .set(UserToken::getIsRevoked, true)
+                .set(UserToken::getTraceId, TraceUtil.getTraceId())
+                .update();
     }
 
     private EnterpriseContext loadEnterpriseContext(Long userId) {

@@ -48,6 +48,8 @@ import org.springframework.data.redis.core.ValueOperations;
 
 import java.time.OffsetDateTime;
 import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static interview.system.TestMockUtils.*;
 import static org.junit.jupiter.api.Assertions.*;
@@ -432,6 +434,92 @@ class AuthServiceImplTest {
 
             BusinessException ex = assertThrows(BusinessException.class, () -> authService.refreshToken(req));
             assertEquals(ErrorCode.RISK_CONTROL.getCode(), ex.getCode());
+        }
+
+        @Test
+        void refreshToken_fail_replayAttack_whenConsumptionAffectedZero() {
+            UserToken normalToken = UserToken.builder()
+                .userId(userId).deviceInfo(deviceInfo).ipAddress(ipAddress).isRevoked(false)
+                .build();
+
+            when(tokenQueryWrapper.one()).thenReturn(normalToken);
+            doReturn(tokenUpdateWrapper).when(authService).lambdaUpdate();
+            LambdaQueryChainWrapper<User> userFreshQ = mockQueryWrapper();
+            when(userFreshQ.one()).thenReturn(User.builder()
+                    .username(username).userType(UserType.CANDIDATE)
+                    .riskLevel(RiskLevel.NO_RISK).build());
+            when(usersService.lambdaQuery()).thenReturn(userFreshQ);
+            when(tokenUpdateWrapper.update()).thenReturn(false);
+
+            BusinessException ex = assertThrows(BusinessException.class, () -> authService.refreshToken(req));
+            assertEquals(ErrorCode.RISK_CONTROL.getCode(), ex.getCode());
+            verify(authService, times(2)).lambdaUpdate();
+        }
+
+        @Test
+        void refreshToken_concurrentReuseOnlyOneSucceeds() throws Exception {
+            when(jwtProperties.getExpiration()).thenReturn(30L);
+
+            UserToken token = UserToken.builder()
+                .userId(userId).deviceInfo(deviceInfo).ipAddress(ipAddress).isRevoked(false)
+                .build();
+
+            when(tokenQueryWrapper.one()).thenReturn(token);
+            doReturn(tokenUpdateWrapper).when(authService).lambdaUpdate();
+            LambdaQueryChainWrapper<User> userFreshQ = mockQueryWrapper();
+            when(userFreshQ.one()).thenReturn(User.builder()
+                .username(username).userType(UserType.CANDIDATE).riskLevel(RiskLevel.NO_RISK).build());
+            when(usersService.lambdaQuery()).thenReturn(userFreshQ);
+            AtomicInteger consumed = new AtomicInteger();
+            when(tokenUpdateWrapper.update()).thenAnswer(inv -> consumed.incrementAndGet() == 1);
+            doReturn(true).when(authService).save(any(UserToken.class));
+
+            LambdaQueryChainWrapper<UserRole> userRoleQ = mockQueryWrapper();
+            UserRole userRole = UserRole.builder().roleId(1).build();
+            when(userRoleQ.list()).thenReturn(List.of(userRole));
+            when(userRolesService.lambdaQuery()).thenReturn(userRoleQ);
+
+            LambdaQueryChainWrapper<EnterpriseTeamMember> memberQ = mockQueryWrapper();
+            when(enterpriseTeamMembersService.lambdaQuery()).thenReturn(memberQ);
+
+            LambdaQueryChainWrapper<Role> roleQ = mockQueryWrapper();
+            Role role = new Role();
+            role.setRoleCode("ROLE_USER");
+            role.setRoleScope(RoleScope.PLATFORM);
+            when(roleQ.list()).thenReturn(List.of(role));
+            when(rolesService.lambdaQuery()).thenReturn(roleQ);
+
+            when(permissionsMapper.getPermCodeByRoleId(anyList())).thenReturn(List.of());
+
+            when(jwttUtil.generatorToken(anyMap(), eq(userId))).thenReturn("new-jwt-token");
+
+            ExecutorService pool = Executors.newFixedThreadPool(2);
+            CountDownLatch ready = new CountDownLatch(2);
+            CountDownLatch go = new CountDownLatch(1);
+            Callable<String> task = () -> {
+                ready.countDown();
+                go.await();
+                try {
+                    authService.refreshToken(req);
+                    return "OK";
+                } catch (BusinessException e) {
+                    return String.valueOf(e.getCode());
+                }
+            };
+            Future<String> first = pool.submit(task);
+            Future<String> second = pool.submit(task);
+
+            assertTrue(ready.await(10, TimeUnit.SECONDS));
+            go.countDown();
+            List<String> results = List.of(
+                first.get(10, TimeUnit.SECONDS),
+                second.get(10, TimeUnit.SECONDS)
+            );
+
+            assertEquals(1, results.stream().filter("OK"::equals).count());
+            assertEquals(1, results.stream()
+                .filter(r -> r.equals(String.valueOf(ErrorCode.RISK_CONTROL.getCode()))).count());
+            pool.shutdownNow();
         }
     }
 
