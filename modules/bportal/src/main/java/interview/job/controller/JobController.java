@@ -16,6 +16,7 @@ import interview.job.model.req.JobUpdateReq;
 import interview.job.model.vo.*;
 import interview.job.service.JobService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
@@ -93,6 +94,7 @@ public class JobController {
     public Result<Void> deleteJob(@PathVariable("enterpriseId") Long enterpriseId,
                                   @PathVariable("jobId") Long jobId,
                                   @RequestHeader("If-Match")
+                                  @Parameter(name = "If-Match", description = "岗位当前版本号，用于乐观锁删除校验", required = true, example = "3")
                                   @Min(value = 0, message = "版本号不能小于 0")
                                   Integer expectedVersion) {
         jobService.deleteJob(enterpriseId, jobId, expectedVersion);
