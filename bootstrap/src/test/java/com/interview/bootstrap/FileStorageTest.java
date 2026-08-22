@@ -6,6 +6,7 @@ import interview.infra.config.properties.StorageConfigProperties;
 import interview.infra.file.FileStorageService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Assumptions;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -39,7 +40,8 @@ class FileStorageTest {
     @Test
     void testUploadPage1() throws Exception {
         Path filePath = Path.of("C:\\Users\\zhuxi\\Desktop\\InterviewGuide\\page-1.jpg");
-        assertTrue(Files.exists(filePath), "page-1.jpg not found");
+        // 手工联调用例：本机无样例文件时跳过而不是失败。
+        Assumptions.assumeTrue(Files.exists(filePath), "page-1.jpg not found");
         byte[] content = Files.readAllBytes(filePath);
         String originalName = filePath.getFileName().toString();
         String contentType = Files.probeContentType(filePath);
@@ -48,7 +50,7 @@ class FileStorageTest {
                 "file", originalName, contentType, content
         );
 
-        String key = fileStorageService.uploadFile(file, FileSort.RESUME);
+        String key = fileStorageService.uploadFile(file, FileSort.RESUME, null);
         assertNotNull(key);
         assertFalse(key.isBlank());
         System.out.println("=== Upload OK ===");
