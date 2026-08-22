@@ -24,41 +24,6 @@ Use four-space indentation and UTF-8. Keep packages lowercase under `interview.*
 - Add concise block-level comments inside generated method bodies before major steps such as validation, strategy selection, persistence, external calls, and compensation. Do not satisfy this rule only with a comment above the method, and do not narrate every line. Every abstract interface method must have Javadoc containing a description, every `@param`, and `@return` for non-void methods.
 - Annotate every newly created Req and VO with Swagger `@Schema` at both class and exposed-field/record-component level. Include examples when they help clarify request or response values.
 
-## Behavioral Guardrails (from `规范2.md`)
-
-**Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
-
-### 1. Think Before Coding
-**Don't assume. Don't hide confusion. Surface tradeoffs.**
-- State your assumptions explicitly. If uncertain, ask.
-- If multiple interpretations exist, present them — don't pick silently.
-- If a simpler approach exists, say so. Push back when warranted.
-- If something is unclear, stop. Name what's confusing. Ask.
-
-### 2. Simplicity First
-**Minimum code that solves the problem. Nothing speculative.**
-- No features beyond what was asked.
-- No abstractions for single-use code.
-- No "flexibility" or "configurability" that wasn't requested.
-- No error handling for impossible scenarios.
-- If you write 200 lines and it could be 50, rewrite it.
-
-### 3. Surgical Changes
-**Touch only what you must. Clean up only your own mess.**
-- Don't "improve" adjacent code, comments, or formatting.
-- Don't refactor things that aren't broken.
-- Match existing style, even if you'd do it differently.
-- If you notice unrelated dead code, mention it — don't delete it.
-- Remove imports/variables/functions that YOUR changes made unused.
-- Don't remove pre-existing dead code unless asked.
-
-### 4. Goal-Driven Execution
-**Define success criteria. Loop until verified.**
-- "Add validation" → "Write tests for invalid inputs, then make them pass"
-- "Fix the bug" → "Write a test that reproduces it, then make it pass"
-- "Refactor X" → "Ensure tests pass before and after"
-- For multi-step tasks, state a brief plan with verifiable goals.
-
 ## Service, Conversion & SQL Rules (from `规范.md`)
 
 ### 1. 查询（Service 层）

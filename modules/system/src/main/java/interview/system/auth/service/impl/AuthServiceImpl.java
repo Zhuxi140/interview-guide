@@ -452,12 +452,9 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
         Long userId = AuthContext.getRequiredUserId();
         User user = usersService.lambdaQuery()
                 .select(
-                    User::getUsername,
-                    User::getNickname,
-                    User::getPhone,
-                    User::getEmail,
-                    User::getAvatarUrl,
-                    User::getUserType,
+                    User::getUsername, User::getNickname,
+                    User::getPhone, User::getEmail,
+                    User::getAvatarUrl, User::getUserType,
                     User::getStatus
                 )
                 .eq(User::getId, userId)
@@ -650,7 +647,7 @@ public class AuthServiceImpl extends ServiceImpl<AuthMapper, UserToken> implemen
                 .username(user.getUsername())
                 .nickname(user.getNickname())
                 .avatarUrl(user.getAvatarUrl())
-                .userType(user.getUserType().name())
+                .userType(user.getUserType())
                 .roles(platformRoleCodes)
                 .permissions(rbacContext.permissions)
                 .accessToken(token)

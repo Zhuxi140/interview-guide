@@ -15,7 +15,8 @@ WHERE permission_id IN (
     501, 502, 503, 504, 505, 506, 507,
     511, 512, 513, 514, 515, 516, 517, 518, 519,
     521, 522, 523, 524, 525, 526,
-    531, 532, 533, 534, 535, 536
+    531, 532, 533, 534, 535, 536,
+    537, 538, 539, 540, 541, 542, 543
 );
 
 -- 删除已取消的“候选人主动触发追问”权限。
@@ -42,7 +43,7 @@ INSERT INTO sys_permissions (id, perm_code, perm_type, api_path, status) VALUES
 
 -- 3.2 企业端面试排期
 (511, 'interview-schedule:create',
- 'API', '/api/v1/enterprises/*/applications/*/interview-schedules', 1),
+ 'API', '/api/v1/enterprises/*/interview-schedules', 1),
 (512, 'interview-schedule:ai-suggest',
  'API', '/api/v1/enterprises/*/applications/*/interview-plan-drafts', 1),
 (513, 'interview-schedule:list',
@@ -86,7 +87,25 @@ INSERT INTO sys_permissions (id, perm_code, perm_type, api_path, status) VALUES
 (535, 'candidate:interview-report:download',
  'API', '/api/v1/candidate/interview-schedules/*/report/download', 1),
 (536, 'candidate:interview-report:detail',
- 'API', '/api/v1/candidate/interview-schedules/*/report', 1)
+ 'API', '/api/v1/candidate/interview-schedules/*/report', 1),
+
+-- 3.5 面试会话接管
+(537, 'interview-session:takeover',
+ 'API', '/api/v1/interview-sessions/*/takeovers', 1),
+(538, 'interview-session:takeover:end',
+ 'API', '/api/v1/interview-sessions/*/takeovers/*/end', 1),
+
+-- 3.6 企业 Offer 管理
+(539, 'offer:create',
+ 'API', '/api/v1/enterprises/*/applications/*/offers', 1),
+(540, 'offer:list',
+ 'API', '/api/v1/enterprises/*/applications/*/offers', 1),
+(541, 'offer:update',
+ 'API', '/api/v1/enterprises/*/offers/*', 1),
+(542, 'offer:send',
+ 'API', '/api/v1/enterprises/*/offers/*/send', 1),
+(543, 'offer:withdraw',
+ 'API', '/api/v1/enterprises/*/offers/*/withdraw', 1)
 ON CONFLICT (id) DO UPDATE SET
     perm_code = EXCLUDED.perm_code,
     perm_type = EXCLUDED.perm_type,
@@ -106,7 +125,10 @@ INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
 (1001, 521, NOW()), (1001, 522, NOW()), (1001, 523, NOW()),
 (1001, 525, NOW()), (1001, 526, NOW()),
 (1001, 531, NOW()), (1001, 532, NOW()), (1001, 533, NOW()),
-(1001, 534, NOW()), (1001, 535, NOW()), (1001, 536, NOW())
+(1001, 534, NOW()), (1001, 535, NOW()), (1001, 536, NOW()),
+(1001, 537, NOW()), (1001, 538, NOW()), (1001, 539, NOW()),
+(1001, 540, NOW()), (1001, 541, NOW()), (1001, 542, NOW()),
+(1001, 543, NOW())
 ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 -- FINANCE_ADMIN (1002)：仅查看企业报告列表
@@ -160,6 +182,27 @@ INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
 (2005, 513, NOW()), (2005, 514, NOW()),
 (2005, 522, NOW()), (2005, 525, NOW()),
 (2005, 531, NOW()), (2005, 532, NOW()), (2005, 533, NOW())
+ON CONFLICT (role_id, permission_id) DO NOTHING;
+
+-- 企业角色：面试会话接管（HR + 面试官可接管）
+INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
+(2001, 537, NOW()), (2001, 538, NOW()),
+(2002, 537, NOW()), (2002, 538, NOW()),
+(2003, 537, NOW()), (2003, 538, NOW()),
+(2004, 537, NOW()), (2004, 538, NOW()),
+(2005, 537, NOW()), (2005, 538, NOW())
+ON CONFLICT (role_id, permission_id) DO NOTHING;
+
+-- 企业 HR 角色：Offer 管理（面试官与候选人不授予）
+INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
+(2001, 539, NOW()), (2001, 540, NOW()), (2001, 541, NOW()),
+(2001, 542, NOW()), (2001, 543, NOW()),
+(2002, 539, NOW()), (2002, 540, NOW()), (2002, 541, NOW()),
+(2002, 542, NOW()), (2002, 543, NOW()),
+(2003, 539, NOW()), (2003, 540, NOW()), (2003, 541, NOW()),
+(2003, 542, NOW()), (2003, 543, NOW()),
+(2004, 539, NOW()), (2004, 540, NOW()), (2004, 541, NOW()),
+(2004, 542, NOW()), (2004, 543, NOW())
 ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 -- CANDIDATE (3001)：本人排期、会话和报告

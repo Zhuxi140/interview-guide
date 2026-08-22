@@ -1,5 +1,6 @@
 package interview.system.auth.model.vo;
 
+import interview.common.enums.UserType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 
@@ -39,7 +40,7 @@ public record LoginVO (
 
     @Schema(description = "用户类型", example = "CANDIDATE",
             allowableValues = {"ENTERPRISE_USER", "CANDIDATE", "PLATFORM_ADMIN", "PLATFORM_OPS"})
-    String userType,
+    UserType userType,
 
     @Schema(description = "角色编码集合")
     List<String> roles,

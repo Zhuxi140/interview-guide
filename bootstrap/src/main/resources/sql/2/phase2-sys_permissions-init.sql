@@ -99,7 +99,25 @@ INSERT INTO sys_permissions (id, perm_code, perm_type, api_path, status) VALUES
 (442, 'admin:llm:scene:update',
  'API', '/api/v1/admin/llm/scenes/*', 1),
 (443, 'admin:llm:scene:status',
- 'API', '/api/v1/admin/llm/scenes/*/status', 1)
+ 'API', '/api/v1/admin/llm/scenes/*/status', 1),
+
+-- 2.6 批量简历导入
+(444, 'resume:import-batch:create',
+ 'API', '/api/v1/enterprises/*/resume-import-batches', 1),
+(445, 'resume:import-batch:detail',
+ 'API', '/api/v1/enterprises/*/resume-import-batches/*', 1),
+(446, 'resume:import-batch:items',
+ 'API', '/api/v1/enterprises/*/resume-import-batches/*/items', 1),
+(447, 'resume:import-batch:retry',
+ 'API', '/api/v1/enterprises/*/resume-import-batches/*/retry-failed', 1),
+
+-- 2.7 企业人才池
+(448, 'enterprise:candidates:list',
+ 'API', '/api/v1/enterprises/*/candidates', 1),
+(449, 'enterprise:candidates:detail',
+ 'API', '/api/v1/enterprises/*/candidates/*', 1),
+(450, 'enterprise:candidates:overview',
+ 'API', '/api/v1/enterprises/*/candidates/*/overview', 1)
 ON CONFLICT (id) DO UPDATE SET
     perm_code = EXCLUDED.perm_code,
     perm_type = EXCLUDED.perm_type,
@@ -126,7 +144,10 @@ INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
 (1001, 434, NOW()), (1001, 435, NOW()), (1001, 436, NOW()),
 (1001, 437, NOW()), (1001, 438, NOW()), (1001, 439, NOW()),
 (1001, 440, NOW()), (1001, 441, NOW()), (1001, 442, NOW()),
-(1001, 443, NOW())
+(1001, 443, NOW()),
+(1001, 444, NOW()), (1001, 445, NOW()), (1001, 446, NOW()),
+(1001, 447, NOW()), (1001, 448, NOW()), (1001, 449, NOW()),
+(1001, 450, NOW())
 ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 -- PLATFORM_OPS：本地消息运维、Provider 脱敏查询和连接测试。
@@ -152,6 +173,22 @@ INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
 (2004, 417, NOW()), (2004, 419, NOW()), (2004, 420, NOW()),
 (2004, 426, NOW()), (2004, 427, NOW()),
 (2005, 412, NOW()), (2005, 413, NOW())
+ON CONFLICT (role_id, permission_id) DO NOTHING;
+
+-- 企业 HR 角色：批量简历导入与企业人才池
+INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
+(2001, 444, NOW()), (2001, 445, NOW()), (2001, 446, NOW()),
+(2001, 447, NOW()), (2001, 448, NOW()), (2001, 449, NOW()),
+(2001, 450, NOW()),
+(2002, 444, NOW()), (2002, 445, NOW()), (2002, 446, NOW()),
+(2002, 447, NOW()), (2002, 448, NOW()), (2002, 449, NOW()),
+(2002, 450, NOW()),
+(2003, 444, NOW()), (2003, 445, NOW()), (2003, 446, NOW()),
+(2003, 447, NOW()), (2003, 448, NOW()), (2003, 449, NOW()),
+(2003, 450, NOW()),
+(2004, 444, NOW()), (2004, 445, NOW()), (2004, 446, NOW()),
+(2004, 447, NOW()), (2004, 448, NOW()), (2004, 449, NOW()),
+(2004, 450, NOW())
 ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 -- 候选人：管理本人简历、投递岗位、查看并撤回本人投递。
