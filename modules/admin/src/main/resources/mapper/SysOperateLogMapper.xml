@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="interview.data.mapper.SysOperateLogMapper">
+
+    <!-- 企业域操作审计分页：sys_operate_logs 与 enterprise_team_members 两表 JOIN，
+         限定仅返回该企业在册成员产生的操作记录；手写 SQL 需自行处理逻辑删除条件。 -->
+    <select id="pageByEnterprise" resultType="interview.data.model.entity.SysOperateLog">
+        SELECT l.id,
+               l.trace_id,
+               l.user_id,
+               l.module,
+               l.operate_type,
+               l.target_table,
+               l.target_id,
+               l.created_at
+        FROM sys_operate_logs l
+        INNER JOIN enterprise_team_members m
+            ON m.user_id = l.user_id
+            AND m.enterprise_id = #{enterpriseId}
+            AND m.is_deleted = FALSE
+        WHERE l.is_deleted = FALSE
+        <if test="module != null and module != ''">
+            AND l.module = #{module}
+        </if>
+        <if test="operateType != null and operateType != ''">
+            AND l.operate_type = #{operateType}
+        </if>
+        <if test="targetTable != null and targetTable != ''">
+            AND l.target_table = #{targetTable}
+        </if>
+        <if test="targetId != null">
+            AND l.target_id = #{targetId}
+        </if>
+        <if test="startTime != null">
+            AND l.created_at &gt;= #{startTime}
+        </if>
+        <if test="endTime != null">
+            AND l.created_at &lt;= #{endTime}
+        </if>
+        ORDER BY l.created_at DESC, l.id DESC
+    </select>
+</mapper>
