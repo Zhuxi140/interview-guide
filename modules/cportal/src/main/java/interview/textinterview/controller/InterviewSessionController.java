@@ -1,5 +1,6 @@
 package interview.textinterview.controller;
 
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import interview.common.annonate.MaxRiskLevel;
 import interview.common.constant.ApiVersion;
 import interview.common.constant.Result;
@@ -48,5 +49,15 @@ public class InterviewSessionController {
             @RequestParam(defaultValue = "0") Long afterSequence,
             @RequestParam(defaultValue = "100") @Min(1) @Max(100) Integer size) {
         return Result.success(interviewSessionService.getTimeline(sessionId, afterSequence, size));
+    }
+
+    @Operation(summary = "查询本人已提交作答（REST 兜底：断线后恢复现场）")
+    @MaxRiskLevel(RiskLevel.NO_RISK)
+    @GetMapping("/{sessionId}/answers")
+    public Result<IPage<InterviewAnswerListItemVO>> getAnswers(
+            @PathVariable Long sessionId,
+            @RequestParam(defaultValue = "1") @Min(1) Integer page,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) Integer size) {
+        return Result.success(interviewSessionService.pageAnswers(sessionId, page, size));
     }
 }

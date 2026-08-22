@@ -2,7 +2,9 @@ package interview.textinterview.service.impl;
 
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import interview.api.bportal.InterviewScheduleCommandApi;
 import interview.api.bportal.InterviewScheduleQueryApi;
 import interview.api.bportal.dto.InterviewScheduleQueryDTO;
@@ -14,13 +16,17 @@ import interview.common.enums.InterviewType;
 import interview.common.enums.UserType;
 import interview.common.exception.BusinessException;
 import interview.framework.context.AuthContext;
+import interview.textinterview.mapper.InterviewAnswerMapper;
 import interview.textinterview.mapper.InterviewReportMapper;
 import interview.textinterview.mapper.InterviewSessionMapper;
+import interview.textinterview.model.entity.InterviewAnswer;
 import interview.textinterview.model.entity.InterviewReport;
 import interview.textinterview.model.entity.InterviewSession;
 import interview.textinterview.model.req.InterviewSessionEndReq;
+import interview.textinterview.model.vo.InterviewAnswerListItemVO;
 import interview.textinterview.model.vo.InterviewJoinTokenVO;
 import interview.textinterview.model.vo.InterviewSessionEndVO;
+import interview.textinterview.model.vo.InterviewSessionVO;
 import interview.voiceinterview.mapper.VoiceInterviewSessionMapper;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.junit.jupiter.api.AfterEach;
@@ -34,6 +40,7 @@ import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -43,8 +50,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -68,9 +77,13 @@ class InterviewSessionServiceImplTest {
     @Mock
     private InterviewSessionMapper sessionMapper;
     @Mock
+    private InterviewAnswerMapper answerMapper;
+    @Mock
     private InterviewReportMapper reportMapper;
 
     private InterviewSessionServiceImpl service;
+    // lambdaQuery() 依赖真实 mapper 的 sqlSession，纯 mock 下不可用；归属校验经 spy 打桩。
+    private InterviewSessionServiceImpl serviceSpy;
 
     @BeforeEach
     void setUp() {
@@ -81,10 +94,14 @@ class InterviewSessionServiceImplTest {
         TableInfoHelper.initTableInfo(
                 new MapperBuilderAssistant(new MybatisConfiguration(), "InterviewReport"),
                 InterviewReport.class);
+        TableInfoHelper.initTableInfo(
+                new MapperBuilderAssistant(new MybatisConfiguration(), "InterviewAnswer"),
+                InterviewAnswer.class);
         service = new InterviewSessionServiceImpl(
-                voiceInterviewSessionMapper, null, reportMapper, interviewScheduleQueryApi,
+                voiceInterviewSessionMapper, null, answerMapper, reportMapper, interviewScheduleQueryApi,
                 interviewScheduleCommandApi, stringRedisTemplate);
         ReflectionTestUtils.setField(service, "baseMapper", sessionMapper);
+        serviceSpy = spy(service);
     }
 
     @AfterEach
@@ -264,6 +281,44 @@ class InterviewSessionServiceImplTest {
                 .startedAt(startedAt)
                 .endedAt(endedAt)
                 .build();
+    }
+
+    @Test
+    void pageAnswersReturnsPagedAnswersForOwner() {
+        doReturn(new InterviewSessionVO(SESSION_ID, SCHEDULE_ID, InterviewType.TEXT, (short) 1,
+                InterviewSessionStatus.IN_PROGRESS, 0L, null, null, null))
+                .when(serviceSpy).getSession(SESSION_ID);
+        Page<InterviewAnswer> answerPage = new Page<InterviewAnswer>(1, 20, 1);
+        answerPage.setRecords(List.of(InterviewAnswer.builder()
+                .id(66001L)
+                .sessionId(SESSION_ID)
+                .questionIndex(1)
+                .questionText("介绍 HashMap 的底层数据结构")
+                .followUpDepth(0)
+                .userAnswer("数组 + 链表 + 红黑树")
+                .score(85)
+                .answeredAt(OffsetDateTime.now())
+                .build()));
+        when(answerMapper.selectPage(any(Page.class), any(Wrapper.class))).thenReturn(answerPage);
+
+        IPage<InterviewAnswerListItemVO> result = serviceSpy.pageAnswers(SESSION_ID, 1, 20);
+
+        assertEquals(1, result.getTotal());
+        assertEquals("介绍 HashMap 的底层数据结构", result.getRecords().get(0).questionText());
+        assertEquals(0, result.getRecords().get(0).followUpDepth());
+    }
+
+    @Test
+    void pageAnswersRejectsInvalidPageSize() {
+        doReturn(new InterviewSessionVO(SESSION_ID, SCHEDULE_ID, InterviewType.TEXT, (short) 1,
+                InterviewSessionStatus.IN_PROGRESS, 0L, null, null, null))
+                .when(serviceSpy).getSession(SESSION_ID);
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> serviceSpy.pageAnswers(SESSION_ID, 1, 0));
+
+        assertEquals(ErrorCode.PAGE_PARAM_INVALID.getCode(), ex.getCode());
+        verify(answerMapper, never()).selectPage(any(Page.class), any(Wrapper.class));
     }
 
     private InterviewReport report() {

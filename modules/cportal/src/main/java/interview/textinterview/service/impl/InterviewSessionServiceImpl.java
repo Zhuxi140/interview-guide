@@ -1,5 +1,6 @@
 package interview.textinterview.service.impl;
 
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import interview.api.bportal.InterviewScheduleCommandApi;
@@ -16,9 +17,11 @@ import interview.common.enums.InterviewType;
 import interview.common.exception.BusinessException;
 import interview.framework.context.AuthContext;
 import interview.framework.redis.RedisScripts;
+import interview.textinterview.mapper.InterviewAnswerMapper;
 import interview.textinterview.mapper.InterviewReportMapper;
 import interview.textinterview.mapper.InterviewSessionMapper;
 import interview.textinterview.mapper.InterviewTimelineEventMapper;
+import interview.textinterview.model.entity.InterviewAnswer;
 import interview.textinterview.model.entity.InterviewReport;
 import interview.textinterview.model.entity.InterviewSession;
 import interview.textinterview.model.entity.InterviewTimelineEvent;
@@ -53,6 +56,7 @@ public class InterviewSessionServiceImpl extends ServiceImpl<InterviewSessionMap
     private static final int CONNECTION_TOKEN_TTL_SECONDS = 60;
     private final VoiceInterviewSessionMapper voiceInterviewSessionMapper;
     private final InterviewTimelineEventMapper interviewTimelineEventMapper;
+    private final InterviewAnswerMapper interviewAnswerMapper;
     private final InterviewReportMapper interviewReportMapper;
     private final InterviewScheduleQueryApi interviewScheduleQueryApi;
     private final InterviewScheduleCommandApi interviewScheduleCommandApi;
@@ -310,6 +314,43 @@ public class InterviewSessionServiceImpl extends ServiceImpl<InterviewSessionMap
     @SuppressWarnings("unchecked")
     private Map<String, Object> parsePayload(String payloadJson) {
         return (Map<String, Object>) toBean(payloadJson, Map.class);
+    }
+
+    @Override
+    public IPage<InterviewAnswerListItemVO> pageAnswers(Long sessionId, Integer page, Integer size) {
+        // 复用统一会话查询完成候选人或企业参与者归属校验。
+        getSession(sessionId);
+        if (page == null || page < 1 || size == null || size < 1 || size > 100) {
+            throw new BusinessException(ErrorCode.PAGE_PARAM_INVALID);
+        }
+        Page<InterviewAnswer> answerPage = interviewAnswerMapper.selectPage(
+                new Page<>(page, size),
+                com.baomidou.mybatisplus.core.toolkit.Wrappers
+                        .lambdaQuery(InterviewAnswer.class)
+                        .select(
+                                InterviewAnswer::getId, InterviewAnswer::getQuestionIndex,
+                                InterviewAnswer::getQuestionText, InterviewAnswer::getParentMessageId,
+                                InterviewAnswer::getFollowUpDepth, InterviewAnswer::getUserAnswer,
+                                InterviewAnswer::getScore, InterviewAnswer::getAiFeedback,
+                                InterviewAnswer::getAnsweredAt)
+                        .eq(InterviewAnswer::getSessionId, sessionId)
+                        .orderByAsc(InterviewAnswer::getQuestionIndex)
+                        .orderByAsc(InterviewAnswer::getAnsweredAt));
+        Page<InterviewAnswerListItemVO> voPage =
+                new Page<>(answerPage.getCurrent(), answerPage.getSize(), answerPage.getTotal());
+        voPage.setRecords(answerPage.getRecords().stream()
+                .map(answer -> new InterviewAnswerListItemVO(
+                        answer.getId(),
+                        answer.getQuestionIndex(),
+                        answer.getQuestionText(),
+                        answer.getParentMessageId(),
+                        answer.getFollowUpDepth(),
+                        answer.getUserAnswer(),
+                        answer.getScore(),
+                        answer.getAiFeedback(),
+                        answer.getAnsweredAt()))
+                .toList());
+        return voPage;
     }
 
     private String toJson(InterviewConnectionContext context) {

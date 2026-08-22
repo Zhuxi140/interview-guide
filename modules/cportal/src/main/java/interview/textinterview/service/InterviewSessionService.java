@@ -1,5 +1,6 @@
 package interview.textinterview.service;
 
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.IService;
 import interview.common.constant.InterviewConnectionContext;
 import interview.textinterview.model.entity.InterviewSession;
@@ -46,4 +47,13 @@ public interface InterviewSessionService extends IService<InterviewSession> {
      * @return 时间线分页
      */
     InterviewTimelinePageVO getTimeline(Long sessionId, Long afterSequence, Integer size);
+
+    /**
+     * 查询会话内本人已提交作答（REST 兜底：断线后恢复现场）
+     * @param sessionId 会话ID
+     * @param page 页码（从 1 开始）
+     * @param size 每页条数（1~100）
+     * @return 作答分页
+     */
+    IPage<InterviewAnswerListItemVO> pageAnswers(Long sessionId, Integer page, Integer size);
 }
