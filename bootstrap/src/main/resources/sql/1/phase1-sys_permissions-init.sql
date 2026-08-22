@@ -29,6 +29,10 @@ INSERT INTO sys_permissions (id, perm_code, perm_type, api_path, status) VALUES
 (222, 'admin:user-roles:list',   'API', '/api/v1/admin/users/*/roles', 1),
 (223, 'admin:user-roles:remove', 'API', '/api/v1/admin/users/*/roles', 1),
 
+-- 1.8 平台用户管理 (Admin)
+(224, 'admin:users:list',   'API', '/api/v1/admin/users', 1),
+(225, 'admin:users:detail', 'API', '/api/v1/admin/users/*', 1),
+
 -- 1.4 岗位管理
 (301, 'job:create', 'API', '/api/v1/enterprises/*/jobs', 1),
 (302, 'job:list',   'API', '/api/v1/enterprises/*/jobs', 1),
@@ -44,12 +48,13 @@ ON CONFLICT (id) DO UPDATE SET
 
 -- ===== sys_role_permissions =====
 
--- SUPER_ADMIN (1001) — 全部 21 个权限
+-- SUPER_ADMIN (1001) — 全部 23 个权限
 INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
 (1001, 101, NOW()), (1001, 102, NOW()), (1001, 103, NOW()), (1001, 104, NOW()), (1001, 105, NOW()), (1001, 106, NOW()),
 (1001, 111, NOW()), (1001, 112, NOW()), (1001, 113, NOW()), (1001, 114, NOW()),
 (1001, 203, NOW()), (1001, 204, NOW()),
 (1001, 221, NOW()), (1001, 222, NOW()), (1001, 223, NOW()),
+(1001, 224, NOW()), (1001, 225, NOW()),
 (1001, 301, NOW()), (1001, 302, NOW()), (1001, 303, NOW()), (1001, 304, NOW()), (1001, 305, NOW()), (1001, 306, NOW())
 ON CONFLICT (role_id, permission_id) DO NOTHING;
 
