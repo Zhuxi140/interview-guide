@@ -32,6 +32,128 @@ public interface Perm {
         String REMOVE = "admin:user-roles:remove";
     }
 
+    interface AdminUsers {
+        String LIST = "admin:users:list";
+        String DETAIL = "admin:users:detail";
+    }
+
+    interface AdminCodeQuestion {
+        String CREATE = "code-question:create";
+        String LIST = "code-question:list";
+        String DETAIL = "code-question:detail";
+        String UPDATE = "code-question:update";
+        String DELETE = "code-question:delete";
+    }
+
+    interface CodeTestCase {
+        String CREATE = "code-test-case:create";
+        String UPDATE = "code-test-case:update";
+        String DELETE = "code-test-case:delete";
+    }
+
+    interface CodeSubmission {
+        String SUBMIT = "code-submission:submit";
+        String RESULTS = "code-submission:results";
+    }
+
+    interface KnowledgeBase {
+        String CREATE = "knowledge-base:create";
+        String LIST = "knowledge-base:list";
+        String DETAIL = "knowledge-base:detail";
+        String DELETE = "knowledge-base:delete";
+        String VECTORIZE = "knowledge-base:vectorize";
+    }
+
+    interface Rag {
+        String SESSION_CREATE = "rag:session-create";
+        String SESSION_LIST = "rag:session-list";
+        String MESSAGE_SEND = "rag:message-send";
+        String MESSAGE_LIST = "rag:message-list";
+        String KNOWLEDGE_BIND = "rag:session-knowledge-bind";
+    }
+
+    interface Kyc {
+        String SUBMIT = "kyc:submit";
+        String STATUS = "kyc:status";
+        String ADMIN_AUDIT = "admin:kyc:audit";
+        String ADMIN_LIST = "admin:kyc:list";
+    }
+
+    interface EnterpriseCert {
+        String SUBMIT = "enterprise:cert:submit";
+        String STATUS = "enterprise:cert:status";
+        String ADMIN_AUDIT = "admin:cert:audit";
+        String ADMIN_LIST = "admin:cert:list";
+    }
+
+    interface SensitiveWords {
+        String LIST = "admin:sensitive-words:list";
+        String CREATE = "admin:sensitive-words:create";
+        String UPDATE = "admin:sensitive-words:update";
+        String DELETE = "admin:sensitive-words:delete";
+    }
+
+    interface AntiCheat {
+        String ADMIN_LIST = "admin:anti-cheat:list";
+        String ADMIN_DETAIL = "admin:anti-cheat:detail";
+    }
+
+    interface ApiPolicies {
+        String CREATE = "admin:api-policies:create";
+        String LIST = "admin:api-policies:list";
+        String UPDATE = "admin:api-policies:update";
+        String DELETE = "admin:api-policies:delete";
+    }
+
+    interface CalendarSlots {
+        String CREATE = "enterprise:calendar-slots:create";
+        String LIST = "enterprise:calendar-slots:list";
+        String DELETE = "enterprise:calendar-slots:delete";
+    }
+
+    interface Notification {
+        String LIST = "notification:list";
+        String READ = "notification:read";
+        String READ_ALL = "notification:read-all";
+    }
+
+    interface NotificationAdmin {
+        String CHANNEL_VIEW = "admin:notification-channels:view";
+        String CHANNEL_UPDATE = "admin:notification-channels:update";
+        String TEMPLATE_LIST = "admin:notification-templates:list";
+        String TEMPLATE_CREATE = "admin:notification-templates:create";
+        String TEMPLATE_UPDATE = "admin:notification-templates:update";
+        String SEND_LIST = "admin:notifications:list";
+    }
+
+    interface Tutor {
+        String CREATE_SESSION = "candidate:tutor:create-session";
+        String LIST_SESSIONS = "candidate:tutor:list-sessions";
+        String SEND_MESSAGE = "candidate:tutor:send-message";
+        String LIST_MESSAGES = "candidate:tutor:list-messages";
+    }
+
+    interface SparkTasks {
+        String LIST = "admin:spark-tasks:list";
+        String DETAIL = "admin:spark-tasks:detail";
+    }
+
+    interface Audit {
+        String API_LOGS_LIST = "admin:audit:api-logs:list";
+        String API_LOGS_DETAIL = "admin:audit:api-logs:detail";
+        String API_LOGS_ARCHIVE = "admin:audit:api-logs:archive";
+        String OPERATE_LOGS_LIST = "admin:audit:operate-logs:list";
+        String OPERATE_LOGS_DETAIL = "admin:audit:operate-logs:detail";
+        String OPERATE_LOGS_TRACE = "admin:audit:operate-logs:trace";
+        String ENTERPRISE_OPERATE_LOGS_LIST = "enterprise:audit:operate-logs:list";
+        String ENTERPRISE_OPERATE_LOGS_DETAIL = "enterprise:audit:operate-logs:detail";
+        String DATA_RETENTION_VIEW = "admin:data-retention:view";
+        String DATA_RETENTION_UPDATE = "admin:data-retention:update";
+        String ARCHIVE_TASKS_CREATE = "admin:archive-tasks:create";
+        String ARCHIVE_TASKS_LIST = "admin:archive-tasks:list";
+        String ARCHIVE_TASKS_DETAIL = "admin:archive-tasks:detail";
+    }
+
     interface Job {
         String CREATE = "job:create";
         String LIST = "job:list";
