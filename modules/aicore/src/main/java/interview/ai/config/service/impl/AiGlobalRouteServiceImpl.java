@@ -11,8 +11,12 @@ import interview.ai.config.model.entity.LlmProviderConfig;
 import interview.ai.config.model.req.AiGlobalRouteUpdateReq;
 import interview.ai.config.model.vo.AiGlobalRouteListVO;
 import interview.ai.config.model.vo.AiGlobalRouteVO;
+import interview.ai.config.model.vo.AiRouteDetailVO;
+import interview.ai.config.model.vo.AiRouteHealthVO;
+import interview.ai.config.model.vo.AiRouteProviderVO;
 import interview.ai.config.service.AiGlobalRouteService;
 import interview.common.enums.AiModelType;
+import interview.common.enums.AiRouteStrategy;
 import interview.common.enums.ErrorCode;
 import interview.common.exception.BusinessException;
 import interview.common.util.TraceUtil;
@@ -27,6 +31,7 @@ import java.time.OffsetDateTime;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.regex.Pattern;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -56,6 +61,31 @@ public class AiGlobalRouteServiceImpl extends ServiceImpl<AiGlobalRouteMapper, A
                         .map(this::toRouteVO)
                         .toList()
         );
+    }
+
+    @Override
+    public AiRouteDetailVO getRoute(AiModelType modelType) {
+        AiGlobalRoute route = lambdaQuery()
+                .select(AiGlobalRoute::getModelType, AiGlobalRoute::getProviderId,
+                        AiGlobalRoute::getVersion, AiGlobalRoute::getUpdatedAt)
+                .eq(AiGlobalRoute::getModelType, modelType)
+                .one();
+        if (route == null) {
+            throw new BusinessException(ErrorCode.AI_GLOBAL_ROUTE_NOT_FOUND);
+        }
+        List<AiRouteProviderVO> providers = StrUtil.isBlank(route.getProviderId())
+                ? List.of()
+                : List.of(new AiRouteProviderVO(route.getProviderId(), 1, 100));
+        return new AiRouteDetailVO(
+                route.getModelType(), AiRouteStrategy.PRIORITY_FAILOVER,
+                providers, route.getVersion(), route.getUpdatedAt());
+    }
+
+    @Override
+    public AiRouteHealthVO getRouteHealth(AiModelType modelType) {
+        getRoute(modelType);
+        // TODO 接入统一 LLM 调用适配器的熔断事件后，从运行时健康注册表读取状态。
+        throw new BusinessException(ErrorCode.AI_ROUTE_HEALTH_UNAVAILABLE);
     }
 
     @Override

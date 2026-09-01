@@ -190,6 +190,17 @@ public interface Perm {
         String MATCH_ANALYSIS_DETAIL = "candidate:application:match-analysis:detail";
     }
 
+    interface ResumeImport {
+        String DETAIL = "resume:import-batch:detail";
+        String ITEMS = "resume:import-batch:items";
+    }
+
+    interface EnterpriseCandidate {
+        String LIST = "enterprise:candidates:list";
+        String DETAIL = "enterprise:candidates:detail";
+        String OVERVIEW = "enterprise:candidates:overview";
+    }
+
     interface AdminLlm {
         String PROVIDER_CREATE = "admin:llm:provider:create";
         String PROVIDER_LIST = "admin:llm:provider:list";

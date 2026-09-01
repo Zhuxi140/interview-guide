@@ -305,6 +305,43 @@ public class JobApplicationsServiceImpl extends ServiceImpl<JobApplicationsMappe
     }
 
     @Override
+    public IPage<ApplicationTransitionLogVO> pageTransitionLogs(
+            Long enterpriseId, Long applicationId, Integer page, Integer size) {
+        Long userId = AuthContext.getRequiredUserId();
+        enterpriseValidationApi.validateEnterpriseBelong(enterpriseId, userId);
+        if (page == null || page < 1 || size == null || size < 1 || size > 100) {
+            throw new BusinessException(ErrorCode.PAGE_PARAM_INVALID);
+        }
+
+        // 先校验投递属于当前企业，再按时间顺序分页读取审计记录。
+        boolean applicationExists = lambdaQuery()
+                .eq(JobApplications::getId, applicationId)
+                .eq(JobApplications::getEnterpriseId, enterpriseId)
+                .exists();
+        if (!applicationExists) {
+            throw new BusinessException(ErrorCode.JOB_APPLICATION_NOT_FOUND);
+        }
+        IPage<WorkflowTransitionLog> logPage = workflowTransitionLogMapper.selectPage(
+                new Page<>(page, size),
+                com.baomidou.mybatisplus.core.toolkit.Wrappers
+                        .lambdaQuery(WorkflowTransitionLog.class)
+                        .select(
+                                WorkflowTransitionLog::getId,
+                                WorkflowTransitionLog::getFromStatus,
+                                WorkflowTransitionLog::getToStatus,
+                                WorkflowTransitionLog::getOperatorUserId,
+                                WorkflowTransitionLog::getTransitionReason,
+                                WorkflowTransitionLog::getCreatedAt)
+                        .eq(WorkflowTransitionLog::getEnterpriseId, enterpriseId)
+                        .eq(WorkflowTransitionLog::getApplicationId, applicationId)
+                        .orderByAsc(WorkflowTransitionLog::getCreatedAt)
+                        .orderByAsc(WorkflowTransitionLog::getId));
+        return logPage.convert(log -> new ApplicationTransitionLogVO(
+                log.getId(), log.getFromStatus(), log.getToStatus(),
+                log.getOperatorUserId(), log.getTransitionReason(), log.getCreatedAt()));
+    }
+
+    @Override
     @Transactional(rollbackFor = BusinessException.class)
     public JobApplicationStatusVO withdrawApplication(
             Long applicationId, JobApplicationWithdrawReq req) {

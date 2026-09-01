@@ -1,5 +1,6 @@
 package interview.billing.service.impl;
 
+import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -12,9 +13,16 @@ import interview.billing.model.vo.*;
 import interview.billing.service.SkuCatalogService;
 import interview.common.enums.ErrorCode;
 import interview.common.exception.BusinessException;
+import interview.common.util.TraceUtil;
+import interview.framework.context.AuthContext;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.OffsetDateTime;
+import java.util.Locale;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -108,38 +116,131 @@ public class SkuCatalogServiceImpl
     @Override
     @Transactional
     public SkuCreateVO createSku(SkuCreateReq req) {
-        // TODO ① 去除套餐名称首尾空白并将 currency 规范为大写，校验当前阶段只允许 CNY。
-        // TODO ② 再次校验 price>0、tokensIncluded>0，isActive 为空时使用 true。
-        // TODO ③ 使用 LambdaQuery 检查未删除记录中 packageName + currency 是否已存在，提前返回套餐重复异常。
-        // TODO ④ 构建完整 SkuCatalog 实体，version=0；通过 save 写入并触发主键及审计字段自动填充。
-        // TODO ⑤ 数据库唯一索引仍作为并发兜底，将重复键异常转换为套餐重复业务异常。
-        // TODO ⑥ 将落库后的实体映射为 SkuCreateVO 返回。
-        return null;
+        String packageName = normalizePackageName(req.getPackageName());
+        String currency = normalizeCurrency(req.getCurrency());
+        if (lambdaQuery()
+                .eq(SkuCatalog::getPackageName, packageName)
+                .eq(SkuCatalog::getCurrency, currency)
+                .exists()) {
+            throw new BusinessException(ErrorCode.SKU_ALREADY_EXISTS);
+        }
+
+        // 创建时一次写入全部套餐字段，审计字段交由 MyBatis 自动填充。
+        SkuCatalog sku = SkuCatalog.builder()
+                .packageName(packageName)
+                .description(req.getDescription())
+                .price(req.getPrice())
+                .currency(currency)
+                .tokensIncluded(req.getTokensIncluded())
+                .isActive(req.getIsActive() == null || req.getIsActive())
+                .version(0)
+                .build();
+        try {
+            if (!save(sku)) {
+                throw new BusinessException(ErrorCode.PARAM_VALID_ERROR, "套餐创建失败");
+            }
+        } catch (DataIntegrityViolationException e) {
+            throw new BusinessException(ErrorCode.SKU_ALREADY_EXISTS);
+        }
+        return new SkuCreateVO(
+                sku.getId(), sku.getPackageName(), sku.getPrice(), sku.getCurrency(),
+                sku.getTokensIncluded(), sku.getIsActive(), sku.getVersion());
     }
 
     @Override
     @Transactional
     public SkuUpdateVO updateSku(Long skuId, SkuUpdateReq req) {
-        // TODO ① 使用 getById 查询未逻辑删除 SKU，不存在时抛出 SKU 不存在业务异常。
-        // TODO ② 校验至少提交一个可更新字段；isActive 不应由该接口修改，上架/下架必须调用独立状态接口。
-        // TODO ③ 规范化 packageName、currency 并限制当前阶段 currency=CNY；价格或额度非空时校验大于 0。
-        // TODO ④ 套餐名称或币种变化时检查 packageName + currency 唯一性。
-        // TODO ⑤ 这是多字段半量更新，构建仅含 id、expectedVersion 和非空变更字段的 SkuCatalog 实体。
-        // TODO ⑥ 使用 updateById 触发 @Version 和审计自动填充；更新零行时区分记录不存在与版本冲突。
-        // TODO ⑦ 回查最新 version、updatedAt，映射为 SkuUpdateVO；不得使用请求中的旧版本拼装响应。
-        return null;
+        SkuCatalog current = getById(skuId);
+        if (current == null) {
+            throw new BusinessException(ErrorCode.SKU_NOT_FOUND);
+        }
+        if (req.getIsActive() != null) {
+            throw new BusinessException(ErrorCode.PARAM_VALID_ERROR, "请使用套餐状态接口上架或下架");
+        }
+        if (req.getPackageName() == null && req.getDescription() == null
+                && req.getPrice() == null && req.getCurrency() == null
+                && req.getTokensIncluded() == null) {
+            throw new BusinessException(ErrorCode.PARAM_VALID_ERROR, "至少提交一个可更新字段");
+        }
+
+        String packageName = req.getPackageName() == null
+                ? current.getPackageName() : normalizePackageName(req.getPackageName());
+        String currency = req.getCurrency() == null
+                ? current.getCurrency() : normalizeCurrency(req.getCurrency());
+        if ((!Objects.equals(packageName, current.getPackageName())
+                || !Objects.equals(currency, current.getCurrency()))
+                && lambdaQuery()
+                .eq(SkuCatalog::getPackageName, packageName)
+                .eq(SkuCatalog::getCurrency, currency)
+                .ne(SkuCatalog::getId, skuId)
+                .exists()) {
+            throw new BusinessException(ErrorCode.SKU_ALREADY_EXISTS);
+        }
+
+        // 多字段半量更新使用实体，并由 @Version 完成 CAS。
+        SkuCatalog update = new SkuCatalog();
+        update.setId(skuId);
+        update.setPackageName(req.getPackageName() == null ? null : packageName);
+        update.setDescription(req.getDescription());
+        update.setPrice(req.getPrice());
+        update.setCurrency(req.getCurrency() == null ? null : currency);
+        update.setTokensIncluded(req.getTokensIncluded());
+        update.setVersion(req.getExpectedVersion());
+        try {
+            if (!updateById(update)) {
+                if (getById(skuId) == null) {
+                    throw new BusinessException(ErrorCode.SKU_NOT_FOUND);
+                }
+                throw new BusinessException(ErrorCode.SKU_VERSION_CONFLICT);
+            }
+        } catch (DataIntegrityViolationException e) {
+            throw new BusinessException(ErrorCode.SKU_ALREADY_EXISTS);
+        }
+        SkuCatalog latest = lambdaQuery()
+                .select(SkuCatalog::getId, SkuCatalog::getVersion, SkuCatalog::getUpdatedAt)
+                .eq(SkuCatalog::getId, skuId)
+                .one();
+        return new SkuUpdateVO(latest.getId(), latest.getVersion(), latest.getUpdatedAt());
     }
 
     @Override
     @Transactional
     public SkuStatusVO updateSkuStatus(Long skuId, SkuStatusReq req) {
-        // TODO ① 使用 LambdaQuery 查询 SKU 当前状态与 version，不存在时抛出 SKU 不存在业务异常。
-        // TODO ② 当前 isActive 已等于目标值且 expectedVersion 匹配时幂等返回，不产生无意义版本递增。
-        // TODO ③ 仅更新少量字段，使用 LambdaUpdate 按 id + version=expectedVersion 原子设置 isActive。
-        // TODO ④ 显式设置 version=version+1、updatedAt、updatedBy、traceId，避免非实体更新遗漏自动填充字段。
-        // TODO ⑤ 更新零行时回查：记录不存在返回不存在，其余情况返回乐观锁版本冲突并提示刷新。
-        // TODO ⑥ 返回数据库中的最终 isActive、version、updatedAt，映射为 SkuStatusVO。
-        return null;
+        SkuCatalog current = lambdaQuery()
+                .select(SkuCatalog::getId, SkuCatalog::getIsActive,
+                        SkuCatalog::getVersion, SkuCatalog::getUpdatedAt)
+                .eq(SkuCatalog::getId, skuId)
+                .one();
+        if (current == null) {
+            throw new BusinessException(ErrorCode.SKU_NOT_FOUND);
+        }
+        if (!Objects.equals(current.getVersion(), req.getExpectedVersion())) {
+            throw new BusinessException(ErrorCode.SKU_VERSION_CONFLICT);
+        }
+        if (Objects.equals(current.getIsActive(), req.getIsActive())) {
+            return new SkuStatusVO(
+                    current.getId(), current.getIsActive(),
+                    current.getVersion(), current.getUpdatedAt());
+        }
+
+        OffsetDateTime now = OffsetDateTime.now();
+        boolean updated = lambdaUpdate()
+                .eq(SkuCatalog::getId, skuId)
+                .eq(SkuCatalog::getVersion, req.getExpectedVersion())
+                .set(SkuCatalog::getIsActive, req.getIsActive())
+                .setSql("version = version + 1")
+                .set(SkuCatalog::getUpdatedAt, now)
+                .set(SkuCatalog::getUpdatedBy, AuthContext.getRequiredUserId())
+                .set(SkuCatalog::getTraceId, TraceUtil.getTraceId())
+                .update();
+        if (!updated) {
+            if (getById(skuId) == null) {
+                throw new BusinessException(ErrorCode.SKU_NOT_FOUND);
+            }
+            throw new BusinessException(ErrorCode.SKU_VERSION_CONFLICT);
+        }
+        return new SkuStatusVO(
+                skuId, req.getIsActive(), req.getExpectedVersion() + 1, now);
     }
 
     private void validatePage(Integer page, Integer size) {
@@ -157,5 +258,23 @@ public class SkuCatalogServiceImpl
                 sku.getCurrency(),
                 sku.getTokensIncluded()
         );
+    }
+
+    private String normalizePackageName(String packageName) {
+        if (StrUtil.isBlank(packageName)) {
+            throw new BusinessException(ErrorCode.PARAM_VALID_ERROR, "套餐名称不能为空");
+        }
+        return packageName.trim();
+    }
+
+    private String normalizeCurrency(String currency) {
+        if (StrUtil.isBlank(currency)) {
+            throw new BusinessException(ErrorCode.PARAM_VALID_ERROR, "币种不能为空");
+        }
+        String normalized = currency.trim().toUpperCase(Locale.ROOT);
+        if (!"CNY".equals(normalized)) {
+            throw new BusinessException(ErrorCode.PARAM_VALID_ERROR, "当前仅支持 CNY");
+        }
+        return normalized;
     }
 }

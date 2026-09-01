@@ -2,10 +2,17 @@ package interview.textinterview.service;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.IService;
+
 import interview.common.constant.InterviewConnectionContext;
 import interview.textinterview.model.entity.InterviewSession;
 import interview.textinterview.model.req.InterviewSessionEndReq;
-import interview.textinterview.model.vo.*;
+import interview.textinterview.model.vo.InterviewAnswerListItemVO;
+import interview.textinterview.model.vo.InterviewCurrentQuestionVO;
+import interview.textinterview.model.vo.InterviewJoinTokenVO;
+import interview.textinterview.model.vo.InterviewSessionEndVO;
+import interview.textinterview.model.vo.InterviewSessionReadyVO;
+import interview.textinterview.model.vo.InterviewSessionVO;
+import interview.textinterview.model.vo.InterviewTimelinePageVO;
 
 public interface InterviewSessionService extends IService<InterviewSession> {
 
@@ -49,6 +56,13 @@ public interface InterviewSessionService extends IService<InterviewSession> {
     InterviewTimelinePageVO getTimeline(Long sessionId, Long afterSequence, Integer size);
 
     /**
+     * 查询当前待作答题目
+     * @param sessionId 会话 ID
+     * @return 当前题目；尚未生成下一题时返回 pending=true
+     */
+    InterviewCurrentQuestionVO getCurrentQuestion(Long sessionId);
+
+    /**
      * 查询会话内本人已提交作答（REST 兜底：断线后恢复现场）
      * @param sessionId 会话ID
      * @param page 页码（从 1 开始）
@@ -56,4 +70,28 @@ public interface InterviewSessionService extends IService<InterviewSession> {
      * @return 作答分页
      */
     IPage<InterviewAnswerListItemVO> pageAnswers(Long sessionId, Integer page, Integer size);
+
+    /**
+     * 候选人就绪，原子推进会话与排期状态并触发生成首题（REST 兜底：等价 WS client.ready）
+     *
+     * @param sessionId 会话 ID
+     * @param idempotencyKey 幂等键
+     * @return 就绪响应
+     */
+    InterviewSessionReadyVO readySession(Long sessionId, String idempotencyKey);
+
+    /**
+     * 事务落库 AI 生成的试题实体并追加时间线事实事件
+     *
+     * @param sessionId 会话 ID
+     * @param enterpriseId 企业 ID
+     * @param questionIndex 题目序号（从 0 开始）
+     * @param parentAnswerId 父题目/上一题作答 ID（追问时传入）
+     * @param followUpDepth 追问深度（首题为 0）
+     * @param generated AI 出题结果 DTO
+     * @return 持久化后的作答记录 ID
+     */
+    Long recordAiQuestion(Long sessionId, Long enterpriseId, int questionIndex,
+                          Long parentAnswerId, int followUpDepth,
+                          interview.api.aicore.dto.InterviewQuestionGeneratedResultDTO generated);
 }

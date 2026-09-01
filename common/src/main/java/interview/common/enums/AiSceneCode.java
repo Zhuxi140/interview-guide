@@ -10,7 +10,8 @@ public enum AiSceneCode {
     CANDIDATE_PROFILE_GENERATION("/prompts/candidate-profile/"),
     HR_APPLICATION_SCREENING("/prompts/hr-application-screening/"),
     CANDIDATE_JOB_MATCHING("/prompts/candidate-job-matching/"),
-    INTERVIEW_PLAN_GENERATION("/prompts/interview-plan-generation/");
+    INTERVIEW_PLAN_GENERATION("/prompts/interview-plan-generation/"),
+    TEXT_INTERVIEW_QUESTION_GEN("/prompts/text-interview-question-gen/");
     // 对应阶段真正实现时再增加：
     // TEXT_INTERVIEW_EVALUATION,
     // VOICE_INTERVIEW_EVALUATION,

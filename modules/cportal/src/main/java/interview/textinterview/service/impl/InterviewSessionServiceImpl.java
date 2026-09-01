@@ -1,11 +1,26 @@
 package interview.textinterview.service.impl;
 
+import java.time.OffsetDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+
+import static cn.hutool.json.JSONUtil.toBean;
+import static cn.hutool.json.JSONUtil.toJsonStr;
 import interview.api.bportal.InterviewScheduleCommandApi;
 import interview.api.bportal.InterviewScheduleQueryApi;
-import interview.api.bportal.JobValidationApi;
 import interview.api.bportal.dto.InterviewScheduleQueryDTO;
 import interview.common.constant.InterviewConnectionContext;
 import interview.common.constant.InterviewConnectionKeyConstant;
@@ -14,9 +29,11 @@ import interview.common.enums.InterviewReportGenerationStatus;
 import interview.common.enums.InterviewScheduleStatus;
 import interview.common.enums.InterviewSessionStatus;
 import interview.common.enums.InterviewType;
+import interview.common.enums.QuestionKind;
 import interview.common.exception.BusinessException;
 import interview.framework.context.AuthContext;
 import interview.framework.redis.RedisScripts;
+import interview.textinterview.event.InterviewSessionReadyEvent;
 import interview.textinterview.mapper.InterviewAnswerMapper;
 import interview.textinterview.mapper.InterviewReportMapper;
 import interview.textinterview.mapper.InterviewSessionMapper;
@@ -26,27 +43,20 @@ import interview.textinterview.model.entity.InterviewReport;
 import interview.textinterview.model.entity.InterviewSession;
 import interview.textinterview.model.entity.InterviewTimelineEvent;
 import interview.textinterview.model.req.InterviewSessionEndReq;
-import interview.textinterview.model.vo.*;
+import interview.textinterview.model.vo.InterviewAnswerListItemVO;
+import interview.textinterview.model.vo.InterviewCurrentQuestionVO;
+import interview.textinterview.model.vo.InterviewJoinTokenVO;
+import interview.textinterview.model.vo.InterviewSessionEndVO;
+import interview.textinterview.model.vo.InterviewSessionReadyVO;
+import interview.textinterview.model.vo.InterviewSessionVO;
+import interview.textinterview.model.vo.InterviewTimelineEventVO;
+import interview.textinterview.model.vo.InterviewTimelinePageVO;
 import interview.textinterview.service.InterviewSessionService;
 import interview.voiceinterview.mapper.VoiceInterviewSessionMapper;
 import interview.voiceinterview.model.entity.VoiceInterviewSession;
 import interview.voiceinterview.model.enums.VoiceEvaluationStatus;
 import interview.voiceinterview.model.vo.VoiceDetailsVO;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.time.OffsetDateTime;
-import java.time.temporal.ChronoUnit;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.TimeUnit;
-
-import static cn.hutool.json.JSONUtil.toBean;
-import static cn.hutool.json.JSONUtil.toJsonStr;
 
 @Service
 @RequiredArgsConstructor
@@ -54,6 +64,7 @@ public class InterviewSessionServiceImpl extends ServiceImpl<InterviewSessionMap
         implements InterviewSessionService {
 
     private static final int CONNECTION_TOKEN_TTL_SECONDS = 60;
+    private static final String QUESTION_COMPLETED_EVENT = "question.completed";
     private final VoiceInterviewSessionMapper voiceInterviewSessionMapper;
     private final InterviewTimelineEventMapper interviewTimelineEventMapper;
     private final InterviewAnswerMapper interviewAnswerMapper;
@@ -61,6 +72,7 @@ public class InterviewSessionServiceImpl extends ServiceImpl<InterviewSessionMap
     private final InterviewScheduleQueryApi interviewScheduleQueryApi;
     private final InterviewScheduleCommandApi interviewScheduleCommandApi;
     private final StringRedisTemplate stringRedisTemplate;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     @Override
     @Transactional
@@ -311,9 +323,87 @@ public class InterviewSessionServiceImpl extends ServiceImpl<InterviewSessionMap
         return new InterviewTimelinePageVO(lastSequence, hasMore, events);
     }
 
+    @Override
+    public InterviewCurrentQuestionVO getCurrentQuestion(Long sessionId) {
+        // 复用统一会话查询完成参与者归属校验。
+        getSession(sessionId);
+        List<InterviewTimelineEvent> events = interviewTimelineEventMapper.selectPage(
+                new Page<>(1, 1, false),
+                com.baomidou.mybatisplus.core.toolkit.Wrappers
+                        .lambdaQuery(InterviewTimelineEvent.class)
+                        .select(
+                                InterviewTimelineEvent::getSequenceNum,
+                                InterviewTimelineEvent::getPayloadJson,
+                                InterviewTimelineEvent::getOccurredAt)
+                        .eq(InterviewTimelineEvent::getSessionId, sessionId)
+                        .eq(InterviewTimelineEvent::getEventType, QUESTION_COMPLETED_EVENT)
+                        .orderByDesc(InterviewTimelineEvent::getSequenceNum))
+                .getRecords();
+        if (events.isEmpty()) {
+            return pendingQuestion(null);
+        }
+
+        // question.completed 是可回放的完整题目事实；已作答时等待下一题。
+        InterviewTimelineEvent event = events.getFirst();
+        Map<String, Object> payload = parsePayload(event.getPayloadJson());
+        Long questionId = numberAsLong(payload.get("questionId"));
+        if (questionId == null || interviewAnswerMapper.exists(
+                com.baomidou.mybatisplus.core.toolkit.Wrappers
+                        .lambdaQuery(InterviewAnswer.class)
+                        .eq(InterviewAnswer::getId, questionId)
+                        .eq(InterviewAnswer::getSessionId, sessionId)
+                        .isNotNull(InterviewAnswer::getUserAnswer))) {
+            return pendingQuestion(questionKind(payload.get("questionKind")));
+        }
+        return new InterviewCurrentQuestionVO(
+                false,
+                questionId,
+                event.getSequenceNum(),
+                questionKind(payload.get("questionKind")),
+                stringValue(payload.get("content")),
+                stringValue(payload.get("assessmentPoint")),
+                stringValue(payload.get("difficulty")),
+                numberAsLong(payload.get("parentAnswerId")),
+                event.getOccurredAt());
+    }
+
     @SuppressWarnings("unchecked")
     private Map<String, Object> parsePayload(String payloadJson) {
         return (Map<String, Object>) toBean(payloadJson, Map.class);
+    }
+
+    private InterviewCurrentQuestionVO pendingQuestion(QuestionKind questionKind) {
+        return new InterviewCurrentQuestionVO(
+                true, null, null, questionKind, null, null, null, null, null);
+    }
+
+    private Long numberAsLong(Object value) {
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        if (value instanceof String text && !text.isBlank()) {
+            try {
+                return Long.valueOf(text);
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private String stringValue(Object value) {
+        return value == null ? null : value.toString();
+    }
+
+    private QuestionKind questionKind(Object value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return QuestionKind.valueOf(value.toString());
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
     }
 
     @Override
@@ -444,5 +534,157 @@ public class InterviewSessionServiceImpl extends ServiceImpl<InterviewSessionMap
                         .<VoiceInterviewSession>lambdaQuery()
                         .eq(VoiceInterviewSession::getInterviewSessionId, session.getId()));
         return count > 0 ? VoiceEvaluationStatus.PENDING : null;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public InterviewSessionReadyVO readySession(Long sessionId, String idempotencyKey) {
+        // 步骤 1：参数校验与当前候选人身份/会话归属校验
+        Long userId = AuthContext.getRequiredUserId();
+        InterviewSession session = lambdaQuery()
+                .select(
+                        InterviewSession::getId,
+                        InterviewSession::getEnterpriseId,
+                        InterviewSession::getUserId,
+                        InterviewSession::getScheduleId,
+                        InterviewSession::getStatus
+                )
+                .eq(InterviewSession::getId, sessionId)
+                .one();
+        if (session == null) {
+            throw new BusinessException(ErrorCode.INTERVIEW_SESSION_NOT_FOUND);
+        }
+        if (!userId.equals(session.getUserId())) {
+            throw new BusinessException(ErrorCode.USER_NOT_PARTICIPANT);
+        }
+
+        // 步骤 2：会话状态机合法性判断与幂等处理
+        if (session.getStatus() == InterviewSessionStatus.COMPLETED
+                || session.getStatus() == InterviewSessionStatus.TERMINATED) {
+            throw new BusinessException(ErrorCode.INTERVIEW_SESSION_ALREADY_COMPLETED);
+        }
+
+        if (session.getStatus() == InterviewSessionStatus.IN_PROGRESS) {
+            boolean firstQuestionExists = checkFirstQuestionExists(sessionId);
+            return new InterviewSessionReadyVO(
+                    sessionId,
+                    InterviewSessionStatus.IN_PROGRESS,
+                    !firstQuestionExists
+            );
+        }
+
+        if (session.getStatus() != InterviewSessionStatus.CREATED) {
+            throw new BusinessException(ErrorCode.INTERVIEW_SESSION_STATUS_INVALID);
+        }
+
+        // 步骤 3：CAS 条件原子更新会话状态 CREATED -> IN_PROGRESS
+        OffsetDateTime now = OffsetDateTime.now();
+        boolean updated = lambdaUpdate()
+                .eq(InterviewSession::getId, sessionId)
+                .eq(InterviewSession::getStatus, InterviewSessionStatus.CREATED)
+                .set(InterviewSession::getStatus, InterviewSessionStatus.IN_PROGRESS)
+                .set(InterviewSession::getStartedAt, now)
+                .set(InterviewSession::getUpdatedAt, now)
+                .update();
+
+        if (!updated) {
+            // 并发竞争重试：重新查询会话状态，若已被并发请求推进为 IN_PROGRESS 则走幂等返回
+            InterviewSession current = lambdaQuery()
+                    .select(InterviewSession::getStatus)
+                    .eq(InterviewSession::getId, sessionId)
+                    .one();
+            if (current != null && current.getStatus() == InterviewSessionStatus.IN_PROGRESS) {
+                boolean firstQuestionExists = checkFirstQuestionExists(sessionId);
+                return new InterviewSessionReadyVO(
+                        sessionId,
+                        InterviewSessionStatus.IN_PROGRESS,
+                        !firstQuestionExists
+                );
+            }
+            throw new BusinessException(ErrorCode.INTERVIEW_SESSION_STATUS_INVALID);
+        }
+
+        // 步骤 4：跨模块联动推进排期状态 CONFIRMED -> IN_PROGRESS
+        interviewScheduleCommandApi.startSchedule(session.getScheduleId(), session.getEnterpriseId());
+
+        // 步骤 5：首题生成判定与异步任务触发
+        boolean firstQuestionExists = checkFirstQuestionExists(sessionId);
+        boolean firstQuestionPending = !firstQuestionExists;
+        if (firstQuestionPending) {
+            applicationEventPublisher.publishEvent(
+                    new InterviewSessionReadyEvent(
+                            sessionId,
+                            session.getScheduleId(),
+                            session.getEnterpriseId(),
+                            session.getSessionType(),
+                            interview.common.enums.QuestionKind.FIRST,
+                            null
+                    )
+            );
+        }
+
+        // 步骤 6：组装并返回就绪响应
+        return new InterviewSessionReadyVO(
+                sessionId,
+                InterviewSessionStatus.IN_PROGRESS,
+                firstQuestionPending
+        );
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Long recordAiQuestion(Long sessionId, Long enterpriseId, int questionIndex,
+                                 Long parentAnswerId, int followUpDepth,
+                                 interview.api.aicore.dto.InterviewQuestionGeneratedResultDTO generated) {
+        // 1. 插入 interview_answers
+        InterviewAnswer answer = InterviewAnswer.builder()
+                .sessionId(sessionId)
+                .enterpriseId(enterpriseId)
+                .questionIndex(questionIndex)
+                .questionText(generated.content())
+                .parentMessageId(parentAnswerId)
+                .followUpDepth(followUpDepth)
+                .build();
+        interviewAnswerMapper.insert(answer);
+
+        // 2. CAS 原子推进 interview_sessions.last_event_sequence = 1
+        this.lambdaUpdate()
+                .eq(InterviewSession::getId, sessionId)
+                .set(InterviewSession::getLastEventSequence, 1L)
+                .set(InterviewSession::getUpdatedAt, OffsetDateTime.now())
+                .update();
+
+        // 3. 插入 interview_timeline_events (sequence_num = 1, event_type = 'question.completed')
+        String kind = cn.hutool.core.util.StrUtil.nullToDefault(generated.questionKind(), "FIRST");
+        Map<String, Object> payload = Map.of(
+                "questionId", answer.getId(),
+                "sequenceNum", 1L,
+                "questionKind", kind,
+                "content", generated.content(),
+                "assessmentPoint", generated.assessmentPoint() != null ? generated.assessmentPoint() : "",
+                "difficulty", generated.difficulty() != null ? generated.difficulty() : "MEDIUM"
+        );
+        InterviewTimelineEvent timelineEvent = InterviewTimelineEvent.builder()
+                .sessionId(sessionId)
+                .enterpriseId(enterpriseId)
+                .eventId(UUID.randomUUID().toString().replace("-", ""))
+                .sequenceNum(1L)
+                .eventType(QUESTION_COMPLETED_EVENT)
+                .actorType("AI")
+                .payloadJson(toJsonStr(payload))
+                .occurredAt(OffsetDateTime.now())
+                .build();
+        interviewTimelineEventMapper.insert(timelineEvent);
+
+        return answer.getId();
+    }
+
+    private boolean checkFirstQuestionExists(Long sessionId) {
+        return interviewTimelineEventMapper.exists(
+                com.baomidou.mybatisplus.core.toolkit.Wrappers
+                        .<InterviewTimelineEvent>lambdaQuery()
+                        .eq(InterviewTimelineEvent::getSessionId, sessionId)
+                        .eq(InterviewTimelineEvent::getEventType, QUESTION_COMPLETED_EVENT)
+        );
     }
 }

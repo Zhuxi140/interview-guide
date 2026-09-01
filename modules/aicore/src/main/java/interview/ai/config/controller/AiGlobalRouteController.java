@@ -3,6 +3,8 @@ package interview.ai.config.controller;
 import interview.ai.config.model.req.AiGlobalRouteUpdateReq;
 import interview.ai.config.model.vo.AiGlobalRouteListVO;
 import interview.ai.config.model.vo.AiGlobalRouteVO;
+import interview.ai.config.model.vo.AiRouteDetailVO;
+import interview.ai.config.model.vo.AiRouteHealthVO;
 import interview.ai.config.service.AiGlobalRouteService;
 import interview.common.annonate.RequirePermission;
 import interview.common.constant.ApiVersion;
@@ -39,6 +41,26 @@ public class AiGlobalRouteController {
     @GetMapping
     public Result<AiGlobalRouteListVO> listRoutes() {
         return Result.success(aiGlobalRouteService.listRoutes());
+    }
+
+    @Operation(summary = "查询指定模型类型的 AI 路由详情")
+    @RequirePermission(
+            permissions = Perm.AdminAi.ROUTE_LIST,
+            scope = PermissionScope.PLATFORM
+    )
+    @GetMapping("/{modelType}")
+    public Result<AiRouteDetailVO> getRoute(@PathVariable AiModelType modelType) {
+        return Result.success(aiGlobalRouteService.getRoute(modelType));
+    }
+
+    @Operation(summary = "查询指定模型类型的 Provider 运行健康状态")
+    @RequirePermission(
+            permissions = Perm.AdminAi.ROUTE_LIST,
+            scope = PermissionScope.PLATFORM
+    )
+    @GetMapping("/{modelType}/health")
+    public Result<AiRouteHealthVO> getRouteHealth(@PathVariable AiModelType modelType) {
+        return Result.success(aiGlobalRouteService.getRouteHealth(modelType));
     }
 
     @Operation(summary = "更新指定模型类型的 AI 全局默认路由（CAS 乐观锁）")

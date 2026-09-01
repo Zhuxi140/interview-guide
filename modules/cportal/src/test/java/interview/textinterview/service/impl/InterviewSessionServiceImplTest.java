@@ -19,6 +19,7 @@ import interview.framework.context.AuthContext;
 import interview.textinterview.mapper.InterviewAnswerMapper;
 import interview.textinterview.mapper.InterviewReportMapper;
 import interview.textinterview.mapper.InterviewSessionMapper;
+import interview.textinterview.mapper.InterviewTimelineEventMapper;
 import interview.textinterview.model.entity.InterviewAnswer;
 import interview.textinterview.model.entity.InterviewReport;
 import interview.textinterview.model.entity.InterviewSession;
@@ -36,6 +37,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -77,9 +79,13 @@ class InterviewSessionServiceImplTest {
     @Mock
     private InterviewSessionMapper sessionMapper;
     @Mock
+    private InterviewTimelineEventMapper timelineEventMapper;
+    @Mock
     private InterviewAnswerMapper answerMapper;
     @Mock
     private InterviewReportMapper reportMapper;
+    @Mock
+    private ApplicationEventPublisher applicationEventPublisher;
 
     private InterviewSessionServiceImpl service;
     // lambdaQuery() 依赖真实 mapper 的 sqlSession，纯 mock 下不可用；归属校验经 spy 打桩。
@@ -98,8 +104,9 @@ class InterviewSessionServiceImplTest {
                 new MapperBuilderAssistant(new MybatisConfiguration(), "InterviewAnswer"),
                 InterviewAnswer.class);
         service = new InterviewSessionServiceImpl(
-                voiceInterviewSessionMapper, null, answerMapper, reportMapper, interviewScheduleQueryApi,
-                interviewScheduleCommandApi, stringRedisTemplate);
+                voiceInterviewSessionMapper, timelineEventMapper, answerMapper, reportMapper,
+                interviewScheduleQueryApi, interviewScheduleCommandApi,
+                stringRedisTemplate, applicationEventPublisher);
         ReflectionTestUtils.setField(service, "baseMapper", sessionMapper);
         serviceSpy = spy(service);
     }

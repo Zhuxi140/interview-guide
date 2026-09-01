@@ -13,6 +13,7 @@ import interview.matching.model.vo.JobApplicationSubmitVO;
 import interview.matching.model.vo.JobApplicationVO;
 import interview.matching.model.vo.MyApplicationListItemVO;
 import interview.matching.model.vo.JobApplicationStatusVO;
+import interview.matching.model.vo.ApplicationTransitionLogVO;
 
 /**
  * @author zhuxi
@@ -79,6 +80,17 @@ public interface JobApplicationsService extends IService<JobApplications> {
      */
     JobApplicationStatusVO withdrawApplication(
             Long applicationId, JobApplicationWithdrawReq req);
+
+    /**
+     * 分页查询投递状态流转历史
+     * @param enterpriseId 企业 ID
+     * @param applicationId 投递 ID
+     * @param page 页码
+     * @param size 每页条数
+     * @return 状态流转记录分页
+     */
+    IPage<ApplicationTransitionLogVO> pageTransitionLogs(
+            Long enterpriseId, Long applicationId, Integer page, Integer size);
 
     /**
      * 面试阶段回写：PASSED → INTERVIEWING（首轮排期创建成功后调用）

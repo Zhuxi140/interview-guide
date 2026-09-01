@@ -49,4 +49,12 @@ public interface InterviewScheduleQueryApi {
      */
     List<Long> listScheduleIdsByCandidate(Long candidateUserId);
 
+    /**
+     * 获取排期固化的完整模板快照 JSON 字符串
+     *
+     * @param scheduleId 排期 ID
+     * @return 模板快照 JSON，不存在时返回 null
+     */
+    String getTemplateSnapshot(Long scheduleId);
+
 }

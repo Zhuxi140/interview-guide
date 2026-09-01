@@ -18,6 +18,7 @@ import interview.matching.model.vo.JobApplicationVO;
 import interview.matching.model.vo.MyApplicationListItemVO;
 import interview.matching.model.vo.CandidateJobMatchAnalysisVO;
 import interview.matching.model.vo.CandidateJobMatchTriggerVO;
+import interview.matching.model.vo.ApplicationTransitionLogVO;
 import interview.matching.service.JobApplicationsService;
 import interview.matching.service.CandidateJobMatchAnalysisService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -95,6 +96,20 @@ public class JobApplicationsController {
             @RequestBody @Valid JobApplicationStatusReq req) {
         return Result.success(jobApplicationsService.updateApplicationStatus(
                 enterpriseId, applicationId, req));
+    }
+
+    @RequirePermission(permissions = Perm.Application.DETAIL, scope = PermissionScope.ENTERPRISE)
+    @RequireActiveEnterprise
+    @MaxRiskLevel(RiskLevel.NO_RISK)
+    @Operation(summary = "分页查询投递状态流转历史")
+    @GetMapping("/enterprises/{enterpriseId}/applications/{applicationId}/transitions")
+    public Result<IPage<ApplicationTransitionLogVO>> listApplicationTransitions(
+            @PathVariable Long enterpriseId,
+            @PathVariable Long applicationId,
+            @RequestParam(defaultValue = "1") @Min(1) Integer page,
+            @RequestParam(defaultValue = "20") @Min(1) @jakarta.validation.constraints.Max(100) Integer size) {
+        return Result.success(jobApplicationsService.pageTransitionLogs(
+                enterpriseId, applicationId, page, size));
     }
 
     @MaxRiskLevel(RiskLevel.NO_RISK)

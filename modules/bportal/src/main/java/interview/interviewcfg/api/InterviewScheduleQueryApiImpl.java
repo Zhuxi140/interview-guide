@@ -91,6 +91,18 @@ public class InterviewScheduleQueryApiImpl implements InterviewScheduleQueryApi 
         return interviewScheduleMapper.listScheduleIdsByCandidate(candidateUserId);
     }
 
+    @Override
+    public String getTemplateSnapshot(Long scheduleId) {
+        if (scheduleId == null) {
+            return null;
+        }
+        InterviewSchedule schedule = interviewScheduleService.lambdaQuery()
+                .select(InterviewSchedule::getTemplateSnapshotJson)
+                .eq(InterviewSchedule::getId, scheduleId)
+                .one();
+        return schedule != null ? schedule.getTemplateSnapshotJson() : null;
+    }
+
 
     private List<InterviewScheduleQueryDTO> enrich(List<InterviewScheduleQueryBO> schedules) {
         if (schedules.isEmpty()) {

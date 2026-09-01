@@ -131,6 +131,9 @@ public enum ErrorCode {
     CANDIDATE_JOB_MATCH_FAILED(40031,"岗位适配预测失败，请稍后重试"),
     CANDIDATE_JOB_MATCH_STATUS_INVALID(40032,"当前岗位适配预测状态不允许该操作"),
     JOB_APPLICATION_NOT_FOUND(40033,"岗位投递记录不存在"),
+    CANDIDATE_PROFILE_VERSION_CONFLICT(40034,"候选人资料已被修改，请刷新后重试"),
+    RESUME_IMPORT_BATCH_NOT_FOUND(40035,"简历导入批次不存在"),
+    ENTERPRISE_CANDIDATE_NOT_FOUND(40036,"企业人才池候选人不存在"),
 
     // ------------ 50xxx 文本/面试流程错误码 ------------
     INTERVIEW_SCHEDULE_NOT_FOUND(50001, "面试排期不存在"),
@@ -192,6 +195,8 @@ public enum ErrorCode {
     WALLET_VERSION_CONFLICT(60010, "钱包并发更新冲突，请重试"),
     BILLING_DISABLED(60011, "计费系统暂未启用"),
     WALLET_TRANSACTION_FAILED(60012, "钱包流水记录失败"),
+    SKU_ALREADY_EXISTS(60013, "同名同币种套餐已存在"),
+    SKU_VERSION_CONFLICT(60014, "套餐已被其他请求修改，请刷新后重试"),
 
     // ------------ 70xxx 语音面试错误码 ------------
     VOICE_SESSION_NOT_FOUND(70001, "语音会话不存在"),
@@ -264,6 +269,9 @@ public enum ErrorCode {
     AI_SCENE_PARAM_UNSUPPORTED(120020, "AI 场景参数或模型能力不支持"),
     AI_PROVIDER_TYPE_MISMATCH(120021, "AI Provider 模型类型与路由或场景配置不匹配"),
     AI_PROVIDER_TEST_UNSUPPORTED(120022, "当前模型类型暂不支持连接测试"),
+    AI_ROUTE_NO_HEALTHY_PROVIDER(120023, "AI 路由没有可用的健康 Provider"),
+    AI_ROUTE_CONFIG_INVALID(120024, "AI 路由配置不合法"),
+    AI_ROUTE_HEALTH_UNAVAILABLE(120025, "AI 路由运行时健康统计尚未启用"),
 
     // ------------ 13xxx Spark 离线任务错误码 ------------
     SPARK_TASK_NOT_FOUND(130001, "Spark 任务不存在"),
