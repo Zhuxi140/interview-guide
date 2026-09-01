@@ -35,7 +35,7 @@ public class CodeGenerator {
                     builder.parent("interview.system")            // 父包名，所有生成的类都在这个包下
                             .entity("entity")                      // 实体类子包 → interview.system.entity
                             .service("service")                    // Service 接口子包 → interview.system.service
-                            .serviceImpl("service.impl")           // ServiceImpl 子包 → interview.system.service.impl
+                            .serviceImpl("service")                // ServiceImpl 与接口保持在同一 service 包
                             .mapper("mapper")                      // Mapper 接口子包 → interview.system.mapper
                             .controller("controller")              // Controller 子包 → interview.system.controller
                             .pathInfo(Collections.singletonMap(

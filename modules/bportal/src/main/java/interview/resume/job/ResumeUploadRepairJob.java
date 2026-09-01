@@ -4,7 +4,7 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import interview.resume.mapper.ResumesMapper;
 import interview.resume.model.entity.Resumes;
 import interview.resume.model.enums.AnalyzeStatus;
-import interview.resume.service.impl.ResumeTxService;
+import interview.resume.service.ResumeTxService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;

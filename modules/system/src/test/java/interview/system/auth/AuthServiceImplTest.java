@@ -20,7 +20,7 @@ import interview.system.auth.model.req.*;
 import interview.system.auth.model.vo.RefreshTokenVO;
 import interview.system.auth.model.vo.TokenInfoVO;
 import interview.system.auth.model.vo.WorkspaceSwitchVO;
-import interview.system.auth.service.impl.AuthServiceImpl;
+import interview.system.auth.service.AuthServiceImpl;
 import interview.system.auth.service.SecureChallengeService;
 import interview.system.auth.service.SmsService;
 import interview.system.auth.service.UsersService;

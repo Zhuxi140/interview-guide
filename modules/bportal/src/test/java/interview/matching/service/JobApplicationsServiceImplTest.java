@@ -16,7 +16,7 @@ import interview.matching.mapper.JobApplicationsMapper;
 import interview.matching.model.entity.JobApplications;
 import interview.matching.model.enums.JobApplicationStatus;
 import interview.matching.model.req.JobApplicationSubmitReq;
-import interview.matching.service.Impl.JobApplicationsServiceImpl;
+import interview.matching.service.JobApplicationsServiceImpl;
 import interview.resume.model.entity.Resumes;
 import interview.resume.service.ResumesService;
 import org.junit.jupiter.api.AfterEach;

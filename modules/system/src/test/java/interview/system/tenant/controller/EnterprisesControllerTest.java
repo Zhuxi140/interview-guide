@@ -171,14 +171,14 @@ class EnterprisesControllerTest {
             when(request.getAttribute(SecureActionContext.REQUEST_ATTRIBUTE)).thenReturn(ctx);
             EnterpriseContactPhoneUpdateVO vo =
                     new EnterpriseContactPhoneUpdateVO(1L, "13900139000");
-            when(enterprisesService.updateEnterpriseContactPhone(1L, ctx)).thenReturn(vo);
+            when(contactVerificationService.completePhoneUpdate(1L, ctx)).thenReturn(vo);
 
             Result<EnterpriseContactPhoneUpdateVO> result =
                     controller.updateEnterpriseContactPhone(1L);
 
             assertEquals("13900139000", result.getData().contactPhone());
-            verify(enterprisesService).updateEnterpriseContactPhone(1L, ctx);
-            verify(contactVerificationService).complete("flow-1");
+            verify(contactVerificationService).completePhoneUpdate(1L, ctx);
+            verifyNoInteractions(enterprisesService);
         }
 
         @Test

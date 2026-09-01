@@ -14,7 +14,7 @@ import interview.matching.model.entity.ApplicationAiScreening;
 import interview.matching.model.entity.JobApplications;
 import interview.matching.model.enums.JobApplicationStatus;
 import interview.matching.model.req.ApplicationAiReviewReq;
-import interview.matching.service.Impl.ApplicationAiScreeningServiceImpl;
+import interview.matching.service.ApplicationAiScreeningServiceImpl;
 import interview.resume.mapper.CandidateProfileMapper;
 import interview.resume.mapper.CandidateSkillScoresMapper;
 import interview.resume.service.CandidateProfileService;

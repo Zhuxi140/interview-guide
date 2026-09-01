@@ -2,6 +2,7 @@ package interview.system.tenant;
 
 import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
 import interview.common.constant.AuthKeyConstant;
+import interview.common.constant.SecureActionContext;
 import interview.common.enums.ErrorCode;
 import interview.common.enums.SmsType;
 import interview.common.exception.BusinessException;
@@ -14,6 +15,7 @@ import interview.system.tenant.model.entity.EnterpriseTeamMember;
 import interview.system.tenant.model.enums.EnterpriseContactVerifyStage;
 import interview.system.tenant.model.enums.EnterpriseStatus;
 import interview.system.tenant.model.req.EnterpriseContactNewPhoneReq;
+import interview.system.tenant.model.vo.EnterpriseContactPhoneUpdateVO;
 import interview.system.tenant.model.vo.EnterpriseContactVerifyStartVO;
 import interview.system.tenant.service.EnterpriseContactVerificationServiceImpl;
 import interview.system.tenant.service.EnterprisesService;
@@ -151,6 +153,44 @@ class EnterpriseContactVerificationServiceImplTest {
 
         assertEquals(ErrorCode.ENTERPRISE_FROZEN.getCode(), exception.getCode());
         verifyNoInteractions(smsService);
+    }
+
+    @Test
+    void completePhoneUpdate_shouldUpdateEnterpriseAndCleanupFlow() {
+        SecureActionContext context = SecureActionContext.builder()
+                .challengeId("flow-1")
+                .build();
+        EnterpriseContactPhoneUpdateVO expected =
+                new EnterpriseContactPhoneUpdateVO(enterpriseId, "13900000002");
+        when(enterprisesService.updateEnterpriseContactPhone(enterpriseId, context))
+                .thenReturn(expected);
+        when(stringRedisTemplate.delete(anyCollection())).thenReturn(3L);
+
+        EnterpriseContactPhoneUpdateVO result =
+                service.completePhoneUpdate(enterpriseId, context);
+
+        assertSame(expected, result);
+        verify(enterprisesService).updateEnterpriseContactPhone(enterpriseId, context);
+        verify(stringRedisTemplate).delete(anyCollection());
+    }
+
+    @Test
+    void completePhoneUpdate_shouldKeepSuccessResultWhenCleanupFails() {
+        SecureActionContext context = SecureActionContext.builder()
+                .challengeId("flow-1")
+                .build();
+        EnterpriseContactPhoneUpdateVO expected =
+                new EnterpriseContactPhoneUpdateVO(enterpriseId, "13900000002");
+        when(enterprisesService.updateEnterpriseContactPhone(enterpriseId, context))
+                .thenReturn(expected);
+        when(stringRedisTemplate.delete(anyCollection()))
+                .thenThrow(new RuntimeException("redis unavailable"));
+
+        EnterpriseContactPhoneUpdateVO result = assertDoesNotThrow(
+                () -> service.completePhoneUpdate(enterpriseId, context));
+
+        assertSame(expected, result);
+        verify(enterprisesService).updateEnterpriseContactPhone(enterpriseId, context);
     }
 
     private void mockStartDependencies(

@@ -25,7 +25,7 @@ import interview.offer.model.vo.OfferDecisionVO;
 import interview.offer.model.vo.OfferDetailVO;
 import interview.offer.model.vo.OfferSendVO;
 import interview.offer.model.vo.OfferUpdateVO;
-import interview.offer.service.impl.OfferServiceImpl;
+import interview.offer.service.OfferServiceImpl;
 import interview.job.service.JobService;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.junit.jupiter.api.AfterEach;

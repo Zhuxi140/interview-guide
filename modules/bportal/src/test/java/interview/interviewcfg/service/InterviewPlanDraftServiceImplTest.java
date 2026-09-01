@@ -27,7 +27,7 @@ import interview.interviewcfg.model.req.InterviewScheduleCreateReq;
 import interview.interviewcfg.model.vo.InterviewPlanDraftApplyVO;
 import interview.interviewcfg.model.vo.InterviewScheduleCreateVO;
 import interview.interviewcfg.service.InterviewScheduleService;
-import interview.interviewcfg.service.impl.InterviewPlanDraftServiceImpl;
+import interview.interviewcfg.service.InterviewPlanDraftServiceImpl;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

@@ -11,7 +11,7 @@ import interview.common.enums.UserType;
 import interview.common.exception.BusinessException;
 import interview.framework.context.AuthContext;
 import interview.textinterview.model.vo.InterviewReportCandidateListItemVO;
-import interview.textinterview.service.impl.InterviewReportServiceImpl;
+import interview.textinterview.service.InterviewReportServiceImpl;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

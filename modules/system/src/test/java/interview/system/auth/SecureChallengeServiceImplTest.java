@@ -13,7 +13,7 @@ import interview.system.auth.model.req.SecureChallengeVerifyReq;
 import interview.system.auth.model.vo.SecureActionTokenVO;
 import interview.system.auth.service.SmsService;
 import interview.system.auth.service.UsersService;
-import interview.system.auth.service.impl.SecureChallengeServiceImpl;
+import interview.system.auth.service.SecureChallengeServiceImpl;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

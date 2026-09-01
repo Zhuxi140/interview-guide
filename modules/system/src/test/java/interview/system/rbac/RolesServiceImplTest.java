@@ -6,7 +6,7 @@ import interview.system.rbac.mapper.RolesMapper;
 import interview.system.rbac.model.entity.Role;
 import interview.system.rbac.model.vo.RoleDetailVO;
 import interview.system.rbac.model.vo.RoleListItemVO;
-import interview.system.rbac.service.impl.RolesServiceImpl;
+import interview.system.rbac.service.RolesServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

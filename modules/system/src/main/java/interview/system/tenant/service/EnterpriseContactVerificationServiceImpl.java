@@ -20,8 +20,10 @@ import interview.system.tenant.model.enums.EnterpriseContactVerifyStage;
 import interview.system.tenant.model.enums.EnterpriseStatus;
 import interview.system.tenant.model.req.EnterpriseContactCodeVerifyReq;
 import interview.system.tenant.model.req.EnterpriseContactNewPhoneReq;
+import interview.system.tenant.model.vo.EnterpriseContactPhoneUpdateVO;
 import interview.system.tenant.model.vo.EnterpriseContactVerifyStartVO;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
@@ -37,6 +39,7 @@ import java.util.concurrent.TimeUnit;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class EnterpriseContactVerificationServiceImpl
         implements EnterpriseContactVerificationService {
 
@@ -236,19 +239,33 @@ public class EnterpriseContactVerificationServiceImpl
     }
 
     @Override
-    public void complete(String flowId) {
+    public EnterpriseContactPhoneUpdateVO completePhoneUpdate(
+            Long enterpriseId, SecureActionContext secureActionContext) {
+        // 先完成数据库更新，成功提交后再执行不影响业务结果的 Redis 清理。
+        EnterpriseContactPhoneUpdateVO result = enterprisesService.updateEnterpriseContactPhone(
+                enterpriseId, secureActionContext);
+        cleanupFlowBestEffort(enterpriseId, secureActionContext.getChallengeId());
+        return result;
+    }
+
+    private void cleanupFlowBestEffort(Long enterpriseId, String flowId) {
         // 通用敏感操作令牌不绑定企业联系电话流程，无需清理
         if (StrUtil.isBlank(flowId)) {
             return;
         }
 
-        // 联系方式更新成功后删除流程及可能残留的新旧号码验证码
-        stringRedisTemplate.delete(java.util.List.of(
-                AuthKeyConstant.getEnterpriseContactFlowKey(flowId),
-                AuthKeyConstant.getEnterpriseContactCodeKey(
-                        flowId, SmsType.ENTERPRISE_VERIFY_OLD),
-                AuthKeyConstant.getEnterpriseContactCodeKey(
-                        flowId, SmsType.ENTERPRISE_VERIFY_NEW)));
+        // 清理失败时保留成功更新结果，残留验证数据由既有 TTL 自动过期。
+        try {
+            stringRedisTemplate.delete(java.util.List.of(
+                    AuthKeyConstant.getEnterpriseContactFlowKey(flowId),
+                    AuthKeyConstant.getEnterpriseContactCodeKey(
+                            flowId, SmsType.ENTERPRISE_VERIFY_OLD),
+                    AuthKeyConstant.getEnterpriseContactCodeKey(
+                            flowId, SmsType.ENTERPRISE_VERIFY_NEW)));
+        } catch (RuntimeException exception) {
+            log.warn("企业联系电话已更新，但验证流程清理失败: enterpriseId [{}], flowId [{}]",
+                    enterpriseId, flowId, exception);
+        }
     }
 
     private String verifyCodeTransition(

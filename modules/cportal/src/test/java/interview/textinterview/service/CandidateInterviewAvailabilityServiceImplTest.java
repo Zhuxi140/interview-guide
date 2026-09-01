@@ -8,7 +8,7 @@ import interview.textinterview.mapper.CandidateInterviewAvailabilityMapper;
 import interview.textinterview.model.entity.CandidateInterviewAvailability;
 import interview.textinterview.model.req.CandidateInterviewAvailabilityUpdateReq;
 import interview.textinterview.model.vo.CandidateInterviewAvailabilityVO;
-import interview.textinterview.service.impl.CandidateInterviewAvailabilityServiceImpl;
+import interview.textinterview.service.CandidateInterviewAvailabilityServiceImpl;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

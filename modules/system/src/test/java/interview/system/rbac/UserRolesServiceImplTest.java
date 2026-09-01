@@ -5,14 +5,14 @@ import com.baomidou.mybatisplus.extension.conditions.update.LambdaUpdateChainWra
 import interview.common.enums.ErrorCode;
 import interview.common.exception.BusinessException;
 import interview.system.auth.model.entity.User;
-import interview.system.auth.service.impl.UsersServiceImpl;
+import interview.system.auth.service.UsersServiceImpl;
 import interview.system.rbac.mapper.UserRolesMapper;
 import interview.system.rbac.model.entity.Role;
 import interview.system.rbac.model.entity.UserRole;
 import interview.system.rbac.model.req.AssignUserRolesReq;
 import interview.system.rbac.model.vo.UserRoleItemVO;
-import interview.system.rbac.service.impl.RolesServiceImpl;
-import interview.system.rbac.service.impl.UserRolesServiceImpl;
+import interview.system.rbac.service.RolesServiceImpl;
+import interview.system.rbac.service.UserRolesServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

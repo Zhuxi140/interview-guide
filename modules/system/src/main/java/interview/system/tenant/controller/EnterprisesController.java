@@ -182,11 +182,9 @@ public class EnterprisesController {
         SecureActionContext secureActionContext = (SecureActionContext) request.getAttribute(
                 SecureActionContext.REQUEST_ATTRIBUTE);
 
-        // 使用令牌中的新旧号码快照更新联系电话，成功后清理验证流程
-        EnterpriseContactPhoneUpdateVO vo = enterprisesService.updateEnterpriseContactPhone(
-                enterpriseId, secureActionContext);
-        contactVerificationService.complete(secureActionContext.getChallengeId());
-        return Result.success(vo);
+        // 由验证服务统一完成联系电话更新和验证流程清理
+        return Result.success(contactVerificationService.completePhoneUpdate(
+                enterpriseId, secureActionContext));
     }
 
     @MaxRiskLevel(RiskLevel.NO_RISK)

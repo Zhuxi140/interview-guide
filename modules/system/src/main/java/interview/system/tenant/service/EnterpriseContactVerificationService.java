@@ -1,7 +1,9 @@
 package interview.system.tenant.service;
 
+import interview.common.constant.SecureActionContext;
 import interview.system.tenant.model.req.EnterpriseContactCodeVerifyReq;
 import interview.system.tenant.model.req.EnterpriseContactNewPhoneReq;
+import interview.system.tenant.model.vo.EnterpriseContactPhoneUpdateVO;
 import interview.system.tenant.model.vo.EnterpriseContactVerifyStartVO;
 
 /**
@@ -41,8 +43,11 @@ public interface EnterpriseContactVerificationService {
     String verifyNewPhone(Long enterpriseId, EnterpriseContactCodeVerifyReq req);
 
     /**
-     * 完成并清理企业联系电话验证流程
-     * @param flowId 验证流程 ID
+     * 完成企业联系电话更新并清理验证流程
+     * @param enterpriseId 企业 ID
+     * @param secureActionContext 安全操作上下文
+     * @return 联系电话更新结果
      */
-    void complete(String flowId);
+    EnterpriseContactPhoneUpdateVO completePhoneUpdate(
+            Long enterpriseId, SecureActionContext secureActionContext);
 }

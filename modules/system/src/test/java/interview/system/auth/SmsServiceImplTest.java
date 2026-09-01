@@ -6,7 +6,7 @@ import interview.common.exception.BusinessException;
 import interview.common.enums.SmsType;
 import interview.system.auth.model.req.SmsSendReq;
 import interview.system.auth.model.entity.User;
-import interview.system.auth.service.impl.SmsServiceImpl;
+import interview.system.auth.service.SmsServiceImpl;
 import interview.system.auth.service.UsersService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
