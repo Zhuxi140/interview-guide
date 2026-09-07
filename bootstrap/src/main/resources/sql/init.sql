@@ -3473,6 +3473,13 @@ ALTER TABLE sys_notifications ADD COLUMN IF NOT EXISTS send_status VARCHAR(20) N
 ALTER TABLE sys_notifications ADD COLUMN IF NOT EXISTS failure_reason VARCHAR(512);
 ALTER TABLE sys_notifications ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
+-- 2026-09-06 发送幂等：防业务重试/并发产生重复站内信；流水行不带键不受约束。
+ALTER TABLE sys_notifications ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(64);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_notifications_idem
+    ON sys_notifications (idempotency_key)
+    WHERE idempotency_key IS NOT NULL AND is_deleted = FALSE;
+
 COMMENT ON TABLE sys_notifications IS '系统消息与投递记录表（含 email_logs 功能）';
 COMMENT ON COLUMN sys_notifications.id IS '雪花主键';
 COMMENT ON COLUMN sys_notifications.enterprise_id IS '[逻辑外键]→enterprises，强隔离企业租户 ID';
@@ -3482,6 +3489,7 @@ COMMENT ON COLUMN sys_notifications.notify_scene IS '业务场景 (INTERVIEW_INV
 COMMENT ON COLUMN sys_notifications.channel_type IS '发送渠道 (IN_APP / EMAIL / SMS)；IN_APP 不依赖外部渠道配置';
 COMMENT ON COLUMN sys_notifications.send_status IS '发送状态 (PENDING / SENT / FAILED)；存量站内信数据视为 SENT';
 COMMENT ON COLUMN sys_notifications.failure_reason IS '外部渠道发送失败原因';
+COMMENT ON COLUMN sys_notifications.idempotency_key IS '发送幂等键（{scene}:{bizId}）；唯一索引仅约束非空且未删除的行';
 COMMENT ON COLUMN sys_notifications.title IS '消息/邮件标题（模板渲染后）';
 COMMENT ON COLUMN sys_notifications.content IS '消息/邮件正文内容（模板渲染后）';
 COMMENT ON COLUMN sys_notifications.is_read IS '已读/送达状态';

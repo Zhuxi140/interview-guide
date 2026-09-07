@@ -1,4 +1,4 @@
-package interview.notification.model.enums;
+package interview.common.enums;
 
 /**
  * 通知发送状态。

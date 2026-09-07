@@ -245,6 +245,11 @@ public enum ErrorCode {
     NOTIFICATION_SEND_FAILED(110001, "消息通知发送失败"),
     NOTIFICATION_NOT_FOUND(110002, "通知消息不存在"),
     API_LOG_ARCHIVE_FAILED(110003, "日志归档失败"),
+    NOTIFICATION_CHANNEL_VERSION_CONFLICT(110004, "通知渠道配置版本冲突，请刷新后重试"),
+    NOTIFICATION_TEMPLATE_ALREADY_EXISTS(110005, "同场景同渠道的通知模板已存在"),
+    NOTIFICATION_TEMPLATE_NOT_FOUND(110006, "通知模板不存在"),
+    NOTIFICATION_TEMPLATE_VERSION_CONFLICT(110007, "通知模板版本冲突，请刷新后重试"),
+    NOTIFICATION_RESEND_NOT_ALLOWED(110008, "仅失败的外部渠道通知允许重发"),
 
     // ------------ 120xxx AI/大模型错误码 ------------
     AI_PROVIDER_NOT_FOUND(120001, "AI 供应商不存在"),

@@ -7,8 +7,8 @@ import interview.common.enums.ErrorCode;
 import interview.common.exception.BusinessException;
 import interview.notification.mapper.SysNotificationTemplateMapper;
 import interview.notification.model.entity.SysNotificationTemplate;
-import interview.notification.model.enums.ChannelType;
-import interview.notification.model.enums.NotifyScene;
+import interview.common.enums.ChannelType;
+import interview.common.enums.NotifyScene;
 import interview.notification.model.req.NotificationTemplateCreateReq;
 import interview.notification.model.req.NotificationTemplateUpdateReq;
 import interview.notification.model.vo.NotificationTemplateCreateVO;
@@ -81,9 +81,7 @@ public class NotificationTemplateServiceImpl
                 .eq(SysNotificationTemplate::getChannelType, req.getChannelType())
                 .exists();
         if (exists) {
-            // TODO: ErrorCode 缺少 NOTIFICATION_TEMPLATE_ALREADY_EXISTS，暂以参数错误语义返回。
-            throw new BusinessException(
-                    ErrorCode.PARAM_VALID_ERROR, "同场景同渠道的模板已存在");
+            throw new BusinessException(ErrorCode.NOTIFICATION_TEMPLATE_ALREADY_EXISTS);
         }
 
         // 落库新模板：默认启用、版本 0。
@@ -98,10 +96,10 @@ public class NotificationTemplateServiceImpl
         try {
             save(template);
         } catch (DuplicateKeyException exception) {
-            throw new BusinessException(
-                    ErrorCode.PARAM_VALID_ERROR, "同场景同渠道的模板已存在");
+            throw new BusinessException(ErrorCode.NOTIFICATION_TEMPLATE_ALREADY_EXISTS);
         }
-        // TODO: 通知实际发送侧接入后按模板占位符白名单校验 contentTemplate 中的变量。
+        // 模板已接入发送侧渲染（NotificationContentRenderer 按场景+渠道取模板，变量缺失显式失败）；
+        // 编辑 contentTemplate 占位符时须与对应场景调用方提供的变量保持一致。
         return new NotificationTemplateCreateVO(
                 template.getId(),
                 template.getNotifyScene(),
@@ -117,13 +115,10 @@ public class NotificationTemplateServiceImpl
         // 查询模板并校验期望版本。
         SysNotificationTemplate template = getById(templateId);
         if (template == null) {
-            // TODO: ErrorCode 缺少 NOTIFICATION_TEMPLATE_NOT_FOUND，暂以参数错误语义返回。
-            throw new BusinessException(ErrorCode.PARAM_VALID_ERROR, "通知模板不存在");
+            throw new BusinessException(ErrorCode.NOTIFICATION_TEMPLATE_NOT_FOUND);
         }
         if (!Objects.equals(template.getVersion(), req.getExpectedVersion())) {
-            // TODO: ErrorCode 缺少 NOTIFICATION_TEMPLATE_VERSION_CONFLICT，暂以参数错误语义返回。
-            throw new BusinessException(
-                    ErrorCode.PARAM_VALID_ERROR, "模板已被修改，请刷新后重试");
+            throw new BusinessException(ErrorCode.NOTIFICATION_TEMPLATE_VERSION_CONFLICT);
         }
 
         // 半量更新：实体承载已提交字段，@Version 乐观锁递增版本。

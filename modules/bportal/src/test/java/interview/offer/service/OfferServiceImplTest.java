@@ -6,6 +6,7 @@ import interview.api.aicore.dto.JobApplicationSnapshotDTO;
 import interview.api.bportal.InterviewFlowStatusApi;
 import interview.api.bportal.JobValidationApi;
 import interview.api.system.EnterpriseValidationApi;
+import interview.api.system.NotificationApi;
 import interview.common.enums.ErrorCode;
 import interview.common.enums.InterviewFlowStatusEnum;
 import interview.common.enums.UserType;
@@ -75,6 +76,8 @@ class OfferServiceImplTest {
     private InterviewFlowStatusApi interviewFlowStatusApi;
     @Mock
     private JobService jobService;
+    @Mock
+    private NotificationApi notificationApi;
 
     private OfferServiceImpl service;
 
@@ -85,7 +88,8 @@ class OfferServiceImplTest {
                 new MapperBuilderAssistant(new MybatisConfiguration(), "Offer"),
                 Offer.class);
         service = spy(new OfferServiceImpl(
-                enterpriseValidationApi, jobValidationApi, interviewFlowStatusApi, jobService));
+                enterpriseValidationApi, jobValidationApi, interviewFlowStatusApi, jobService,
+                notificationApi));
         ReflectionTestUtils.setField(service, "baseMapper", mapper);
         AuthContext.setAuthContext(AuthContext.AuthUser.builder()
                 .userId(1L)

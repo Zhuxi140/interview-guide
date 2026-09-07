@@ -1,4 +1,4 @@
-package interview.notification.model.enums;
+package interview.common.enums;
 
 /**
  * 通知业务场景，驱动模板选择。

@@ -53,7 +53,8 @@ INSERT INTO sys_permissions (id, perm_code, perm_type, api_path, status) VALUES
 (1133, 'admin:notification-templates:list',   'API', '/api/v1/admin/notification-templates', 1),
 (1134, 'admin:notification-templates:create', 'API', '/api/v1/admin/notification-templates', 1),
 (1135, 'admin:notification-templates:update', 'API', '/api/v1/admin/notification-templates/*', 1),
-(1136, 'admin:notifications:list',            'API', '/api/v1/admin/notifications', 1)
+(1136, 'admin:notifications:list',            'API', '/api/v1/admin/notifications', 1),
+(1137, 'admin:notifications:resend',          'API', '/api/v1/admin/notifications/*/resend', 1)
 ON CONFLICT (id) DO UPDATE SET
     perm_code = EXCLUDED.perm_code,
     perm_type = EXCLUDED.perm_type,
@@ -62,7 +63,7 @@ ON CONFLICT (id) DO UPDATE SET
 
 -- ===== sys_role_permissions =====
 
--- SUPER_ADMIN (1001) — 全部 Phase 9 权限（含 1131-1136 通知发送侧管理）
+-- SUPER_ADMIN (1001) — 全部 Phase 9 权限（含 1131-1137 通知发送侧管理）
 INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
 (1001, 1101, NOW()), (1001, 1102, NOW()), (1001, 1103, NOW()),
 (1001, 1104, NOW()), (1001, 1105, NOW()), (1001, 1106, NOW()),
@@ -74,7 +75,8 @@ INSERT INTO sys_role_permissions (role_id, permission_id, created_at) VALUES
 (1001, 1122, NOW()), (1001, 1123, NOW()),
 (1001, 1124, NOW()), (1001, 1125, NOW()),
 (1001, 1131, NOW()), (1001, 1132, NOW()), (1001, 1133, NOW()),
-(1001, 1134, NOW()), (1001, 1135, NOW()), (1001, 1136, NOW())
+(1001, 1134, NOW()), (1001, 1135, NOW()), (1001, 1136, NOW()),
+(1001, 1137, NOW())
 ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 -- ENTERPRISE_OWNER (2001) / ENTERPRISE_ADMIN (2002) — 企业操作审计日志

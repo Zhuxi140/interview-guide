@@ -13,10 +13,18 @@ import interview.api.aicore.dto.InterviewQuestionGeneratedResultDTO;
 import interview.api.aicore.dto.InterviewQuestionGenerationReqDTO;
 import interview.api.bportal.InterviewScheduleQueryApi;
 import interview.api.bportal.dto.InterviewScheduleQueryDTO;
+import interview.api.system.NotificationApi;
+import interview.api.system.dto.SendNotificationCommand;
+import interview.common.enums.ChannelType;
+import interview.common.enums.NotifyScene;
 import interview.common.enums.QuestionKind;
 import interview.textinterview.event.InterviewSessionReadyEvent;
+import interview.textinterview.model.command.InterviewQuestionRecordCommand;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
+import java.util.Map;
+import java.util.Set;
 
 /**
  * 面试题生成执行服务，负责组织出题上下文、调用 AI 并持久化生成结果。
@@ -28,7 +36,8 @@ public class InterviewQuestionExecutionService {
 
     private final InterviewScheduleQueryApi interviewScheduleQueryApi;
     private final InterviewQuestionAiApi interviewQuestionAiApi;
-    private final InterviewSessionService interviewSessionService;
+    private final InterviewQuestionTxService interviewQuestionTxService;
+    private final NotificationApi notificationApi;
 
     /**
      * 根据会话就绪事件生成并保存首题。
@@ -69,22 +78,40 @@ public class InterviewQuestionExecutionService {
         }
 
         // 通过事务 Service 保存题目并追加时间线事件。
-        Long answerId = interviewSessionService.recordAiQuestion(
-                event.sessionId(),
-                event.enterpriseId(),
-                0,
-                null,
-                0,
-                generated
-        );
+        Long answerId = interviewQuestionTxService.recordQuestion(
+                new InterviewQuestionRecordCommand(
+                        event.sessionId(),
+                        event.enterpriseId(),
+                        0,
+                        null,
+                        0,
+                        generated.content(),
+                        generated.questionKind(),
+                        generated.assessmentPoint(),
+                        generated.difficulty()
+                ));
         log.info("首题生成与事务落库成功: sessionId={}, answerId={}, content={}",
                 event.sessionId(), answerId, generated.content());
 
-        // AI 触发兜底时预留通知 HR 接管的扩展点。
+        // AI 触发兜底时通知面试官切换为人工接管：收件人取排期面试官，
+        // 无面试官排期仅告警跳过（通知为尽力而为，不阻塞首题落库结果）。
         if ("FALLBACK".equalsIgnoreCase(generated.rawModelResponse())) {
             log.warn("AI 首题生成触发兜底，准备通知 HR 面试官介入接管: sessionId={}, scheduleId={}",
                     event.sessionId(), event.scheduleId());
-            // TODO：发送系统通知/WebSocket 提醒 HR 切换为人工接管模式。
+            if (schedule != null && schedule.interviewerUserId() != null) {
+                notificationApi.send(new SendNotificationCommand(
+                        event.enterpriseId(),
+                        schedule.interviewerUserId(),
+                        NotifyScene.SYSTEM,
+                        Set.of(ChannelType.IN_APP),
+                        Map.of("title", "AI 出题触发兜底",
+                                "content", "面试会话 " + event.sessionId() + " 的 AI 首题生成已触发兜底，"
+                                        + "请尽快进入会话切换为人工接管模式。"),
+                        "INTERVIEW_FALLBACK:" + event.sessionId(),
+                        null));
+            } else {
+                log.warn("兜底通知跳过：排期缺失或未指定面试官 scheduleId={}", event.scheduleId());
+            }
         }
 
         // TODO：通过实时通道向已在线候选人广播生成的题目。

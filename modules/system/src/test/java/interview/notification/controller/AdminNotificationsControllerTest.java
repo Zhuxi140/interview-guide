@@ -7,6 +7,7 @@ import interview.common.enums.ErrorCode;
 import interview.common.exception.BusinessException;
 import interview.notification.model.vo.NotificationSendRecordListItemVO;
 import interview.notification.service.NotificationSendRecordService;
+import interview.notification.service.NotificationSendService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -29,11 +30,14 @@ class AdminNotificationsControllerTest {
     @Mock
     private NotificationSendRecordService notificationSendRecordService;
 
+    @Mock
+    private NotificationSendService notificationSendService;
+
     private AdminNotificationsController controller;
 
     @BeforeEach
     void setUp() {
-        controller = new AdminNotificationsController(notificationSendRecordService);
+        controller = new AdminNotificationsController(notificationSendRecordService, notificationSendService);
     }
 
     @Nested

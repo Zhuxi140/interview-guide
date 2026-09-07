@@ -630,54 +630,6 @@ public class InterviewSessionServiceImpl extends ServiceImpl<InterviewSessionMap
         );
     }
 
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public Long recordAiQuestion(Long sessionId, Long enterpriseId, int questionIndex,
-                                 Long parentAnswerId, int followUpDepth,
-                                 interview.api.aicore.dto.InterviewQuestionGeneratedResultDTO generated) {
-        // 1. 插入 interview_answers
-        InterviewAnswer answer = InterviewAnswer.builder()
-                .sessionId(sessionId)
-                .enterpriseId(enterpriseId)
-                .questionIndex(questionIndex)
-                .questionText(generated.content())
-                .parentMessageId(parentAnswerId)
-                .followUpDepth(followUpDepth)
-                .build();
-        interviewAnswerMapper.insert(answer);
-
-        // 2. CAS 原子推进 interview_sessions.last_event_sequence = 1
-        this.lambdaUpdate()
-                .eq(InterviewSession::getId, sessionId)
-                .set(InterviewSession::getLastEventSequence, 1L)
-                .set(InterviewSession::getUpdatedAt, OffsetDateTime.now())
-                .update();
-
-        // 3. 插入 interview_timeline_events (sequence_num = 1, event_type = 'question.completed')
-        String kind = cn.hutool.core.util.StrUtil.nullToDefault(generated.questionKind(), "FIRST");
-        Map<String, Object> payload = Map.of(
-                "questionId", answer.getId(),
-                "sequenceNum", 1L,
-                "questionKind", kind,
-                "content", generated.content(),
-                "assessmentPoint", generated.assessmentPoint() != null ? generated.assessmentPoint() : "",
-                "difficulty", generated.difficulty() != null ? generated.difficulty() : "MEDIUM"
-        );
-        InterviewTimelineEvent timelineEvent = InterviewTimelineEvent.builder()
-                .sessionId(sessionId)
-                .enterpriseId(enterpriseId)
-                .eventId(UUID.randomUUID().toString().replace("-", ""))
-                .sequenceNum(1L)
-                .eventType(QUESTION_COMPLETED_EVENT)
-                .actorType("AI")
-                .payloadJson(toJsonStr(payload))
-                .occurredAt(OffsetDateTime.now())
-                .build();
-        interviewTimelineEventMapper.insert(timelineEvent);
-
-        return answer.getId();
-    }
-
     private boolean checkFirstQuestionExists(Long sessionId) {
         return interviewTimelineEventMapper.exists(
                 com.baomidou.mybatisplus.core.toolkit.Wrappers

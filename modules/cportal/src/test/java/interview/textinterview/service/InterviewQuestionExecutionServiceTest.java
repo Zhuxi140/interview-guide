@@ -18,12 +18,10 @@ import interview.common.enums.InterviewScheduleStatus;
 import interview.common.enums.InterviewType;
 import interview.common.enums.QuestionKind;
 import interview.textinterview.event.InterviewSessionReadyEvent;
+import interview.textinterview.model.command.InterviewQuestionRecordCommand;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -40,12 +38,15 @@ class InterviewQuestionExecutionServiceTest {
     @Mock
     private InterviewQuestionAiApi interviewQuestionAiApi;
     @Mock
-    private InterviewSessionService interviewSessionService;
+    private InterviewQuestionTxService interviewQuestionTxService;
+    @Mock
+    private interview.api.system.NotificationApi notificationApi;
 
     @Test
     void shouldBuildQuestionContextAndPersistGeneratedQuestion() {
         InterviewQuestionExecutionService service = new InterviewQuestionExecutionService(
-                interviewScheduleQueryApi, interviewQuestionAiApi, interviewSessionService);
+                interviewScheduleQueryApi, interviewQuestionAiApi, interviewQuestionTxService,
+                notificationApi);
         InterviewQuestionGeneratedResultDTO generated = new InterviewQuestionGeneratedResultDTO(
                 "请介绍一次性能优化经历", "性能分析", "HARD", "FIRST", "model-response");
         when(interviewScheduleQueryApi.getSchedule(SCHEDULE_ID)).thenReturn(schedule());
@@ -54,8 +55,7 @@ class InterviewQuestionExecutionServiceTest {
                 "promptOverride":"聚焦工程实践","focusPoints":["Java","SQL"]}]}
                 """);
         when(interviewQuestionAiApi.generateQuestion(any())).thenReturn(generated);
-        when(interviewSessionService.recordAiQuestion(
-                SESSION_ID, ENTERPRISE_ID, 0, null, 0, generated)).thenReturn(10001L);
+        when(interviewQuestionTxService.recordQuestion(any())).thenReturn(10001L);
 
         service.generateFirstQuestion(event());
 
@@ -68,14 +68,24 @@ class InterviewQuestionExecutionServiceTest {
         assertEquals("聚焦工程实践", request.promptOverride());
         assertEquals(List.of("Java", "SQL"), request.focusPoints());
         assertEquals("Java 后端工程师", request.jobTitle());
-        verify(interviewSessionService).recordAiQuestion(
-                SESSION_ID, ENTERPRISE_ID, 0, null, 0, generated);
+        ArgumentCaptor<InterviewQuestionRecordCommand> commandCaptor =
+                ArgumentCaptor.forClass(InterviewQuestionRecordCommand.class);
+        verify(interviewQuestionTxService).recordQuestion(commandCaptor.capture());
+        InterviewQuestionRecordCommand command = commandCaptor.getValue();
+        assertEquals(SESSION_ID, command.sessionId());
+        assertEquals(ENTERPRISE_ID, command.enterpriseId());
+        assertEquals(0, command.questionIndex());
+        assertEquals("请介绍一次性能优化经历", command.content());
+        assertEquals("FIRST", command.questionKind());
+        assertEquals("性能分析", command.assessmentPoint());
+        assertEquals("HARD", command.difficulty());
     }
 
     @Test
     void shouldNotPersistWhenAiReturnsBlankQuestion() {
         InterviewQuestionExecutionService service = new InterviewQuestionExecutionService(
-                interviewScheduleQueryApi, interviewQuestionAiApi, interviewSessionService);
+                interviewScheduleQueryApi, interviewQuestionAiApi, interviewQuestionTxService,
+                notificationApi);
         when(interviewScheduleQueryApi.getSchedule(SCHEDULE_ID)).thenReturn(schedule());
         when(interviewScheduleQueryApi.getTemplateSnapshot(SCHEDULE_ID)).thenReturn(null);
         when(interviewQuestionAiApi.generateQuestion(any())).thenReturn(
@@ -83,8 +93,7 @@ class InterviewQuestionExecutionServiceTest {
 
         service.generateFirstQuestion(event());
 
-        verify(interviewSessionService, never()).recordAiQuestion(
-                anyLong(), anyLong(), anyInt(), isNull(), anyInt(), any());
+        verify(interviewQuestionTxService, never()).recordQuestion(any());
     }
 
     private InterviewSessionReadyEvent event() {

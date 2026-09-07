@@ -12,7 +12,7 @@ import interview.common.util.TraceUtil;
 import interview.framework.context.AuthContext;
 import interview.notification.mapper.SysNotificationChannelMapper;
 import interview.notification.model.entity.SysNotificationChannel;
-import interview.notification.model.enums.ChannelType;
+import interview.common.enums.ChannelType;
 import interview.notification.model.req.NotificationChannelItemReq;
 import interview.notification.model.req.NotificationChannelsUpdateReq;
 import interview.notification.model.vo.NotificationChannelVO;
@@ -90,9 +90,7 @@ public class NotificationChannelServiceImpl
         // 聚合版本 CAS：期望版本必须等于当前各行版本最大值。
         List<SysNotificationChannel> current = lambdaQuery().list();
         if (!Objects.equals(aggregateVersion(current), req.getExpectedVersion())) {
-            // TODO: ErrorCode 缺少 NOTIFICATION_CHANNEL_VERSION_CONFLICT，暂以参数错误语义返回。
-            throw new BusinessException(
-                    ErrorCode.PARAM_VALID_ERROR, "渠道配置已被修改，请刷新后重试");
+            throw new BusinessException(ErrorCode.NOTIFICATION_CHANNEL_VERSION_CONFLICT);
         }
 
         // 逐渠道写入：凭证字段加密落盘，未提交 config 的渠道保留原参数。

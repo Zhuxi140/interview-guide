@@ -6,9 +6,14 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import interview.api.bportal.JobValidationApi;
 import interview.api.system.EnterpriseValidationApi;
+import interview.api.system.NotificationApi;
 import interview.api.system.UserApi;
+import interview.api.system.dto.SendNotificationCommand;
+import interview.matching.model.entity.JobApplications;
+import interview.common.enums.ChannelType;
 import interview.common.enums.ErrorCode;
 import interview.common.enums.InterviewScheduleStatus;
+import interview.common.enums.NotifyScene;
 import interview.common.exception.BusinessException;
 import interview.common.util.TraceUtil;
 import interview.framework.context.AuthContext;
@@ -19,6 +24,7 @@ import interview.interviewcfg.model.entity.InterviewSchedule;
 import interview.interviewcfg.model.req.*;
 import interview.interviewcfg.model.vo.*;
 import interview.job.service.JobService;
+import interview.matching.service.JobApplicationsService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.postgresql.util.PSQLException;
@@ -29,9 +35,12 @@ import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 @Slf4j
@@ -41,6 +50,12 @@ public class InterviewScheduleServiceImpl extends ServiceImpl<InterviewScheduleM
 
     private static final int DEFAULT_DURATION_MINUTES = 60;
 
+    /**
+     * 通知文案中的时间展示格式（按系统默认时区转换后渲染）。
+     */
+    private static final DateTimeFormatter NOTIFY_TIME_FORMAT =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+
     private final InterviewScheduleMapper interviewScheduleMapper;
     private final InterviewStageTemplateService interviewStageTemplateService;
     private final EnterpriseValidationApi enterpriseValidationApi;
@@ -48,6 +63,8 @@ public class InterviewScheduleServiceImpl extends ServiceImpl<InterviewScheduleM
     private final UserApi userApi;
     private final JobService jobService;
     private final ObjectMapper objectMapper;
+    private final JobApplicationsService jobApplicationsService;
+    private final NotificationApi notificationApi;
 
     @Override
     @Transactional
@@ -138,7 +155,11 @@ public class InterviewScheduleServiceImpl extends ServiceImpl<InterviewScheduleM
             jobValidationApi.markInterviewing(applicationId, enterpriseId);
         }
 
-        // TODO [Notification] 事务提交后向候选人发送面试邀请通知（需接入可靠消息/Outbox，失败重试不阻塞主流程）。
+        // 7. 向候选人发送面试邀请站内信：与排期落库同事务，发送异常由编排层收敛不阻塞主流程。
+        notifyCandidate(schedule.getApplicationId(), enterpriseId, NotifyScene.INTERVIEW_INVITE,
+                "INTERVIEW_INVITE:" + schedule.getId(),
+                Map.of("interviewTime", formatNotifyTime(schedule.getInterviewTime()),
+                        "durationMinutes", String.valueOf(schedule.getDurationMinutes())));
         return new InterviewScheduleCreateVO(
                 schedule.getId(), schedule.getApplicationId(), schedule.getRoundNo(),
                 schedule.getPhaseCode(), resolved.stage().phaseName(), schedule.getStatus(),
@@ -253,7 +274,8 @@ public class InterviewScheduleServiceImpl extends ServiceImpl<InterviewScheduleM
                 .select(
                         InterviewSchedule::getStatus, InterviewSchedule::getInterviewTime,
                         InterviewSchedule::getDurationMinutes, InterviewSchedule::getEnterpriseId,
-                        InterviewSchedule::getInterviewerUserId, InterviewSchedule::getVersion
+                        InterviewSchedule::getInterviewerUserId, InterviewSchedule::getVersion,
+                        InterviewSchedule::getApplicationId
                 )
                 .eq(InterviewSchedule::getId, scheduleId)
                 .one();
@@ -334,7 +356,11 @@ public class InterviewScheduleServiceImpl extends ServiceImpl<InterviewScheduleM
             }
             throw new BusinessException(ErrorCode.INTERVIEW_SCHEDULE_VERSION_CONFLICT);
         }
-        // TODO [Notification] 事务提交后：释放原日历占用、向候选人/面试官发送重新安排通知（需接入可靠消息/Outbox，失败重试不阻塞主流程）。
+        // 8. 向候选人发送重新安排通知：复用邀请场景携带新时间；幂等键拼入新时间避免与首轮/上一轮互斥。
+        notifyCandidate(schedule.getApplicationId(), enterpriseId, NotifyScene.INTERVIEW_INVITE,
+                "INTERVIEW_INVITE:" + scheduleId + ":" + newInterviewTime.toEpochSecond(),
+                Map.of("interviewTime", formatNotifyTime(newInterviewTime),
+                        "durationMinutes", String.valueOf(finalDurationMinutes)));
         return InterviewScheduleUpdateVO.builder()
                 .id(scheduleId)
                 .status(InterviewScheduleStatus.PENDING_CONFIRMATION)
@@ -353,7 +379,7 @@ public class InterviewScheduleServiceImpl extends ServiceImpl<InterviewScheduleM
                 .select(
                         InterviewSchedule::getStatus, InterviewSchedule::getInterviewTime,
                         InterviewSchedule::getDurationMinutes, InterviewSchedule::getEnterpriseId,
-                        InterviewSchedule::getVersion)
+                        InterviewSchedule::getVersion, InterviewSchedule::getApplicationId)
                 .eq(InterviewSchedule::getId, scheduleId)
                 .one();
         if (schedule == null) {
@@ -416,7 +442,10 @@ public class InterviewScheduleServiceImpl extends ServiceImpl<InterviewScheduleM
             throw new BusinessException(ErrorCode.INTERVIEW_SCHEDULE_VERSION_CONFLICT);
         }
 
-        // TODO [Notification] 事务提交后：释放日历占用、向候选人/面试官发送取消通知（需接入可靠消息/Outbox，失败重试不阻塞主流程）。
+        // 6. 向候选人发送取消通知：携带原面试时间便于候选人识别是哪一场。
+        notifyCandidate(schedule.getApplicationId(), enterpriseId, NotifyScene.INTERVIEW_CANCEL,
+                "INTERVIEW_CANCEL:" + scheduleId,
+                Map.of("interviewTime", formatNotifyTime(schedule.getInterviewTime())));
         return InterviewScheduleUpdateVO.builder()
                 .id(scheduleId)
                 .status(InterviewScheduleStatus.CANCELLED)
@@ -560,6 +589,34 @@ private ResolvedSchedulePhase resolveSchedulePhase(Long enterpriseId,
             cause = cause.getCause();
         }
         return null;
+    }
+
+    /**
+     * 向投递对应的候选人发送站内信：接收人由本模块解析（job_applications.candidate_id 即候选人用户 ID），
+     * 通知模块不反查投递表。投递缺失仅记录告警，通知属尽力而为不阻塞排期主流程。
+     */
+    private void notifyCandidate(Long applicationId, Long enterpriseId, NotifyScene scene,
+                                 String idempotencyKey, Map<String, String> vars) {
+        JobApplications application = jobApplicationsService.getById(applicationId);
+        if (application == null || application.getCandidateId() == null) {
+            log.warn("发送面试通知跳过：投递记录缺失 applicationId={} scene={}", applicationId, scene);
+            return;
+        }
+        notificationApi.send(new SendNotificationCommand(
+                enterpriseId,
+                application.getCandidateId(),
+                scene,
+                Set.of(ChannelType.IN_APP),
+                vars,
+                idempotencyKey,
+                AuthContext.getRequiredUserId()));
+    }
+
+    /**
+     * 通知文案时间格式化：按系统默认时区展示，避免 ISO 字符串直接外发。
+     */
+    private String formatNotifyTime(OffsetDateTime time) {
+        return time == null ? "" : time.atZoneSameInstant(ZoneId.systemDefault()).format(NOTIFY_TIME_FORMAT);
     }
 
     private record ResolvedSchedulePhase(

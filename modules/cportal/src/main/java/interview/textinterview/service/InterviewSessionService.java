@@ -80,18 +80,4 @@ public interface InterviewSessionService extends IService<InterviewSession> {
      */
     InterviewSessionReadyVO readySession(Long sessionId, String idempotencyKey);
 
-    /**
-     * 事务落库 AI 生成的试题实体并追加时间线事实事件
-     *
-     * @param sessionId 会话 ID
-     * @param enterpriseId 企业 ID
-     * @param questionIndex 题目序号（从 0 开始）
-     * @param parentAnswerId 父题目/上一题作答 ID（追问时传入）
-     * @param followUpDepth 追问深度（首题为 0）
-     * @param generated AI 出题结果 DTO
-     * @return 持久化后的作答记录 ID
-     */
-    Long recordAiQuestion(Long sessionId, Long enterpriseId, int questionIndex,
-                          Long parentAnswerId, int followUpDepth,
-                          interview.api.aicore.dto.InterviewQuestionGeneratedResultDTO generated);
 }

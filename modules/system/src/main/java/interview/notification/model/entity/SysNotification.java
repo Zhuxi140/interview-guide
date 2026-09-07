@@ -52,6 +52,12 @@ public class SysNotification implements Serializable {
 
     private String failureReason;
 
+    /**
+     * 发送幂等键（{scene}:{bizId}）；唯一索引仅约束非空且未删除的行，
+     * 投递流水（EMAIL_LOG / SMS_LOG）不带该键，可多行并存。
+     */
+    private String idempotencyKey;
+
     private String title;
 
     private String content;

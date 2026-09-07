@@ -3,14 +3,13 @@ package interview.notification.service;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import interview.common.enums.ChannelType;
 import interview.common.enums.ErrorCode;
+import interview.common.enums.SendStatus;
 import interview.common.exception.BusinessException;
-import interview.notification.mapper.NotificationSendRecordMapper;
-import interview.notification.model.entity.NotificationSendRecord;
-import interview.notification.model.enums.ChannelType;
-import interview.notification.model.enums.SendStatus;
+import interview.notification.mapper.SysNotificationMapper;
+import interview.notification.model.entity.SysNotification;
 import interview.notification.model.vo.NotificationSendRecordListItemVO;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.OffsetDateTime;
@@ -20,12 +19,15 @@ import java.util.List;
 /**
  * 全站通知发送记录查询服务实现。
  *
+ * <p>直接基于 {@link SysNotification} 查询：收件箱与投递流水共用一张
+ * {@code sys_notifications} 表，历史上的只读投影实体 {@code NotificationSendRecord}
+ * 已删除，同一张表在本模块内只保留一个实体映射。</p>
+ *
  * @author zhuxi
  */
 @Service
-@RequiredArgsConstructor
 public class NotificationSendRecordServiceImpl
-        extends ServiceImpl<NotificationSendRecordMapper, NotificationSendRecord>
+        extends ServiceImpl<SysNotificationMapper, SysNotification>
         implements NotificationSendRecordService {
 
     @Override
@@ -43,31 +45,31 @@ public class NotificationSendRecordServiceImpl
         validateTimeRange(start, end);
 
         // 单表 LambdaQuery：复用 sys_notifications 投递流水，按发送时间倒序稳定分页。
-        IPage<NotificationSendRecord> recordPage = lambdaQuery()
-                .select(NotificationSendRecord::getId, NotificationSendRecord::getUserId,
-                        NotificationSendRecord::getNotifyScene,
-                        NotificationSendRecord::getChannelType,
-                        NotificationSendRecord::getSendStatus,
-                        NotificationSendRecord::getFailureReason,
-                        NotificationSendRecord::getCreatedAt)
-                .eq(channel != null, NotificationSendRecord::getChannelType, channel)
-                .eq(status != null, NotificationSendRecord::getSendStatus, status)
-                .ge(start != null, NotificationSendRecord::getCreatedAt, start)
-                .le(end != null, NotificationSendRecord::getCreatedAt, end)
-                .orderByDesc(NotificationSendRecord::getCreatedAt)
-                .orderByDesc(NotificationSendRecord::getId)
+        IPage<SysNotification> recordPage = lambdaQuery()
+                .select(SysNotification::getId, SysNotification::getUserId,
+                        SysNotification::getNotifyScene,
+                        SysNotification::getChannelType,
+                        SysNotification::getSendStatus,
+                        SysNotification::getFailureReason,
+                        SysNotification::getCreatedAt)
+                .eq(channel != null, SysNotification::getChannelType, channel)
+                .eq(status != null, SysNotification::getSendStatus, status)
+                .ge(start != null, SysNotification::getCreatedAt, start)
+                .le(end != null, SysNotification::getCreatedAt, end)
+                .orderByDesc(SysNotification::getCreatedAt)
+                .orderByDesc(SysNotification::getId)
                 .page(new Page<>(page, size));
 
         // 组装列表 VO。
         List<NotificationSendRecordListItemVO> records = recordPage.getRecords().stream()
-                .map(record -> new NotificationSendRecordListItemVO(
-                        record.getId(),
-                        record.getUserId(),
-                        record.getNotifyScene(),
-                        record.getChannelType(),
-                        record.getSendStatus(),
-                        record.getFailureReason(),
-                        record.getCreatedAt()))
+                .map(notification -> new NotificationSendRecordListItemVO(
+                        notification.getId(),
+                        notification.getUserId(),
+                        notification.getNotifyScene(),
+                        notification.getChannelType(),
+                        notification.getSendStatus(),
+                        notification.getFailureReason(),
+                        notification.getCreatedAt()))
                 .toList();
         Page<NotificationSendRecordListItemVO> voPage = new Page<>(
                 recordPage.getCurrent(), recordPage.getSize(), recordPage.getTotal());

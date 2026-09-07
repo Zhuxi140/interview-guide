@@ -8,8 +8,12 @@ import interview.api.aicore.dto.JobApplicationSnapshotDTO;
 import interview.api.bportal.InterviewFlowStatusApi;
 import interview.api.bportal.JobValidationApi;
 import interview.api.system.EnterpriseValidationApi;
+import interview.api.system.NotificationApi;
+import interview.api.system.dto.SendNotificationCommand;
+import interview.common.enums.ChannelType;
 import interview.common.enums.ErrorCode;
 import interview.common.enums.InterviewFlowStatusEnum;
+import interview.common.enums.NotifyScene;
 import interview.common.exception.BusinessException;
 import interview.framework.context.AuthContext;
 import interview.offer.mapper.OfferMapper;
@@ -33,6 +37,7 @@ import interview.offer.model.vo.OfferSendVO;
 import interview.offer.model.vo.OfferUpdateVO;
 import interview.job.service.JobService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,10 +46,12 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Offer 写入与决策实现。
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class OfferServiceImpl extends ServiceImpl<OfferMapper, Offer> implements OfferService {
@@ -53,6 +60,7 @@ public class OfferServiceImpl extends ServiceImpl<OfferMapper, Offer> implements
     private final JobValidationApi jobValidationApi;
     private final InterviewFlowStatusApi interviewFlowStatusApi;
     private final JobService jobService;
+    private final NotificationApi notificationApi;
 
     @Override
     @Transactional(rollbackFor = BusinessException.class)
@@ -116,7 +124,17 @@ public class OfferServiceImpl extends ServiceImpl<OfferMapper, Offer> implements
             throw exception;
         }
 
-        // TODO [Notification] 事务提交后向企业操作人发送草稿创建通知（可靠消息/Outbox，失败重试不阻塞主流程）。
+        // 向企业操作人发送草稿创建站内信：草稿属操作者自身行为，收件人即当前用户；
+        // 无对应预定义场景，按系统通知语义由调用方提供标题与正文。
+        notificationApi.send(new SendNotificationCommand(
+                enterpriseId,
+                AuthContext.getRequiredUserId(),
+                NotifyScene.SYSTEM,
+                Set.of(ChannelType.IN_APP),
+                Map.of("title", "Offer 草稿已创建",
+                        "content", "您已为投递 " + applicationId + " 创建 Offer 草稿，可随时编辑并发送。"),
+                "OFFER_DRAFT:" + offer.getId(),
+                AuthContext.getRequiredUserId()));
 
         // ⑥ 返回创建结果（offerId、applicationId、DRAFT、version、createdAt）。
         return buildCreateVO(offer);
@@ -268,7 +286,15 @@ public class OfferServiceImpl extends ServiceImpl<OfferMapper, Offer> implements
             throw exception;
         }
 
-        // TODO ④ 同一事务创建 Offer 通知 Outbox 消息，提交后派发；失败由消息租约与重试收敛，不回退 SENT。
+        // 向候选人发送 Offer 发送站内信：收件人由 Offer 实体直接携带；发送失败不回退 SENT 状态。
+        notificationApi.send(new SendNotificationCommand(
+                enterpriseId,
+                offer.getCandidateUserId(),
+                NotifyScene.OFFER_SENT,
+                Set.of(ChannelType.IN_APP),
+                null,
+                "OFFER_SENT:" + offer.getId(),
+                AuthContext.getRequiredUserId()));
 
         // ⑦ 投递状态 INTERVIEWING → OFFERED 回写（幂等，已处于 OFFERED 直接返回），作为招聘结果。
         jobValidationApi.markOffered(offer.getApplicationId(), enterpriseId);
@@ -334,7 +360,16 @@ public class OfferServiceImpl extends ServiceImpl<OfferMapper, Offer> implements
             throw new BusinessException(classifyWithdrawConflict(latest.getStatus()));
         }
 
-        // TODO ⑥ 同一事务记录撤回审计并创建候选人通知 Outbox（TODO [Notification]）。
+        // 向候选人发送撤回站内信：撤回无预定义场景，按系统通知语义提供文案。
+        notificationApi.send(new SendNotificationCommand(
+                enterpriseId,
+                offer.getCandidateUserId(),
+                NotifyScene.SYSTEM,
+                Set.of(ChannelType.IN_APP),
+                Map.of("title", "Offer 已撤回",
+                        "content", "您收到的 Offer 已被企业撤回，请留意后续安排。"),
+                "OFFER_WITHDRAWN:" + offer.getId(),
+                AuthContext.getRequiredUserId()));
 
         // ⑦ 返回撤回结果。
         return new OfferUpdateVO(offerId, OfferStatus.WITHDRAWN, newVersion, withdrawnAt);
@@ -418,7 +453,15 @@ public class OfferServiceImpl extends ServiceImpl<OfferMapper, Offer> implements
             jobValidationApi.markHired(offer.getApplicationId(), offer.getEnterpriseId());
         }
 
-        // TODO ⑧ 同一事务记录决策审计并创建企业通知 Outbox（TODO [Notification]）。
+        // 向 Offer 创建人（企业操作人）发送决策站内信：决策值转义为中文展示。
+        notificationApi.send(new SendNotificationCommand(
+                offer.getEnterpriseId(),
+                offer.getCreatedBy(),
+                NotifyScene.OFFER_DECIDED,
+                Set.of(ChannelType.IN_APP),
+                Map.of("decision", req.decision() == OfferDecision.ACCEPT ? "接受" : "拒绝"),
+                "OFFER_DECIDED:" + offerId,
+                null));
 
         // ⑨ 返回决策结果。
         return new OfferDecisionVO(offerId, target, decidedAt);

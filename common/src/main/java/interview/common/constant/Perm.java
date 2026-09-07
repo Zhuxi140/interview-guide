@@ -124,6 +124,7 @@ public interface Perm {
         String TEMPLATE_CREATE = "admin:notification-templates:create";
         String TEMPLATE_UPDATE = "admin:notification-templates:update";
         String SEND_LIST = "admin:notifications:list";
+        String SEND_RESEND = "admin:notifications:resend";
     }
 
     interface Tutor {
