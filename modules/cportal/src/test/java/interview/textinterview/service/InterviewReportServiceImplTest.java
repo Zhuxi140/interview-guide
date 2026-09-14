@@ -3,6 +3,7 @@ package interview.textinterview.service;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import interview.api.bportal.InterviewScheduleQueryApi;
 import interview.api.bportal.dto.InterviewScheduleQueryDTO;
+import interview.api.infra.FileStorageApi;
 import interview.api.system.EnterpriseValidationApi;
 import interview.common.enums.ErrorCode;
 import interview.common.enums.InterviewScheduleStatus;
@@ -34,13 +35,15 @@ class InterviewReportServiceImplTest {
     private InterviewScheduleQueryApi interviewScheduleQueryApi;
     @Mock
     private EnterpriseValidationApi enterpriseValidationApi;
+    @Mock
+    private FileStorageApi fileStorageApi;
 
     private InterviewReportServiceImpl service;
 
     @BeforeEach
     void setUp() {
         service = new InterviewReportServiceImpl(
-                interviewScheduleQueryApi, enterpriseValidationApi);
+                interviewScheduleQueryApi, enterpriseValidationApi, fileStorageApi);
         AuthContext.setAuthContext(AuthContext.AuthUser.builder()
                 .userId(1L)
                 .userType(UserType.CANDIDATE)
@@ -97,6 +100,25 @@ class InterviewReportServiceImplTest {
 
         assertEquals(0, result.getTotal());
         assertTrue(result.getRecords().isEmpty());
+    }
+
+    @Test
+    void getDownloadUrl_shouldRejectAnotherCandidatesSchedule() {
+        // 排期不属于当前候选人时，不得签发下载地址。
+        // 说明：未就绪/预签名分支需经 getReport→lambdaQuery()，链式查询在纯 mock 下
+        // 无法解析实体类（需真实 SqlSession），故单测只覆盖归属拒绝这一早返回分支。
+        when(interviewScheduleQueryApi.getSchedule(10L))
+                .thenReturn(schedule(10L, 20L, 2L));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> service.getDownloadUrl(1L, 10L)
+        );
+
+        assertEquals(
+                ErrorCode.INTERVIEW_REPORT_NOT_FOUND.getCode(),
+                exception.getCode()
+        );
     }
 
     private InterviewScheduleQueryDTO schedule(Long scheduleId,

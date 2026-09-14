@@ -179,6 +179,7 @@ public enum ErrorCode {
     INTERVIEW_TYPE_NOT_ALLOWED(50043, "当前阶段仅支持文本面试（TEXT），语音面试功能尚未上线"),
     INTERVIEWER_NOT_ENTERPRISE_MEMBER(50044, "候选面试官不属于当前企业,请重新选择"),
     INTERVIEW_PLAN_TEMPLATE_CHANGED(50045, "面试编排草案基于的模板已变更，请重新生成"),
+    INTERVIEW_REPORT_NOT_READY(50046, "面试报告尚未生成完成，暂无可下载文件"),
 
 
 

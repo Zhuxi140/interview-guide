@@ -3,8 +3,10 @@ package interview.textinterview.service;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import cn.hutool.core.util.StrUtil;
 import interview.api.bportal.InterviewScheduleQueryApi;
 import interview.api.bportal.dto.InterviewScheduleQueryDTO;
+import interview.api.infra.FileStorageApi;
 import interview.api.system.EnterpriseValidationApi;
 import interview.common.enums.ErrorCode;
 import interview.common.enums.InterviewReportGenerationStatus;
@@ -16,6 +18,7 @@ import interview.textinterview.model.vo.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.List;
@@ -29,8 +32,12 @@ public class InterviewReportServiceImpl
         extends ServiceImpl<InterviewReportMapper, InterviewReport>
         implements InterviewReportService {
 
+    /** 报告 PDF 预签名下载地址有效期（秒），与简历/资质材料下载保持一致。 */
+    private static final long REPORT_DOWNLOAD_TTL_SECONDS = 300L;
+
     private final InterviewScheduleQueryApi interviewScheduleQueryApi;
     private final EnterpriseValidationApi enterpriseValidationApi;
+    private final FileStorageApi fileStorageApi;
 
     @Override
     public InterviewReportVO getReportBySchedule(Long enterpriseId, Long scheduleId) {
@@ -150,12 +157,29 @@ public class InterviewReportServiceImpl
 
     @Override
     public InterviewReportDownloadVO getDownloadUrl(Long userId, Long scheduleId) {
-        // TODO ① userId 从 AuthContext 获取并校验排期属于本人，复用候选人报告可见性规则。
-        // TODO ② 要求报告生成状态为 COMPLETED、报告记录存在且 reportPdfUrl/objectKey 非空。
-        // TODO ③ 通过 FileStorageApi 校验对象并生成短期预签名下载地址，不向客户端暴露内部存储 URL。
-        // TODO ④ 使用配置化 TTL 返回 downloadUrl 和 expiresInSeconds；对象缺失时返回报告文件不可用错误。
-        // TODO ⑤ 记录下载审计信息，Phase 8 可扩展下载频控和敏感报告水印。
-        return null;
+        // 复用候选人报告可见性规则：排期必须归属当前用户。
+        validateCurrentUser(userId);
+        InterviewScheduleQueryDTO schedule =
+                interviewScheduleQueryApi.getSchedule(scheduleId);
+        if (schedule == null || !userId.equals(schedule.candidateUserId())) {
+            throw new BusinessException(ErrorCode.INTERVIEW_REPORT_NOT_FOUND);
+        }
+
+        // 仅 COMPLETED 且已生成 PDF 对象的报告可下载；
+        // 未就绪状态用独立错误码，避免与「报告不存在」混淆。
+        InterviewReport report = getReport(scheduleId, schedule.enterpriseId());
+        if (report.getGenerationStatus() != InterviewReportGenerationStatus.COMPLETED
+                || StrUtil.isBlank(report.getReportPdfUrl())) {
+            throw new BusinessException(ErrorCode.INTERVIEW_REPORT_NOT_READY);
+        }
+
+        // 对内部对象键签发短期只读地址，不向客户端暴露存储定位信息。
+        return InterviewReportDownloadVO.builder()
+                .downloadUrl(fileStorageApi.generatePresignedDownloadUrl(
+                        report.getReportPdfUrl(),
+                        Duration.ofSeconds(REPORT_DOWNLOAD_TTL_SECONDS)))
+                .expiresInSeconds(REPORT_DOWNLOAD_TTL_SECONDS)
+                .build();
     }
 
     private InterviewReport getReport(Long scheduleId, Long enterpriseId) {
