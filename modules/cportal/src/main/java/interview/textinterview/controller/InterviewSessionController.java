@@ -16,13 +16,16 @@ import interview.common.annonate.MaxRiskLevel;
 import interview.common.constant.ApiVersion;
 import interview.common.constant.Result;
 import interview.common.enums.RiskLevel;
+import interview.textinterview.model.req.InterviewAnswerSubmitReq;
 import interview.textinterview.model.req.InterviewSessionEndReq;
 import interview.textinterview.model.vo.InterviewAnswerListItemVO;
+import interview.textinterview.model.vo.InterviewAnswerSubmitVO;
 import interview.textinterview.model.vo.InterviewCurrentQuestionVO;
 import interview.textinterview.model.vo.InterviewSessionEndVO;
 import interview.textinterview.model.vo.InterviewSessionReadyVO;
 import interview.textinterview.model.vo.InterviewSessionVO;
 import interview.textinterview.model.vo.InterviewTimelinePageVO;
+import interview.textinterview.service.InterviewAnswerService;
 import interview.textinterview.service.InterviewSessionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -39,6 +42,7 @@ import lombok.RequiredArgsConstructor;
 public class InterviewSessionController {
 
     private final InterviewSessionService interviewSessionService;
+    private final InterviewAnswerService interviewAnswerService;
 
     @Operation(summary = "查询面试会话状态")
     @MaxRiskLevel(RiskLevel.NO_RISK)
@@ -81,6 +85,15 @@ public class InterviewSessionController {
             @RequestParam(defaultValue = "1") @Min(1) Integer page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) Integer size) {
         return Result.success(interviewSessionService.pageAnswers(sessionId, page, size));
+    }
+
+    @Operation(summary = "REST 兜底：幂等提交当前题答案（等价 WS answer.submit）")
+    @PostMapping("/{sessionId}/answers")
+    public Result<InterviewAnswerSubmitVO> submitAnswer(
+            @PathVariable Long sessionId,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+            @Valid @RequestBody InterviewAnswerSubmitReq req) {
+        return Result.success(interviewAnswerService.submitAnswer(sessionId, idempotencyKey, req));
     }
 
     @Operation(summary = "REST 兜底：候选人就绪并触发首题生成")

@@ -21,9 +21,12 @@ public interface InterviewAnswerService {
      * {@code question.completed} 事件解析），不接受客户端上报题目信息，
      * 防止伪造题目。幂等键命中时重放既有结果。</p>
      *
-     * @param sessionId 会话 ID
-     * @param req       作答内容与幂等键
+     * @param sessionId      会话 ID
+     * @param idempotencyKey 幂等键（REST 取 {@code Idempotency-Key} 请求头，
+     *                       WS 取 {@code answer.submit} 载荷；可空表示不做幂等重放）
+     * @param req            作答内容
      * @return 作答结果（含评分占位、追问/结束标记）
      */
-    InterviewAnswerSubmitVO submitAnswer(Long sessionId, InterviewAnswerSubmitReq req);
+    InterviewAnswerSubmitVO submitAnswer(Long sessionId, String idempotencyKey,
+                                         InterviewAnswerSubmitReq req);
 }

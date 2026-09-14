@@ -5,6 +5,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
+import interview.textinterview.event.InterviewAnswerSubmittedEvent;
 import interview.textinterview.event.InterviewSessionReadyEvent;
 import interview.textinterview.service.InterviewQuestionExecutionService;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +35,22 @@ public class InterviewSessionEventListener {
         } catch (Exception e) {
             log.error("异步生成面试首题发生未捕获异常: sessionId={}, scheduleId={}",
                     event.sessionId(), event.scheduleId(), e);
+        }
+    }
+
+    /**
+     * 监听作答提交事件：事务提交后异步触发 AI 追问题生成与数据落库
+     *
+     * @param event 作答提交事件
+     */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Async("interviewQuestionExecutor")
+    public void handleAnswerSubmitted(InterviewAnswerSubmittedEvent event) {
+        try {
+            questionExecutionService.generateFollowUpQuestion(event);
+        } catch (Exception e) {
+            log.error("异步生成面试追问题发生未捕获异常: sessionId={}, answerId={}",
+                    event.sessionId(), event.answerId(), e);
         }
     }
 }

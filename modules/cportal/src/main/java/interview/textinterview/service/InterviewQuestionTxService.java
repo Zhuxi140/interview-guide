@@ -3,6 +3,7 @@ package interview.textinterview.service;
 import static cn.hutool.json.JSONUtil.toJsonStr;
 
 import java.time.OffsetDateTime;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 
@@ -29,7 +30,6 @@ import lombok.RequiredArgsConstructor;
 public class InterviewQuestionTxService {
 
     private static final String QUESTION_COMPLETED_EVENT = "question.completed";
-    private static final long FIRST_QUESTION_SEQUENCE = 1L;
 
     private final InterviewAnswerMapper interviewAnswerMapper;
     private final InterviewSessionMapper interviewSessionMapper;
@@ -43,6 +43,9 @@ public class InterviewQuestionTxService {
      */
     @Transactional(rollbackFor = Exception.class)
     public Long recordQuestion(InterviewQuestionRecordCommand command) {
+        // 先分配会话内严格递增的事件序号，首题与追问题共用同一分配器。
+        Long sequenceNum = nextEventSequence(command.sessionId());
+
         // 保存 AI 生成的题目。
         InterviewAnswer answer = InterviewAnswer.builder()
                 .sessionId(command.sessionId())
@@ -54,28 +57,21 @@ public class InterviewQuestionTxService {
                 .build();
         interviewAnswerMapper.insert(answer);
 
-        // 推进会话事件序号，为时间线事件分配确定序号。
-        interviewSessionMapper.update(
-                null,
-                Wrappers.<InterviewSession>lambdaUpdate()
-                        .eq(InterviewSession::getId, command.sessionId())
-                        .set(InterviewSession::getLastEventSequence, FIRST_QUESTION_SEQUENCE)
-                        .set(InterviewSession::getUpdatedAt, OffsetDateTime.now()));
-
-        // 保存可供前端回放的题目完成事件。
-        Map<String, Object> payload = Map.of(
-                "questionId", answer.getId(),
-                "sequenceNum", FIRST_QUESTION_SEQUENCE,
-                "questionKind", StrUtil.nullToDefault(command.questionKind(), "FIRST"),
-                "content", command.content(),
-                "assessmentPoint", StrUtil.nullToDefault(command.assessmentPoint(), ""),
-                "difficulty", StrUtil.nullToDefault(command.difficulty(), "MEDIUM")
-        );
+        // 保存可供前端回放的题目完成事件；parentAnswerId 仅在追问场景有值，
+        // 序列化为 JSON 时为空值会被剔除，非追问题目不出现该字段。
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("questionId", answer.getId());
+        payload.put("sequenceNum", sequenceNum);
+        payload.put("questionKind", StrUtil.nullToDefault(command.questionKind(), "FIRST"));
+        payload.put("content", command.content());
+        payload.put("assessmentPoint", StrUtil.nullToDefault(command.assessmentPoint(), ""));
+        payload.put("difficulty", StrUtil.nullToDefault(command.difficulty(), "MEDIUM"));
+        payload.put("parentAnswerId", command.parentAnswerId());
         InterviewTimelineEvent timelineEvent = InterviewTimelineEvent.builder()
                 .sessionId(command.sessionId())
                 .enterpriseId(command.enterpriseId())
                 .eventId(UUID.randomUUID().toString().replace("-", ""))
-                .sequenceNum(FIRST_QUESTION_SEQUENCE)
+                .sequenceNum(sequenceNum)
                 .eventType(QUESTION_COMPLETED_EVENT)
                 .actorType("AI")
                 .payloadJson(toJsonStr(payload))
@@ -84,5 +80,30 @@ public class InterviewQuestionTxService {
         interviewTimelineEventMapper.insert(timelineEvent);
 
         return answer.getId();
+    }
+
+    /**
+     * 原子分配会话内下一个事件序号。
+     *
+     * <p>用数据库侧自增（{@code last_event_sequence = last_event_sequence + 1}）
+     * 而不是先读后写：并发分配会在会话行锁上串行化，避免两个请求拿到同一序号后
+     * 触发 {@code uk_interview_timeline_session_sequence} 唯一约束冲突。
+     * 随后的回查处于同一事务内，读到的即本事务刚推进的序号。</p>
+     *
+     * @param sessionId 会话 ID
+     * @return 本次分配的事件序号
+     */
+    private Long nextEventSequence(Long sessionId) {
+        interviewSessionMapper.update(
+                null,
+                Wrappers.<InterviewSession>lambdaUpdate()
+                        .eq(InterviewSession::getId, sessionId)
+                        .setSql("last_event_sequence = last_event_sequence + 1")
+                        .set(InterviewSession::getUpdatedAt, OffsetDateTime.now()));
+        InterviewSession session = interviewSessionMapper.selectOne(
+                Wrappers.<InterviewSession>lambdaQuery()
+                        .select(InterviewSession::getLastEventSequence)
+                        .eq(InterviewSession::getId, sessionId));
+        return session.getLastEventSequence();
     }
 }

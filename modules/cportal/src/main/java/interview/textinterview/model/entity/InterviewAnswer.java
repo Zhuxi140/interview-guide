@@ -34,6 +34,8 @@ public class InterviewAnswer implements Serializable {
     @Builder.Default
     private Integer followUpDepth = 0;
 
+    private String idempotencyKey;
+
     private String userAnswer;
 
     private Integer score;

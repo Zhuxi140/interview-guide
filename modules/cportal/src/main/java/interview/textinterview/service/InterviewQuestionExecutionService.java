@@ -18,6 +18,7 @@ import interview.api.system.dto.SendNotificationCommand;
 import interview.common.enums.ChannelType;
 import interview.common.enums.NotifyScene;
 import interview.common.enums.QuestionKind;
+import interview.textinterview.event.InterviewAnswerSubmittedEvent;
 import interview.textinterview.event.InterviewSessionReadyEvent;
 import interview.textinterview.model.command.InterviewQuestionRecordCommand;
 import lombok.RequiredArgsConstructor;
@@ -115,6 +116,64 @@ public class InterviewQuestionExecutionService {
         }
 
         // TODO：通过实时通道向已在线候选人广播生成的题目。
+    }
+
+    /**
+     * 根据作答提交事件生成并保存追问题。
+     *
+     * <p>与首题生成同构，差异只在出题上下文：把被作答题目与候选人作答回传给 AI，
+     * 并携带 {@code parentAnswerId} 与递增后的追问深度，形成可追溯的追问链。</p>
+     *
+     * @param event 作答提交事件
+     */
+    public void generateFollowUpQuestion(InterviewAnswerSubmittedEvent event) {
+        // 读取排期和模板快照，构造本轮追问的出题上下文。
+        InterviewScheduleQueryDTO schedule = interviewScheduleQueryApi.getSchedule(event.scheduleId());
+        String phaseCode = schedule == null ? null : schedule.phaseCode();
+        QuestionContext context = resolveQuestionContext(event.scheduleId(), phaseCode);
+
+        // 题目类型取服务端意图而非模型回显，避免模型误标为 FIRST 破坏追问链语义。
+        InterviewQuestionGenerationReqDTO request = new InterviewQuestionGenerationReqDTO(
+                event.enterpriseId(),
+                phaseCode,
+                context.promptOverride(),
+                context.focusPoints(),
+                context.difficulty(),
+                schedule == null ? null : schedule.jobTitle(),
+                null,
+                null,
+                null,
+                QuestionKind.FOLLOW_UP.name(),
+                event.questionIndex() + 1,
+                event.answerId(),
+                event.questionText(),
+                event.userAnswer()
+        );
+
+        // 调用 AI 生成追问题；空结果不进入持久化流程。
+        InterviewQuestionGeneratedResultDTO generated = interviewQuestionAiApi.generateQuestion(request);
+        if (generated == null || StrUtil.isBlank(generated.content())) {
+            log.error("AI 追问服务返回空题目，终止追问题落库: sessionId={}", event.sessionId());
+            return;
+        }
+
+        // 通过事务 Service 保存追问题并追加时间线事件。
+        Long followUpAnswerId = interviewQuestionTxService.recordQuestion(
+                new InterviewQuestionRecordCommand(
+                        event.sessionId(),
+                        event.enterpriseId(),
+                        event.questionIndex() + 1,
+                        event.answerId(),
+                        event.followUpDepth() + 1,
+                        generated.content(),
+                        QuestionKind.FOLLOW_UP.name(),
+                        generated.assessmentPoint(),
+                        generated.difficulty()
+                ));
+        log.info("追问题生成与事务落库成功: sessionId={}, answerId={}, parentAnswerId={}, depth={}",
+                event.sessionId(), followUpAnswerId, event.answerId(), event.followUpDepth() + 1);
+
+        // TODO：通过实时通道向已在线候选人广播生成的追问题。
     }
 
     private QuestionContext resolveQuestionContext(Long scheduleId, String phaseCode) {

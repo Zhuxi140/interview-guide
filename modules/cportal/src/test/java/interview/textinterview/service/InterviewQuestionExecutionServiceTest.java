@@ -17,6 +17,7 @@ import interview.api.bportal.dto.InterviewScheduleQueryDTO;
 import interview.common.enums.InterviewScheduleStatus;
 import interview.common.enums.InterviewType;
 import interview.common.enums.QuestionKind;
+import interview.textinterview.event.InterviewAnswerSubmittedEvent;
 import interview.textinterview.event.InterviewSessionReadyEvent;
 import interview.textinterview.model.command.InterviewQuestionRecordCommand;
 
@@ -79,6 +80,41 @@ class InterviewQuestionExecutionServiceTest {
         assertEquals("FIRST", command.questionKind());
         assertEquals("性能分析", command.assessmentPoint());
         assertEquals("HARD", command.difficulty());
+    }
+
+    @Test
+    void shouldCarryParentAnswerAndIncrementDepthWhenGeneratingFollowUp() {
+        InterviewQuestionExecutionService service = new InterviewQuestionExecutionService(
+                interviewScheduleQueryApi, interviewQuestionAiApi, interviewQuestionTxService,
+                notificationApi);
+        when(interviewScheduleQueryApi.getSchedule(SCHEDULE_ID)).thenReturn(schedule());
+        when(interviewQuestionAiApi.generateQuestion(any())).thenReturn(
+                new InterviewQuestionGeneratedResultDTO(
+                        "请进一步说明量化收益", "性能量化", "HARD", "FOLLOW_UP", "model-response"));
+        when(interviewQuestionTxService.recordQuestion(any())).thenReturn(20002L);
+
+        service.generateFollowUpQuestion(new InterviewAnswerSubmittedEvent(
+                SESSION_ID, SCHEDULE_ID, ENTERPRISE_ID, 20001L, 0, 0,
+                "请介绍一次性能优化经历", "我做过一次缓存优化", "trace-1"));
+
+        ArgumentCaptor<InterviewQuestionGenerationReqDTO> requestCaptor =
+                ArgumentCaptor.forClass(InterviewQuestionGenerationReqDTO.class);
+        verify(interviewQuestionAiApi).generateQuestion(requestCaptor.capture());
+        InterviewQuestionGenerationReqDTO request = requestCaptor.getValue();
+        assertEquals("FOLLOW_UP", request.questionKind());
+        assertEquals(1, request.questionIndex().intValue());
+        assertEquals(20001L, request.parentAnswerId());
+        assertEquals("请介绍一次性能优化经历", request.previousQuestionText());
+        assertEquals("我做过一次缓存优化", request.previousUserAnswer());
+
+        ArgumentCaptor<InterviewQuestionRecordCommand> commandCaptor =
+                ArgumentCaptor.forClass(InterviewQuestionRecordCommand.class);
+        verify(interviewQuestionTxService).recordQuestion(commandCaptor.capture());
+        InterviewQuestionRecordCommand command = commandCaptor.getValue();
+        assertEquals(1, command.questionIndex());
+        assertEquals(20001L, command.parentAnswerId());
+        assertEquals(1, command.followUpDepth());
+        assertEquals("FOLLOW_UP", command.questionKind());
     }
 
     @Test
