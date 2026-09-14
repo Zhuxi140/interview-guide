@@ -1,5 +1,7 @@
 package interview.textinterview.service;
 
+import cn.hutool.json.JSONObject;
+import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -34,6 +36,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -43,6 +46,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -151,7 +155,17 @@ class InterviewSessionServiceImplTest {
         assertEquals("/ws/v1/interview-sessions/" + vo.sessionId(), vo.wsUrl());
         assertEquals(60, vo.expiresInSeconds());
         assertFalse(vo.connectionToken().isBlank());
-        verify(interviewScheduleCommandApi).startSchedule(SCHEDULE_ID, ENTERPRISE_ID);
+        // 凭证上下文必须携带账号类型：WS 消息线程要靠它重建认证上下文。
+        ArgumentCaptor<String> contextCaptor = ArgumentCaptor.forClass(String.class);
+        verify(valueOps).set(anyString(), contextCaptor.capture(), anyLong(), any(TimeUnit.class));
+        JSONObject connectionContext = JSONUtil.parseObj(contextCaptor.getValue());
+        assertEquals(SESSION_ID, connectionContext.getLong("sessionId"));
+        assertEquals(CANDIDATE_USER_ID, connectionContext.getLong("userId"));
+        assertEquals("CANDIDATE", connectionContext.getStr("userType"));
+        assertEquals("CANDIDATE", connectionContext.getStr("role"));
+        // 取令牌不等于开场：排期 CONFIRMED→IN_PROGRESS 由 readySession 负责，
+        // 建会话时提前推进会让「只取令牌不进房」的候选人把排期挂成进行中。
+        verify(interviewScheduleCommandApi, never()).startSchedule(anyLong(), anyLong());
     }
 
     @Test

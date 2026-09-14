@@ -125,8 +125,9 @@ public class InterviewSessionServiceImpl extends ServiceImpl<InterviewSessionMap
                                 .interviewSessionId(session.getId())
                                 .build());
             }
-            // TODO ④ 首次进入时通过跨模块 API 原子推进排期 CONFIRMED→IN_PROGRESS；断线重连（session != null）跳过推进。
-            interviewScheduleCommandApi.startSchedule(scheduleId, scheduleDTO.enterpriseId());
+            // 排期 CONFIRMED→IN_PROGRESS 不在建会话时推进：连接凭证只证明「够资格进场」，
+            // 真正开场由 client.ready / POST /ready 的 readySession 原子推进，避免候选人
+            // 只取令牌不进房就把排期挂成进行中。
         }
         // 生成绑定 userId、sessionId、参与者角色且 60 秒内只能消费一次的 connectionToken。
         String connectionToken = UUID.randomUUID().toString().replace("-", "");
@@ -137,6 +138,7 @@ public class InterviewSessionServiceImpl extends ServiceImpl<InterviewSessionMap
                 .scheduleId(scheduleId)
                 .enterpriseId(scheduleDTO.enterpriseId())
                 .role(role)
+                .userType(AuthContext.getUserType().name())
                 .build();
         String key = InterviewConnectionKeyConstant.getConnectionKey(connectionToken);
         stringRedisTemplate.opsForValue().set(

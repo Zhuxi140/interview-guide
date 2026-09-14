@@ -36,6 +36,10 @@ public class WebMvcConfig implements WebMvcConfigurer {
                         "/api/v1/auth/password/reset",
                         "/api/v1/auth/refresh",
                         "/api/v1/auth/send-sms",
+                        // WebSocket 握手：浏览器无法为握手请求附加 Authorization 头，
+                        // 因此该路径不能走 JWT 拦截器；鉴权改由一次性连接凭证在
+                        // InterviewHandshakeInterceptor 中完成（消费即失效，60 秒 TTL）。
+                        "/ws/**",
                         "/swagger-ui/**",
                         "/swagger-ui.html",
                         "/api-docs/**"
