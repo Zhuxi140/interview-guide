@@ -372,6 +372,10 @@ docs(phase2): 同步简历 AI 任务契约
 8. 当前任务所属阶段的接口、数据库和权限 SQL
 9. 目标 Controller → Service 接口 → ServiceImpl → Mapper/XML → Entity/Req/VO → 测试
 
+> ⚠️ **动手实现前先读 `../docs/开发者手写清单.md`**：该清单只收录「已搭好脚手架、且包含架构/策略判断」
+> 因而**开发者有意保留手写**的位置（业务编排、状态机、消息分发决策），**不要代为实现**。
+> 尚未开始的功能范围见 `../docs/未实现接口.md`。快速自检命令见该清单附录。
+
 阶段二 AI 建议额外阅读：
 
 1. `modules/aicore/.../LlmSceneConfig`
