@@ -12,6 +12,8 @@ import interview.common.enums.SecureActionType;
 import interview.common.enums.SmsType;
 import interview.common.exception.BusinessException;
 import interview.framework.context.AuthContext;
+import interview.framework.security.Desensitize.DesensitizeType;
+import interview.framework.security.Desensitize.DesensitizeUtil;
 import interview.system.auth.model.entity.User;
 import interview.system.auth.model.enums.SecureChallengeStatus;
 import interview.system.auth.model.req.SecureChallengeVerifyReq;
@@ -102,7 +104,7 @@ public class SecureChallengeServiceImpl implements SecureChallengeService {
 
         return new SecureChallengeStartDTO(
                 challengeId,
-                StrUtil.hide(user.getPhone(), 3, 7),
+                DesensitizeUtil.mask(DesensitizeType.PHONE, user.getPhone()),
                 CODE_TTL_SECONDS);
     }
 

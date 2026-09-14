@@ -10,6 +10,8 @@ import interview.common.security.SecretCipher;
 import interview.common.security.SecretCipherException;
 import interview.common.util.TraceUtil;
 import interview.framework.context.AuthContext;
+import interview.framework.security.Desensitize.DesensitizeType;
+import interview.framework.security.Desensitize.DesensitizeUtil;
 import interview.notification.mapper.SysNotificationChannelMapper;
 import interview.notification.model.entity.SysNotificationChannel;
 import interview.common.enums.ChannelType;
@@ -34,11 +36,9 @@ import java.util.stream.Collectors;
  */
 @Service
 @RequiredArgsConstructor
-public class NotificationChannelServiceImpl
-        extends ServiceImpl<SysNotificationChannelMapper, SysNotificationChannel>
+public class NotificationChannelServiceImpl extends ServiceImpl<SysNotificationChannelMapper, SysNotificationChannel>
         implements NotificationChannelService {
 
-    private static final String MASKED_SECRET = "******";
     /**
      * 凭证类字段名匹配：命中即在写入时加密、查询时脱敏。
      */
@@ -184,6 +184,8 @@ public class NotificationChannelServiceImpl
 
     /**
      * 查询侧脱敏：凭证字段替换为固定掩码后返回紧凑 JSON 摘要。
+     * 掩码值取自 {@link DesensitizeType#SECRET}（项目脱敏单一事实来源），
+     * 键名判定属业务规则保留在本服务。
      */
     private String maskConfigSummary(String configJson) {
         if (configJson == null || configJson.isBlank()) {
@@ -193,11 +195,13 @@ public class NotificationChannelServiceImpl
             JSONObject raw = JSONUtil.parseObj(configJson);
             JSONObject masked = new JSONObject();
             raw.forEach((key, value) -> masked.set(
-                    key, isCredentialKey(key) ? MASKED_SECRET : value));
+                    key, isCredentialKey(key)
+                            ? DesensitizeUtil.mask(DesensitizeType.SECRET, String.valueOf(value))
+                            : value));
             return masked.toString();
         } catch (RuntimeException exception) {
             // 无法解析的存量数据一律整体脱敏。
-            return MASKED_SECRET;
+            return DesensitizeUtil.mask(DesensitizeType.SECRET, null);
         }
     }
 
