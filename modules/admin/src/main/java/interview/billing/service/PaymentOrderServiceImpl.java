@@ -1,6 +1,7 @@
 package interview.billing.service;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import interview.api.system.EnterpriseValidationApi;
@@ -14,6 +15,7 @@ import interview.billing.model.req.SimulatePaymentReq;
 import interview.billing.model.vo.*;
 import interview.common.enums.ErrorCode;
 import interview.common.exception.BusinessException;
+import interview.common.util.TraceUtil;
 import interview.framework.context.AuthContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,6 +38,16 @@ public class PaymentOrderServiceImpl
     @Override
     @Transactional
     public OrderCreateVO createOrder(Long enterpriseId, String idempotencyKey, OrderCreateReq req) {
+        // ⚠️ 前置缺口（2026-09-14 核实，动手前先定）：
+        //   - orderNo 生成规则与订单有效期 TTL 项目内均无约定，需你定义。
+        //     DDL 有 CHECK (expire_time > created_at)，TTL 必须为正。
+        //   - TODO ⑦ 的过期任务有两条路，选哪条由你定：
+        //     a) 本地消息表：需在 MsgTopic 新增订单过期主题，并在 admin 模块补首个 Handler
+        //        （现有 7 个主题与订单无关，admin 目前没有任何消息处理者）；
+        //        接口可用 LocalMessageApi.saveInCurrentTransaction + schedulePending(messageId, executeAt)。
+        //     b) 定时扫描：payment_orders 上已有 (expire_time, id) 索引，正是为「捞到期订单」设计的，
+        //        无需新主题即可落地，代价是引入扫描周期内的判定延迟。
+        //   - 60xxx 错误码中没有「幂等键冲突」码，需新增或复用 PARAM_VALID_ERROR。
         // TODO ① 校验 Idempotency-Key 非空且长度合法，查询 enterpriseId + idempotencyKey 对应的历史订单。
         // TODO ② 已存在订单时核对 skuId；请求一致则反序列化原 SKU 快照并返回原结果，不一致则抛出幂等键冲突。
         // TODO ③ 使用 LambdaQuery 查询未删除且已上架的 SKU，校验当前阶段 currency = CNY；不存在或已下架时拒绝下单。
@@ -119,14 +131,47 @@ public class PaymentOrderServiceImpl
     @Override
     @Transactional
     public OrderUpdateVO cancelOrder(Long enterpriseId, Long orderId, OrderCancelReq req) {
-        // TODO ① 校验 expectedStatus，只允许以 PENDING 作为取消前置状态。
-        // TODO ② 按 id + enterpriseId 查询订单并校验租户归属；已是 CANCELLED 时幂等返回原结果。
-        // TODO ③ PAID、EXPIRED 等终态禁止取消；订单已到期但仍为 PENDING 时应先推进 EXPIRED。
-        // TODO ④ 使用 LambdaUpdate 按 id + enterpriseId + status=PENDING + expireTime>now 原子更新为 CANCELLED。
-        // TODO ⑤ 同时显式写入 cancelledAt、statusReason、updatedAt、traceId 等非实体更新不会自动填充的审计字段。
-        // TODO ⑥ 更新零行时回查最新状态：CANCELLED 返回原结果，其余状态按并发后的真实结果返回业务异常。
-        // TODO ⑦ 将最终订单状态和更新时间映射为 OrderUpdateVO；后续过期任务看到非 PENDING 时直接忽略。
-        return null;
+        // 只接受以 PENDING 为前置状态，避免客户端误以为能撤销已支付订单。
+        if (req.getExpectedStatus() != PaymentOrderStatus.PENDING) {
+            throw new BusinessException(ErrorCode.PARAM_VALID_ERROR,
+                    "仅支持以 PENDING 作为取消前置状态");
+        }
+        validateEnterpriseAccess(enterpriseId);
+
+        OffsetDateTime now = OffsetDateTime.now();
+        // 首次读取用于快速失败与幂等重放；真正的并发保护在后面的条件更新。
+        PaymentOrder order = requireOrder(enterpriseId, orderId);
+        OrderUpdateVO replay = replayIfNotPending(order, enterpriseId, now);
+        if (replay != null) {
+            return replay;
+        }
+
+        // 条件更新：id + enterpriseId + PENDING + 未过期 -> CANCELLED。
+        // 条件里带上 expireTime，避免与过期任务并发时把已到期订单取消掉。
+        int updated = baseMapper.update(null,
+                Wrappers.<PaymentOrder>lambdaUpdate()
+                        .eq(PaymentOrder::getId, orderId)
+                        .eq(PaymentOrder::getEnterpriseId, enterpriseId)
+                        .eq(PaymentOrder::getStatus, PaymentOrderStatus.PENDING)
+                        .gt(PaymentOrder::getExpireTime, now)
+                        .set(PaymentOrder::getStatus, PaymentOrderStatus.CANCELLED)
+                        .set(PaymentOrder::getCancelledAt, now)
+                        .set(PaymentOrder::getStatusReason, "企业主动取消")
+                        .set(PaymentOrder::getUpdatedAt, now)
+                        .set(PaymentOrder::getTraceId, TraceUtil.getTraceId()));
+
+        if (updated == 0) {
+            // 零行归因：并发下状态可能已被支付回调或过期任务推进，回查真实状态给出准确结果。
+            OrderUpdateVO concurrent = replayIfNotPending(
+                    requireOrder(enterpriseId, orderId), enterpriseId, now);
+            // 回查仍显示可取消，说明条件更新与快照不一致（如时间精度边界或极小概率的并发交错）。
+            // 这里必须给出明确结果，不能让方法返回 null 让前端拿到空响应体。
+            if (concurrent == null) {
+                throw new BusinessException(ErrorCode.PAYMENT_ORDER_STATUS_CONFLICT);
+            }
+            return concurrent;
+        }
+        return new OrderUpdateVO(orderId, PaymentOrderStatus.CANCELLED, now);
     }
 
     @Override
@@ -192,6 +237,77 @@ public class PaymentOrderServiceImpl
         // TODO ⑨ 订单推进、钱包充值或账本写入任一步失败均回滚；唯一键冲突时回查并判断是否为同一幂等结果。
         // TODO ⑩ 返回 SimulatePaymentVO；正式支付回调必须复用相同入账逻辑，仅额外执行渠道验签和防重放。
         return null;
+    }
+
+    /**
+     * 读取企业名下的订单；查询条件已含租户归属，天然防止跨企业读取。
+     */
+    private PaymentOrder requireOrder(Long enterpriseId, Long orderId) {
+        PaymentOrder order = baseMapper.selectOne(
+                Wrappers.<PaymentOrder>lambdaQuery()
+                        .select(PaymentOrder::getId, PaymentOrder::getStatus,
+                                PaymentOrder::getExpireTime, PaymentOrder::getUpdatedAt)
+                        .eq(PaymentOrder::getId, orderId)
+                        .eq(PaymentOrder::getEnterpriseId, enterpriseId));
+        if (order == null) {
+            throw new BusinessException(ErrorCode.PAYMENT_ORDER_NOT_FOUND);
+        }
+        return order;
+    }
+
+    /**
+     * 处理「已不是可取消的未过期 PENDING」的各种情形。
+     *
+     * <p>返回非 null 表示按幂等重放既有结果；抛出异常表示终态不可取消；
+     * 返回 null 表示订单仍可取消。已到期但仍为 PENDING 时先原子推进 EXPIRED 再拒绝。</p>
+     *
+     * @param order        当前订单（含状态与到期时间）
+     * @param enterpriseId 企业 ID
+     * @param now          本次请求的统一时间基准
+     * @return 幂等重放结果；订单仍可取消时返回 null
+     */
+    private OrderUpdateVO replayIfNotPending(PaymentOrder order, Long enterpriseId,
+                                            OffsetDateTime now) {
+        switch (order.getStatus()) {
+            case CANCELLED -> {
+                // 并发下另一次取消已生效：按幂等返回既有结果，不重复推进。
+                return toUpdateResult(order);
+            }
+            case PAID -> throw new BusinessException(ErrorCode.PAYMENT_ORDER_ALREADY_PAID);
+            case EXPIRED -> throw new BusinessException(ErrorCode.PAYMENT_ORDER_EXPIRED);
+            case PENDING -> {
+                // 仍是 PENDING：继续走下面的过期判断。
+            }
+        }
+        if (order.getExpireTime() != null && !order.getExpireTime().isAfter(now)) {
+            markExpired(order.getId(), enterpriseId, now);
+            throw new BusinessException(ErrorCode.PAYMENT_ORDER_EXPIRED);
+        }
+        return null;
+    }
+
+    /** 幂等重放：按既有订单状态组装响应。 */
+    private OrderUpdateVO toUpdateResult(PaymentOrder order) {
+        return new OrderUpdateVO(order.getId(), order.getStatus(), order.getUpdatedAt());
+    }
+
+    /**
+     * 把已到期的 PENDING 订单原子推进为 EXPIRED。
+     *
+     * <p>并发下若已被支付回调或其他请求推进，条件更新零行即静默返回——
+     * 调用方随后按真实状态给出结果，不会覆盖终态。</p>
+     */
+    private void markExpired(Long orderId, Long enterpriseId, OffsetDateTime now) {
+        baseMapper.update(null,
+                Wrappers.<PaymentOrder>lambdaUpdate()
+                        .eq(PaymentOrder::getId, orderId)
+                        .eq(PaymentOrder::getEnterpriseId, enterpriseId)
+                        .eq(PaymentOrder::getStatus, PaymentOrderStatus.PENDING)
+                        .set(PaymentOrder::getStatus, PaymentOrderStatus.EXPIRED)
+                        .set(PaymentOrder::getExpiredAt, now)
+                        .set(PaymentOrder::getStatusReason, "订单超时未支付")
+                        .set(PaymentOrder::getUpdatedAt, now)
+                        .set(PaymentOrder::getTraceId, TraceUtil.getTraceId()));
     }
 
     private void validateEnterpriseAccess(Long enterpriseId) {

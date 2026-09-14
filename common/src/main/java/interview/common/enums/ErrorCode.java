@@ -198,6 +198,7 @@ public enum ErrorCode {
     WALLET_TRANSACTION_FAILED(60012, "钱包流水记录失败"),
     SKU_ALREADY_EXISTS(60013, "同名同币种套餐已存在"),
     SKU_VERSION_CONFLICT(60014, "套餐已被其他请求修改，请刷新后重试"),
+    PAYMENT_ORDER_STATUS_CONFLICT(60015, "订单状态已变更，请刷新后重试"),
 
     // ------------ 70xxx 语音面试错误码 ------------
     VOICE_SESSION_NOT_FOUND(70001, "语音会话不存在"),
